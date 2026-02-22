@@ -129,7 +129,7 @@ export function FilesTab({ files }: FilesTabProps) {
         onValueChange={setSearchQuery}
         placeholder="Search files..."
         className="rounded-[min(var(--radius-md),10px)] border-border/70 bg-muted/20 px-2.5 py-1.5 shadow-xs"
-        inputClassName="h-6 border-none bg-transparent px-0 py-0 text-sm text-foreground/90 shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/80"
+        inputClassName="h-6 border-none !bg-transparent px-0 py-0 text-sm text-foreground/90 shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/80 dark:!bg-transparent"
         leadingIcon={<Search className="h-3.5 w-3.5 text-muted-foreground/70" />}
       />
 
