@@ -14,7 +14,15 @@ describe('FilesTab', () => {
 
     expect(screen.getByRole('heading', { name: 'Files' })).toBeTruthy()
     expect(screen.getByText(/Your copy of the repo lives in/)).toBeTruthy()
+    expect(screen.getByText('/tui-app/repo.')).toBeTruthy()
     expect(screen.getByLabelText('Search files')).toBeTruthy()
+    const searchContainer = screen.getByRole('search')
+    expect(searchContainer.className).toContain('border-border/70')
+    expect(searchContainer.className).toContain('bg-muted/20')
+    expect(searchContainer.className).toContain('rounded-[min(var(--radius-md),10px)]')
+    expect(screen.getByRole('button', { name: 'New file' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Rename file' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open file actions' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Toggle src' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle src' }))
@@ -28,6 +36,32 @@ describe('FilesTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Toggle src' }))
 
     expect(screen.queryByRole('button', { name: 'Toggle src/renderer' })).toBeNull()
+  })
+
+  it('renders file rows with baseline icon metadata and diff stats', () => {
+    render(<FilesTab files={mockFiles} />)
+
+    expect(screen.getByText('.gitignore')).toBeTruthy()
+    expect(screen.getByText('Cargo.lock')).toBeTruthy()
+    expect(screen.getByText('Cargo.toml')).toBeTruthy()
+    expect(screen.getByText('README.md')).toBeTruthy()
+
+    expect(screen.getByText('+3')).toBeTruthy()
+    expect(screen.getByText('-9')).toBeTruthy()
+    expect(screen.getByText('+12')).toBeTruthy()
+  })
+
+  it('supports the draft file row flow from the new-file action', () => {
+    render(<FilesTab files={mockFiles} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New file' }))
+
+    const draftInput = screen.getByRole('textbox', { name: 'New file name' })
+    expect(draftInput).toBeTruthy()
+    expect((draftInput as HTMLInputElement).value).toBe('filename')
+
+    fireEvent.change(draftInput, { target: { value: 'my-file.txt' } })
+    expect((draftInput as HTMLInputElement).value).toBe('my-file.txt')
   })
 
   it('filters tree results based on search input', () => {

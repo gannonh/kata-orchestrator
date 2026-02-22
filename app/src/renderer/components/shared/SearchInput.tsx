@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useRef } from 'react'
+import { type KeyboardEvent, type ReactNode, useRef } from 'react'
 
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -10,6 +10,8 @@ export type SearchInputProps = {
   placeholder?: string
   ariaLabel?: string
   className?: string
+  inputClassName?: string
+  leadingIcon?: ReactNode
 }
 
 export function SearchInput({
@@ -17,7 +19,9 @@ export function SearchInput({
   onValueChange,
   placeholder = 'Search',
   ariaLabel,
-  className
+  className,
+  inputClassName,
+  leadingIcon
 }: SearchInputProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -42,6 +46,7 @@ export function SearchInput({
         className
       )}
     >
+      {leadingIcon ? <span className="shrink-0">{leadingIcon}</span> : null}
       <Input
         ref={inputRef}
         type="search"
@@ -52,7 +57,10 @@ export function SearchInput({
         onChange={(event) => {
           onValueChange(event.target.value)
         }}
-        className="h-8 border-none bg-transparent shadow-none focus-visible:ring-0"
+        className={cn(
+          'h-8 border-none bg-transparent shadow-none focus-visible:ring-0',
+          inputClassName
+        )}
       />
       {value ? (
         <Button

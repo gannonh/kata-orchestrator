@@ -3,6 +3,12 @@ export type MockFileNode = {
   name: string
   path: string
   type: 'file' | 'directory'
+  tone?: 'default' | 'accent'
+  icon?: 'git' | 'lock' | 'settings' | 'info' | 'file'
+  stats?: {
+    added?: number
+    removed?: number
+  }
   children?: MockFileNode[]
 }
 
@@ -12,6 +18,7 @@ export const mockFiles: MockFileNode[] = [
     name: 'src',
     path: 'src',
     type: 'directory',
+    tone: 'accent',
     children: [
       {
         id: 'renderer',
@@ -50,5 +57,48 @@ export const mockFiles: MockFileNode[] = [
         ]
       }
     ]
+  },
+  {
+    id: 'target',
+    name: 'target',
+    path: 'target',
+    type: 'directory'
+  },
+  {
+    id: 'dot-gitignore',
+    name: '.gitignore',
+    path: '.gitignore',
+    type: 'file',
+    tone: 'accent',
+    icon: 'git',
+    stats: {
+      added: 3,
+      removed: 9
+    }
+  },
+  {
+    id: 'cargo-lock',
+    name: 'Cargo.lock',
+    path: 'Cargo.lock',
+    type: 'file',
+    icon: 'lock'
+  },
+  {
+    id: 'cargo-toml',
+    name: 'Cargo.toml',
+    path: 'Cargo.toml',
+    type: 'file',
+    tone: 'accent',
+    icon: 'settings',
+    stats: {
+      added: 12
+    }
+  },
+  {
+    id: 'readme',
+    name: 'README.md',
+    path: 'README.md',
+    type: 'file',
+    icon: 'info'
   }
 ]
