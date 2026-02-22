@@ -82,7 +82,21 @@ describe('ChangesTab', () => {
     expect(screen.getByRole('button', { name: 'Unstage all' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Commit' }).hasAttribute('disabled')).toBe(false)
     expect(screen.getByRole('button', { name: 'Export' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Merge' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Merge' })).toHaveLength(2)
     expect(screen.getByRole('button', { name: 'Connect Remote' })).toBeTruthy()
+    expect(screen.getByText('PULL REQUESTS')).toBeTruthy()
+    expect(screen.getByText('Please authenticate with Augment first.')).toBeTruthy()
+    expect(screen.getByText('Run auggie login in your terminal.')).toBeTruthy()
+  })
+
+  it('renders a git-provided merge target branch when available', () => {
+    render(
+      <ChangesTab
+        git={{ ...mockGit, targetBranch: 'develop' }}
+        previewState={3}
+      />
+    )
+
+    expect(screen.getByText('develop')).toBeTruthy()
   })
 })

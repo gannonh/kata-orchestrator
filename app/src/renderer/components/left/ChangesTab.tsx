@@ -32,6 +32,7 @@ type ChangesView = {
   showPullRequestAuthPrompt: boolean
 }
 
+// PREVIEW_STATE_REMAP intentionally reorders ChangesPreviewState to match the mock click-through sequence.
 const PREVIEW_STATE_REMAP: Record<ChangesPreviewState, ChangesPreviewState> = {
   0: 2,
   1: 3,
@@ -113,7 +114,7 @@ function getChangesView(previewState: ChangesPreviewState, git: GitSnapshot): Ch
     showCreatePrAction: false,
     showMergeAction: true,
     showConnectRemoteAction: true,
-    showPullRequestAuthPrompt: false
+    showPullRequestAuthPrompt: true
   }
 }
 
@@ -197,7 +198,7 @@ export function ChangesTab({ git, previewState = 0 }: ChangesTabProps) {
         </span>
         <span className="h-px flex-1 bg-border/70" />
         <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span>main</span>
+        <span>{git.targetBranch ?? 'main'}</span>
       </div>
       <p className={cn('mt-1', LEFT_PANEL_TYPOGRAPHY.meta)}>and will be merged into:</p>
 
@@ -226,6 +227,7 @@ export function ChangesTab({ git, previewState = 0 }: ChangesTabProps) {
             {renderFileChanges(view.unstaged)}
             {view.unstaged.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-2">
+                {/* @scaffold -- action handlers are intentionally deferred until git workflow wiring. */}
                 <Button
                   type="button"
                   variant="outline"

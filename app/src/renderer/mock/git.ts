@@ -2,6 +2,7 @@ import type { GitSnapshot } from '../types/git'
 
 export const mockGit: GitSnapshot = {
   branch: 'feat/wave-2A-contracts',
+  targetBranch: 'main',
   ahead: 2,
   behind: 0,
   staged: [
