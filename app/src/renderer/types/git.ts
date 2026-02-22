@@ -7,6 +7,7 @@ export type GitFileChange = {
 
 export type GitSnapshot = {
   branch: string
+  targetBranch?: string
   ahead: number
   behind: number
   staged: GitFileChange[]
