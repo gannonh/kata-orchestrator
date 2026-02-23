@@ -206,4 +206,20 @@ describe('LeftPanel', () => {
 
     expect(onToggleTheme).toHaveBeenCalledTimes(1)
   })
+
+  it('calls onOpenHome when the home action is clicked', () => {
+    const onOpenHome = vi.fn()
+    render(<LeftPanel onOpenHome={onOpenHome} />)
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
+    expect(onOpenHome).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not throw when home action is clicked without onOpenHome wired', () => {
+    render(<LeftPanel />)
+
+    expect(() => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
+    }).not.toThrow()
+  })
 })
