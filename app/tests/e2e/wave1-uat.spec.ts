@@ -10,8 +10,14 @@ test.describe('Wave 1 desktop shell UAT @uat', () => {
   }) => {
     await expect(appWindow).toHaveTitle('Kata Orchestrator')
 
+    await expect(appWindow.getByTestId('left-panel')).toBeVisible()
+    await expect(appWindow.getByTestId('center-panel')).toBeVisible()
+    await expect(appWindow.getByTestId('right-panel')).toBeVisible()
+
     await expect(appWindow.getByRole('heading', { name: 'Agents' })).toBeVisible()
-    await expect(appWindow.getByRole('heading', { name: 'Orchestrator Chat' })).toBeVisible()
+    await expect(
+      appWindow.getByRole('tablist', { name: 'Center panel tabs' }).getByRole('tab', { name: 'Coordinator' })
+    ).toBeVisible()
     await expect(appWindow.getByRole('heading', { name: 'Spec' })).toBeVisible()
 
     await expect(appWindow.getByLabel('Resize left panel')).toBeVisible()
