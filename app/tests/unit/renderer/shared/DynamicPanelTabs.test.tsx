@@ -63,6 +63,26 @@ describe('DynamicPanelTabs', () => {
     expect(onCreateNote).not.toHaveBeenCalled()
   })
 
+  it('renders the open menu outside the tablist scrolling container to avoid clipping', () => {
+    render(
+      <DynamicPanelTabs
+        ariaLabel="Center tabs"
+        tabs={baseTabs}
+        activeTabId="base"
+        onActiveTabChange={() => {}}
+        onCreateNote={() => {}}
+        onCloseTab={() => {}}
+        onRenameTab={() => {}}
+      />
+    )
+
+    openMenu()
+
+    const tablist = screen.getByRole('tablist', { name: 'Center tabs' })
+    const menu = screen.getByRole('menu')
+    expect(tablist.contains(menu)).toBe(false)
+  })
+
   it('renders close button only for closable tabs and reports close action', () => {
     const onCloseTab = vi.fn()
 

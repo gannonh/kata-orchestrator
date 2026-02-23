@@ -67,6 +67,15 @@ describe('RightPanel', () => {
     expect(screen.queryByLabelText('Rename Spec tab')).toBeNull()
   })
 
+  it('renders the new-tab trigger in the right-panel header area', () => {
+    render(<RightPanel project={mockProject} />)
+
+    const header = screen.getByRole('banner')
+    const newTabButton = screen.getByRole('button', { name: 'New tab' })
+
+    expect(header.contains(newTabButton)).toBe(true)
+  })
+
   it('toggles right column collapse state', () => {
     const { getByTestId } = render(<RightPanel project={mockProject} />)
 

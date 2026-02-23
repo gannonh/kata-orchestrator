@@ -120,93 +120,97 @@ export function DynamicPanelTabs({
   return (
     <div
       ref={containerRef}
-      role="tablist"
-      aria-label={ariaLabel}
-      className={cn('flex h-10 items-center gap-1 overflow-x-auto border-b border-border px-1', className)}
+      className={cn('flex h-10 items-center gap-1 border-b border-border', className)}
     >
-      {tabs.map((tab) => {
-        const isActive = tab.id === activeTabId
-        const isEditing = tab.id === editingTabId
+      <div
+        role="tablist"
+        aria-label={ariaLabel}
+        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1"
+      >
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTabId
+          const isEditing = tab.id === editingTabId
 
-        return (
-          <div
-            key={tab.id}
-            className={cn(
-              'flex h-8 items-center rounded-sm border border-transparent bg-background/40 text-sm',
-              isActive ? 'border-border bg-background text-foreground' : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            {isEditing ? (
-              <Input
-                ref={inputRef}
-                aria-label={`Rename ${tab.label} tab`}
-                value={editingValue}
-                className="h-7 w-36 border-0 bg-transparent px-2 py-0 text-sm shadow-none focus-visible:ring-0"
-                onChange={(event) => {
-                  setEditingValue(event.currentTarget.value)
-                }}
-                onBlur={commitRename}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
+          return (
+            <div
+              key={tab.id}
+              className={cn(
+                'flex h-8 shrink-0 items-center rounded-sm border border-transparent bg-background/40 text-sm',
+                isActive ? 'border-border bg-background text-foreground' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {isEditing ? (
+                <Input
+                  ref={inputRef}
+                  aria-label={`Rename ${tab.label} tab`}
+                  value={editingValue}
+                  className="h-7 w-36 border-0 bg-transparent px-2 py-0 text-sm shadow-none focus-visible:ring-0"
+                  onChange={(event) => {
+                    setEditingValue(event.currentTarget.value)
+                  }}
+                  onBlur={commitRename}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      commitRename()
+                      return
+                    }
+
+                    if (event.key === 'Escape') {
+                      event.preventDefault()
+                      cancelRename()
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className="flex h-8 max-w-52 items-center gap-1 px-2 text-sm"
+                  onMouseDown={(event) => {
+                    if (event.button !== 0) {
+                      return
+                    }
                     event.preventDefault()
-                    commitRename()
-                    return
-                  }
+                    onActiveTabChange(tab.id)
+                  }}
+                  onDoubleClick={() => {
+                    beginRename(tab)
+                  }}
+                >
+                  <span className="text-xs text-muted-foreground">≡</span>
+                  <span className="truncate">{tab.label}</span>
+                </button>
+              )}
 
-                  if (event.key === 'Escape') {
+              {tab.closable ? (
+                <button
+                  type="button"
+                  aria-label={`Close ${tab.label} tab`}
+                  className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onMouseDown={(event) => {
                     event.preventDefault()
-                    cancelRename()
-                  }
-                }}
-              />
-            ) : (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                className="flex h-8 max-w-52 items-center gap-1 px-2 text-sm"
-                onMouseDown={(event) => {
-                  if (event.button !== 0) {
-                    return
-                  }
-                  event.preventDefault()
-                  onActiveTabChange(tab.id)
-                }}
-                onDoubleClick={() => {
-                  beginRename(tab)
-                }}
-              >
-                <span className="text-xs text-muted-foreground">≡</span>
-                <span className="truncate">{tab.label}</span>
-              </button>
-            )}
+                    event.stopPropagation()
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    if (editingTabId === tab.id) {
+                      cancelRename()
+                    }
+                    onCloseTab(tab.id)
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
 
-            {tab.closable ? (
-              <button
-                type="button"
-                aria-label={`Close ${tab.label} tab`}
-                className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-                onMouseDown={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                }}
-                onClick={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  if (editingTabId === tab.id) {
-                    cancelRename()
-                  }
-                  onCloseTab(tab.id)
-                }}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            ) : null}
-          </div>
-        )
-      })}
-
-      <div className="relative">
+      <div className="relative shrink-0 pr-1">
         <button
           type="button"
           aria-label="New tab"
@@ -223,7 +227,7 @@ export function DynamicPanelTabs({
         {isMenuOpen ? (
           <div
             role="menu"
-            className="absolute left-0 z-50 mt-1 min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+            className="absolute right-0 z-50 mt-1 min-w-44 rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
           >
             <button
               type="button"

@@ -80,8 +80,17 @@ export function RightPanel({ project = mockProject, theme, onToggleTheme }: Righ
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-center justify-between bg-background px-4">
-        <p className="text-sm font-medium text-foreground">Right Column</p>
+      <header className="flex h-14 shrink-0 items-end gap-2 bg-background px-3">
+        <DynamicPanelTabs
+          className="w-full border-0"
+          ariaLabel="Right panel tabs"
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onActiveTabChange={setActiveTabId}
+          onCreateNote={handleCreateNote}
+          onCloseTab={handleCloseTab}
+          onRenameTab={handleRenameTab}
+        />
         <div className="flex items-center gap-2">
           {theme ? (
             <Button
@@ -116,16 +125,6 @@ export function RightPanel({ project = mockProject, theme, onToggleTheme }: Righ
           Spec
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">{project.name}</p>
-        <DynamicPanelTabs
-          className="mt-4"
-          ariaLabel="Right panel tabs"
-          tabs={tabs}
-          activeTabId={activeTabId}
-          onActiveTabChange={setActiveTabId}
-          onCreateNote={handleCreateNote}
-          onCloseTab={handleCloseTab}
-          onRenameTab={handleRenameTab}
-        />
         <ScrollArea className="mt-4 min-h-0 flex-1 pr-2">{activeContent}</ScrollArea>
       </div>
     </div>
