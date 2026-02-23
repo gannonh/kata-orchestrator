@@ -20,13 +20,15 @@ describe('App', () => {
   it('switches from workspace shell to home view and back, wiring activeSpaceId into the shell', () => {
     render(<App />)
 
-    expect(screen.getAllByRole('heading', { name: 'Orchestrator Chat' }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('tablist', { name: 'Center panel tabs' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /Coordinator/ })).toBeTruthy()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
     expect(screen.getByRole('heading', { name: 'Home' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
-    expect(screen.getAllByRole('heading', { name: 'Orchestrator Chat' }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('tablist', { name: 'Center panel tabs' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /Coordinator/ })).toBeTruthy()
 
     // The selected space ID must be threaded into AppShell after navigation
     const shell = screen.getByTestId('app-shell-root')

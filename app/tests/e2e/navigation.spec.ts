@@ -155,9 +155,10 @@ test.describe('Desktop app navigation @uat', () => {
   }) => {
     await appWindow.getByRole('button', { name: 'Open Home spaces view' }).first().click()
     await expect(appWindow.getByRole('heading', { name: 'Home' })).toBeVisible()
-    await expect(appWindow.getByRole('heading', { name: 'Orchestrator Chat' })).toHaveCount(0)
+    await expect(appWindow.getByRole('tablist', { name: 'Center panel tabs' })).toHaveCount(0)
 
     await appWindow.getByRole('button', { name: 'Open selected space' }).click()
-    await expect(appWindow.getByRole('heading', { name: 'Orchestrator Chat' })).toBeVisible()
+    await expect(appWindow.getByRole('tablist', { name: 'Center panel tabs' })).toBeVisible()
+    await expect(appWindow.getByRole('tab', { name: /Coordinator/ })).toBeVisible()
   })
 })
