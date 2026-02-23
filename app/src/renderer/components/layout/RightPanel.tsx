@@ -80,9 +80,9 @@ export function RightPanel({ project = mockProject, theme, onToggleTheme }: Righ
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-end gap-2 bg-background px-3">
+      <header className="flex h-14 shrink-0 items-end gap-2 bg-background pl-0 pr-3">
         <DynamicPanelTabs
-          className="w-full border-0"
+          className="w-full border-0 px-0"
           ariaLabel="Right panel tabs"
           tabs={tabs}
           activeTabId={activeTabId}

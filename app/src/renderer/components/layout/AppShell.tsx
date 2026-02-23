@@ -184,7 +184,7 @@ export function AppShell() {
         <PanelResizer
           label="Resize center-right divider"
           testId="right-resizer"
-          lineAt="start"
+          lineAt="end"
           onDelta={handleCenterRightDelta}
           onReset={handleCenterRightReset}
         />

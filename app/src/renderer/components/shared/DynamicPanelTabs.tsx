@@ -120,23 +120,25 @@ export function DynamicPanelTabs({
   return (
     <div
       ref={containerRef}
-      className={cn('flex h-10 items-center gap-1 border-b border-border', className)}
+      className={cn('flex h-10 items-end gap-1 border-b border-border', className)}
     >
       <div
         role="tablist"
         aria-label={ariaLabel}
-        className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto px-1"
+        className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pl-0 pr-1"
       >
-        {tabs.map((tab) => {
+        {tabs.map((tab, tabIndex) => {
           const isActive = tab.id === activeTabId
           const isEditing = tab.id === editingTabId
 
           return (
             <div
               key={tab.id}
+              data-first-tab={tabIndex === 0 ? 'true' : undefined}
               className={cn(
-                'flex h-8 shrink-0 items-center rounded-sm border border-transparent bg-background/40 text-sm',
-                isActive ? 'border-border bg-background text-foreground' : 'text-muted-foreground hover:text-foreground'
+                'relative -mb-px flex h-8 shrink-0 items-center rounded-t-sm rounded-b-none border border-transparent border-b-0 text-sm',
+                tabIndex === 0 ? '-ml-px rounded-tl-none' : null,
+                isActive ? 'border-border bg-background text-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground'
               )}
             >
               {isEditing ? (

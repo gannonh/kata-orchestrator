@@ -72,7 +72,7 @@ export function LeftStatusSection({
   return (
     <section
       aria-label="Left panel status"
-      className="border-y border-border px-4 pb-3 pt-4"
+      className="border-b border-border px-4 pb-3 pt-4"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">

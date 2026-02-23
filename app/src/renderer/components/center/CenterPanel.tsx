@@ -58,7 +58,7 @@ export function CenterPanel({ children }: CenterPanelProps) {
       data-testid="center-panel"
       className="relative flex h-full min-h-0 flex-col overflow-hidden"
     >
-      <header className="flex h-14 shrink-0 items-end bg-background px-3">
+      <header className="flex h-14 shrink-0 items-end bg-background pl-0 pr-3">
         <DynamicPanelTabs
           ariaLabel="Center panel tabs"
           tabs={tabs}
