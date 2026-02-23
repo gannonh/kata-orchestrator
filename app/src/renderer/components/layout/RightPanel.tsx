@@ -14,11 +14,9 @@ const BASE_TAB_ID = 'right-spec'
 
 type RightPanelProps = {
   project?: ProjectSpec
-  theme?: 'dark' | 'light'
-  onToggleTheme?: () => void
 }
 
-export function RightPanel({ project = mockProject, theme, onToggleTheme }: RightPanelProps) {
+export function RightPanel({ project = mockProject }: RightPanelProps) {
   const noteIdCounter = useRef(1)
   const [tabs, setTabs] = useState<DynamicPanelTab[]>([
     { id: BASE_TAB_ID, label: 'Spec', kind: 'base', closable: false, renamable: false }
@@ -92,16 +90,6 @@ export function RightPanel({ project = mockProject, theme, onToggleTheme }: Righ
           onRenameTab={handleRenameTab}
         />
         <div className="flex items-center gap-2">
-          {theme ? (
-            <Button
-              type="button"
-              variant="outline"
-              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-              onClick={onToggleTheme}
-            >
-              {theme === 'dark' ? 'Dark' : 'Light'}
-            </Button>
-          ) : null}
           <Button
             type="button"
             variant="ghost"

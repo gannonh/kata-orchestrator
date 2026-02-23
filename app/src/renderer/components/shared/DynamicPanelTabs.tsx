@@ -218,7 +218,7 @@ export function DynamicPanelTabs({
           aria-label="New tab"
           aria-haspopup="menu"
           aria-expanded={isMenuOpen}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-blue-500/70 bg-background text-blue-300 hover:bg-blue-500/10"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground"
           onClick={() => {
             setIsMenuOpen((current) => !current)
           }}
