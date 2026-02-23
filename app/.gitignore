@@ -7,4 +7,5 @@ out/
 coverage/
 playwright-report/
 test-results/
-output/
+# Playwright ad-hoc screenshot captures generated during local visual checks.
+output/playwright/

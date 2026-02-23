@@ -78,7 +78,10 @@ export function RightPanel({ project = mockProject }: RightPanelProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-14 shrink-0 items-end gap-2 bg-background pl-0 pr-3">
+      <header
+        data-testid="right-panel-header"
+        className="flex h-14 shrink-0 items-end gap-2 bg-background pl-0 pr-3"
+      >
         <DynamicPanelTabs
           className="w-full border-0 px-0"
           ariaLabel="Right panel tabs"
@@ -109,10 +112,14 @@ export function RightPanel({ project = mockProject }: RightPanelProps) {
           isCollapsed ? 'pointer-events-none opacity-0' : 'opacity-100'
         )}
       >
-        <h2 className="text-2xl font-semibold tracking-tight">
-          Spec
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{project.name}</p>
+        {activeTab?.kind !== 'note' ? (
+          <>
+            <h2 className="text-2xl font-semibold tracking-tight">
+              Spec
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">{project.name}</p>
+          </>
+        ) : null}
         <ScrollArea className="mt-4 min-h-0 flex-1 pr-2">{activeContent}</ScrollArea>
       </div>
     </div>

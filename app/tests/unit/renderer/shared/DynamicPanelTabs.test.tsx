@@ -133,7 +133,7 @@ describe('DynamicPanelTabs', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  it('updates active tab on pointer interaction', () => {
+  it('updates active tab on click activation', () => {
     const onActiveTabChange = vi.fn()
 
     render(
@@ -148,12 +148,12 @@ describe('DynamicPanelTabs', () => {
       />
     )
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /New Note/ }), { button: 0 })
+    fireEvent.click(screen.getByRole('tab', { name: /New Note/ }))
 
     expect(onActiveTabChange).toHaveBeenCalledWith('note')
   })
 
-  it('ignores non-left pointer tab activation and suppresses close-button mousedown bubbling', () => {
+  it('suppresses close-button mousedown and click bubbling', () => {
     const onActiveTabChange = vi.fn()
 
     render(
@@ -168,10 +168,10 @@ describe('DynamicPanelTabs', () => {
       />
     )
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /New Note/ }), { button: 1 })
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Close New Note tab' }))
     expect(onActiveTabChange).not.toHaveBeenCalled()
 
-    fireEvent.mouseDown(screen.getByRole('button', { name: 'Close New Note tab' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close New Note tab' }))
     expect(onActiveTabChange).not.toHaveBeenCalled()
   })
 

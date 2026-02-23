@@ -176,11 +176,7 @@ export function DynamicPanelTabs({
                   role="tab"
                   aria-selected={isActive}
                   className="flex h-9 max-w-52 items-center gap-1 px-2 pb-[3px] text-sm"
-                  onMouseDown={(event) => {
-                    if (event.button !== 0) {
-                      return
-                    }
-                    event.preventDefault()
+                  onClick={() => {
                     onActiveTabChange(tab.id)
                   }}
                   onDoubleClick={() => {

@@ -30,6 +30,8 @@ describe('RightPanel', () => {
 
     expect(screen.getByRole('tab', { name: /New Note/ }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByText(/Start drafting a specification for what you want to build\./i)).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Spec' })).toBeNull()
+    expect(screen.queryByText(mockProject.name)).toBeNull()
   })
 
   it('closes active right-panel note tabs and falls back to spec', () => {
@@ -70,7 +72,7 @@ describe('RightPanel', () => {
   it('renders the new-tab trigger in the right-panel header area', () => {
     render(<RightPanel project={mockProject} />)
 
-    const header = screen.getByRole('banner')
+    const header = screen.getByTestId('right-panel-header')
     const newTabButton = screen.getByRole('button', { name: 'New tab' })
 
     expect(header.contains(newTabButton)).toBe(true)
