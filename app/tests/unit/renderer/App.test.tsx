@@ -8,7 +8,8 @@ describe('App', () => {
     render(<App />)
 
     expect(screen.getByRole('heading', { name: 'Agents' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Orchestrator Chat' })).toBeTruthy()
+    expect(screen.getByRole('tablist', { name: 'Center panel tabs' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /Coordinator/ })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Spec' })).toBeTruthy()
   })
 })

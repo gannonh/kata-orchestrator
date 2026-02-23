@@ -3,60 +3,75 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { RightPanel } from '../../../../src/renderer/components/layout/RightPanel'
 import { mockProject } from '../../../../src/renderer/mock/project'
-import type { ProjectSpec } from '../../../../src/renderer/types/project'
 
 afterEach(() => {
   cleanup()
 })
 
 describe('RightPanel', () => {
-  it('shows spec content by default and supports notes editing across tab switches', () => {
+  it('shows spec content by default', () => {
     render(<RightPanel project={mockProject} />)
 
     expect(screen.getByRole('tablist', { name: 'Right panel tabs' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /Spec/ }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('heading', { name: 'Goal' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Architecture' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Tasks' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Acceptance Criteria' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Non-Goals' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Assumptions' })).toBeTruthy()
-
-    const notesTab = screen.getByRole('tab', { name: 'Notes' })
-    fireEvent.mouseDown(notesTab, { button: 0 })
-
-    const notesInput = screen.getByLabelText('Project notes')
-    fireEvent.change(notesInput, { target: { value: 'Capture review follow-up items.' } })
-
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Spec' }), { button: 0 })
-    fireEvent.mouseDown(notesTab, { button: 0 })
-
-    expect(screen.getByDisplayValue('Capture review follow-up items.')).toBeTruthy()
   })
 
-  it('resets notes when the selected project changes', () => {
-    const nextProject: ProjectSpec = {
-      ...mockProject,
-      id: 'phase-2',
-      name: 'Kata Desktop App - Phase 2',
-      notes: 'Fresh project notes from the next phase.'
-    }
+  it('creates and activates a New Note tab from the right panel menu', () => {
+    render(<RightPanel project={mockProject} />)
 
-    const { rerender } = render(<RightPanel project={mockProject} />)
+    fireEvent.click(screen.getByRole('button', { name: 'New tab' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New Note' }))
 
-    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Notes' }), { button: 0 })
-    fireEvent.change(screen.getByLabelText('Project notes'), { target: { value: 'Edited old project notes.' } })
+    expect(screen.getByRole('tab', { name: /New Note/ }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByText(/Start drafting a specification for what you want to build\./i)).toBeTruthy()
+  })
 
-    rerender(<RightPanel project={nextProject} />)
+  it('closes active right-panel note tabs and falls back to spec', () => {
+    render(<RightPanel project={mockProject} />)
 
-    expect(screen.getByDisplayValue('Fresh project notes from the next phase.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'New tab' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New Note' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close New Note tab' }))
+
+    expect(screen.getByRole('tab', { name: /Spec/ }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('heading', { name: 'Goal' })).toBeTruthy()
+  })
+
+  it('renames a right-panel note tab via inline edit', () => {
+    render(<RightPanel project={mockProject} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New tab' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New Note' }))
+    fireEvent.doubleClick(screen.getByRole('tab', { name: /New Note/ }))
+
+    const renameInput = screen.getByLabelText('Rename New Note tab')
+    fireEvent.change(renameInput, { target: { value: 'Spec scratchpad' } })
+    fireEvent.keyDown(renameInput, { key: 'Enter', code: 'Enter' })
+
+    expect(screen.getByRole('tab', { name: /Spec scratchpad/ })).toBeTruthy()
+  })
+
+  it('keeps the base Spec tab non-closable and non-renamable', () => {
+    render(<RightPanel project={mockProject} />)
+
+    expect(screen.queryByRole('button', { name: 'Close Spec tab' })).toBeNull()
+
+    fireEvent.doubleClick(screen.getByRole('tab', { name: /Spec/ }))
+
+    expect(screen.queryByLabelText('Rename Spec tab')).toBeNull()
   })
 
   it('toggles right column collapse state', () => {
-    render(<RightPanel project={mockProject} />)
+    const { getByTestId } = render(<RightPanel project={mockProject} />)
 
     const collapseButton = screen.getByRole('button', { name: 'Collapse right column' })
-    const specHeading = screen.getByRole('heading', { name: 'Spec', level: 2 })
-    const content = specHeading.parentElement
+    const content = getByTestId('right-panel-content')
 
     expect(content).toBeTruthy()
     expect(content?.className).toContain('opacity-100')

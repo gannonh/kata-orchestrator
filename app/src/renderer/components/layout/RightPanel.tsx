@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
 import { mockProject } from '../../mock/project'
 import type { ProjectSpec } from '../../types/project'
 import { cn } from '../../lib/cn'
-import { NotesTab } from '../right/NotesTab'
 import { SpecTab } from '../right/SpecTab'
-import { TabBar, type TabBarItem } from '../shared/TabBar'
+import { DynamicPanelTabs, type DynamicPanelTab } from '../shared/DynamicPanelTabs'
+import { NewNoteScaffold } from '../shared/NewNoteScaffold'
 import { Button } from '../ui/button'
 import { ScrollArea } from '../ui/scroll-area'
 
-type RightPanelTab = 'spec' | 'notes'
+const BASE_TAB_ID = 'right-spec'
 
 type RightPanelProps = {
   project?: ProjectSpec
@@ -18,38 +18,65 @@ type RightPanelProps = {
   onToggleTheme?: () => void
 }
 
-const tabs: Array<TabBarItem<RightPanelTab>> = [
-  {
-    id: 'spec',
-    label: 'Spec'
-  },
-  {
-    id: 'notes',
-    label: 'Notes'
-  }
-]
-
 export function RightPanel({ project = mockProject, theme, onToggleTheme }: RightPanelProps) {
-  const [activeTab, setActiveTab] = useState<RightPanelTab>('spec')
-  const [notes, setNotes] = useState(project.notes)
+  const noteIdCounter = useRef(1)
+  const [tabs, setTabs] = useState<DynamicPanelTab[]>([
+    { id: BASE_TAB_ID, label: 'Spec', kind: 'base', closable: false, renamable: false }
+  ])
+  const [activeTabId, setActiveTabId] = useState(BASE_TAB_ID)
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
-    setNotes(project.notes)
-  }, [project.id, project.notes])
+    noteIdCounter.current = 1
+    setTabs([{ id: BASE_TAB_ID, label: 'Spec', kind: 'base', closable: false, renamable: false }])
+    setActiveTabId(BASE_TAB_ID)
+  }, [project.id])
+
+  const activeTab = useMemo(
+    () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0],
+    [activeTabId, tabs]
+  )
+
+  const handleCreateNote = () => {
+    const nextId = `right-note-${noteIdCounter.current}`
+    noteIdCounter.current += 1
+
+    setTabs((currentTabs) => [
+      ...currentTabs,
+      { id: nextId, label: 'New Note', kind: 'note', closable: true, renamable: true }
+    ])
+    setActiveTabId(nextId)
+  }
+
+  const handleCloseTab = (tabId: string) => {
+    setTabs((currentTabs) => {
+      const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId)
+      if (tabIndex < 0) {
+        return currentTabs
+      }
+
+      const remainingTabs = currentTabs.filter((tab) => tab.id !== tabId)
+
+      if (activeTabId === tabId) {
+        const fallbackTab = currentTabs[tabIndex - 1] ?? currentTabs[tabIndex + 1] ?? remainingTabs[0]
+        setActiveTabId(fallbackTab?.id ?? BASE_TAB_ID)
+      }
+
+      return remainingTabs
+    })
+  }
+
+  const handleRenameTab = (tabId: string, label: string) => {
+    setTabs((currentTabs) => currentTabs.map((tab) => (tab.id === tabId ? { ...tab, label } : tab)))
+  }
 
   const activeContent = useMemo(() => {
-    if (activeTab === 'notes') {
-      return (
-        <NotesTab
-          notes={notes}
-          onNotesChange={setNotes}
-        />
-      )
+    if (activeTab?.kind === 'note') {
+      return <NewNoteScaffold />
     }
 
     return <SpecTab project={project} />
-  }, [activeTab, notes, project])
+  }, [activeTab?.kind, project])
 
   return (
     <div className="flex h-full flex-col">
@@ -79,6 +106,7 @@ export function RightPanel({ project = mockProject, theme, onToggleTheme }: Righ
       </header>
 
       <div
+        data-testid="right-panel-content"
         className={cn(
           'flex min-h-0 flex-1 flex-col overflow-hidden p-4 transition-[opacity] duration-200 ease-linear',
           isCollapsed ? 'pointer-events-none opacity-0' : 'opacity-100'
@@ -88,12 +116,15 @@ export function RightPanel({ project = mockProject, theme, onToggleTheme }: Righ
           Spec
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">{project.name}</p>
-        <TabBar
+        <DynamicPanelTabs
           className="mt-4"
-          tabs={tabs}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
           ariaLabel="Right panel tabs"
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onActiveTabChange={setActiveTabId}
+          onCreateNote={handleCreateNote}
+          onCloseTab={handleCloseTab}
+          onRenameTab={handleRenameTab}
         />
         <ScrollArea className="mt-4 min-h-0 flex-1 pr-2">{activeContent}</ScrollArea>
       </div>
