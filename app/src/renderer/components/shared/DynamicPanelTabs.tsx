@@ -136,7 +136,7 @@ export function DynamicPanelTabs({
               key={tab.id}
               data-first-tab={tabIndex === 0 ? 'true' : undefined}
               className={cn(
-                'relative -mb-px flex h-8 shrink-0 items-center rounded-t-sm rounded-b-none border border-transparent border-b-0 text-sm',
+                'relative -mb-px flex h-9 shrink-0 items-center rounded-t-sm rounded-b-none border border-transparent border-b-0 text-sm',
                 tabIndex === 0 ? '-ml-px rounded-tl-none' : null,
                 isActive ? 'border-border bg-background text-foreground' : 'bg-transparent text-muted-foreground hover:text-foreground'
               )}
@@ -169,7 +169,7 @@ export function DynamicPanelTabs({
                   type="button"
                   role="tab"
                   aria-selected={isActive}
-                  className="flex h-8 max-w-52 items-center gap-1 px-2 text-sm"
+                  className="flex h-9 max-w-52 items-center gap-1 px-2 pb-[3px] text-sm"
                   onMouseDown={(event) => {
                     if (event.button !== 0) {
                       return
