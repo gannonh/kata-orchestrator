@@ -144,7 +144,13 @@ export function LeftPanel({ collapsed, onCollapsedChange, theme, onToggleTheme, 
               size="icon-sm"
               aria-label="Open Home spaces view"
               className="h-10 w-10"
-              onClick={onOpenHome}
+              onClick={() => {
+                if (!onOpenHome) {
+                  console.warn('[LeftPanel] onOpenHome is not wired. Home navigation will not work.')
+                  return
+                }
+                onOpenHome()
+              }}
             >
               <House className="h-4 w-4" />
             </Button>

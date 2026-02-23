@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { mockSpaces, type MockSpace } from '../../mock/spaces'
 import { CreateSpacePanel } from './CreateSpacePanel'
@@ -11,22 +11,29 @@ type HomeSpacesScreenProps = {
 
 type Mode = 'team' | 'single'
 
+// Groups spaces by repository, normalizing the repo key to lowercase so that
+// differently-cased repo strings (e.g. 'MyOrg/repo' vs 'myorg/repo') land in
+// the same group. The display name preserves the first occurrence's casing.
 function groupSpacesByRepo(spaces: MockSpace[]): Array<{ repo: string; spaces: MockSpace[] }> {
-  const grouped = new Map<string, MockSpace[]>()
+  const grouped = new Map<string, { repo: string; spaces: MockSpace[] }>()
 
-  spaces.forEach((space) => {
-    const group = grouped.get(space.repo)
-    if (group) {
-      group.push(space)
-      return
+  for (const space of spaces) {
+    const key = space.repo.toLowerCase()
+    const existing = grouped.get(key)
+    if (existing) {
+      existing.spaces.push(space)
+    } else {
+      grouped.set(key, { repo: space.repo, spaces: [space] })
     }
-    grouped.set(space.repo, [space])
-  })
+  }
 
-  return [...grouped.entries()].map(([repo, repoSpaces]) => ({ repo, spaces: repoSpaces }))
+  return [...grouped.values()]
 }
 
 export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: HomeSpacesScreenProps) {
+  // TODO(KAT-65): Replace mockSpaces default with IPC/API data fetch.
+  // When implementing: add loading state, error state, and empty state.
+  // Remove the mockSpaces default from initialSpaces.
   const [isCreatePanelActive, setIsCreatePanelActive] = useState(false)
   const [spacePrompt, setSpacePrompt] = useState('')
   const [selectedMode, setSelectedMode] = useState<Mode>('team')
@@ -53,12 +60,16 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
     })
   }, [searchQuery, showArchived, spaces])
 
-  useEffect(() => {
+  // Derive the effective selected ID synchronously to avoid a double-render on every
+  // filter change. When the user's selectedSpaceId is no longer in visibleSpaces
+  // (e.g. search filtered it out), fall back to the first visible space.
+  // The raw selectedSpaceId state is preserved so the selection restores when
+  // the filter is cleared.
+  const effectiveSelectedSpaceId = useMemo(() => {
     if (selectedSpaceId && visibleSpaces.some((space) => space.id === selectedSpaceId)) {
-      return
+      return selectedSpaceId
     }
-
-    setSelectedSpaceId(visibleSpaces[0]?.id ?? null)
+    return visibleSpaces[0]?.id ?? null
   }, [selectedSpaceId, visibleSpaces])
 
   const groups = useMemo(() => {
@@ -70,23 +81,21 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
   }, [groupByRepo, visibleSpaces])
 
   const selectedSpace = useMemo(() => {
-    if (!spaces.length) {
+    if (!effectiveSelectedSpaceId) {
       return null
     }
+    // effectiveSelectedSpaceId is always derived from visibleSpaces ⊆ spaces,
+    // so find() will always succeed when effectiveSelectedSpaceId is non-null.
+    return spaces.find((space) => space.id === effectiveSelectedSpaceId) ?? null
+  }, [effectiveSelectedSpaceId, spaces])
 
-    if (!selectedSpaceId) {
-      return spaces[0]
-    }
-
-    return spaces.find((space) => space.id === selectedSpaceId) ?? spaces[0]
-  }, [selectedSpaceId, spaces])
-
-  const handleCreateSpace = () => {
-    const trimmedPrompt = spacePrompt.trim()
-
+  function handleCreateSpace() {
+    // TODO(KAT-65): Space creation is currently UI-only (no persistence).
+    // When wiring persistence, replace this local state mutation with an IPC call
+    // and surface errors to the user if the call fails.
     const nextSpace: MockSpace = {
       id: `space-${Date.now()}`,
-      name: trimmedPrompt || 'Untitled space',
+      name: spacePrompt.trim() || 'Untitled space',
       repo: selectedSpace?.repo ?? 'gannonh/kata-cloud',
       branch: selectedSpace?.branch ?? 'main',
       elapsed: 'now',
@@ -109,8 +118,8 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
             type="button"
             className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Open selected space"
-            disabled={!selectedSpaceId}
-            onClick={selectedSpaceId ? () => onOpenSpace(selectedSpaceId) : undefined}
+            disabled={!effectiveSelectedSpaceId}
+            onClick={() => effectiveSelectedSpaceId && onOpenSpace(effectiveSelectedSpaceId)}
           >
             Open selected space
           </button>
@@ -137,7 +146,7 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
 
           <SpacesListPanel
             groups={groups}
-            selectedSpaceId={selectedSpaceId}
+            selectedSpaceId={effectiveSelectedSpaceId}
             searchQuery={searchQuery}
             groupByRepo={groupByRepo}
             showArchived={showArchived}

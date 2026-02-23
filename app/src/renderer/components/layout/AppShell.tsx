@@ -152,6 +152,7 @@ export function AppShell({ activeSpaceId, onOpenHome }: AppShellProps = {}) {
   return (
     <main
       data-testid="app-shell-root"
+      // TODO(KAT-65): Use activeSpaceId to load space data via IPC once persistence is wired.
       data-active-space-id={activeSpaceId ?? ''}
       className="h-screen w-screen overflow-hidden bg-background text-foreground"
     >

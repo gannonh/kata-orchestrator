@@ -214,4 +214,12 @@ describe('LeftPanel', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
     expect(onOpenHome).toHaveBeenCalledTimes(1)
   })
+
+  it('does not throw when home action is clicked without onOpenHome wired', () => {
+    render(<LeftPanel />)
+
+    expect(() => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
+    }).not.toThrow()
+  })
 })

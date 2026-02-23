@@ -17,6 +17,11 @@ type SpacesListPanelProps = {
   onSelectSpace: (spaceId: string) => void
 }
 
+// Invariant: archived: true always implies status: 'archived'. A space with
+// archived: true and a non-archived status value is a data inconsistency.
+// Note: archived spaces are filtered out by showArchived before reaching this
+// function under default settings, so the 'archived' branch is only reachable
+// when showArchived is true.
 function statusDotClassName(status: MockSpace['status']): string {
   if (status === 'active') {
     return 'bg-blue-500'
@@ -40,6 +45,10 @@ export function SpacesListPanel({
   onToggleShowArchived,
   onSelectSpace
 }: SpacesListPanelProps) {
+  // groups.every returns true for an empty array (vacuous truth), which correctly
+  // treats the zero-groups case as "no results". Do not change this to
+  // `groups.length === 0 || groups.every(...)` — that would break the case where
+  // groups exist but all have been filtered to zero spaces.
   const noResults = groups.every((group) => group.spaces.length === 0)
 
   return (
@@ -63,19 +72,20 @@ export function SpacesListPanel({
         >
           SHOW ARCHIVED
         </button>
-        <label className="ml-auto">
-          <span className="sr-only">Search spaces</span>
-          <input
-            type="search"
-            aria-label="Search spaces"
-            value={searchQuery}
-            onChange={(event) => {
-              onSearchChange(event.target.value)
-            }}
-            placeholder="Search spaces"
-            className="h-8 rounded-md border border-border bg-background/70 px-2 text-xs outline-none focus:border-ring"
-          />
+        <label className="sr-only" htmlFor="spaces-search">
+          Search spaces
         </label>
+        <input
+          id="spaces-search"
+          type="search"
+          aria-label="Search spaces"
+          value={searchQuery}
+          onChange={(event) => {
+            onSearchChange(event.target.value)
+          }}
+          placeholder="Search spaces"
+          className="ml-auto h-8 rounded-md border border-border bg-background/70 px-2 text-xs outline-none focus:border-ring"
+        />
       </div>
 
       {noResults ? (

@@ -1,3 +1,7 @@
+// Invariant: `archived: true` must always be paired with `status: 'archived'`,
+// and `archived: false` must never have `status: 'archived'`. Code that reads
+// these fields (e.g. statusDotClassName, showArchived filter) relies on this
+// consistency. Enforce it at any creation or update site.
 export type MockSpace = {
   id: string
   name: string

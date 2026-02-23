@@ -33,9 +33,7 @@ export function CreateSpacePanel({
       data-active={isActive ? 'true' : 'false'}
       className="rounded-2xl border border-border/80 bg-card/60 p-6 shadow-sm"
     >
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-semibold tracking-tight">Let&apos;s get building!</h2>
-      </div>
+      <h2 className="mb-4 text-xl font-semibold tracking-tight">Let&apos;s get building!</h2>
 
       <label className="sr-only" htmlFor="home-space-prompt">
         Space prompt
@@ -56,6 +54,7 @@ export function CreateSpacePanel({
       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
         <button
           type="button"
+          aria-label="Add context"
           className="rounded-md px-2 py-1 hover:bg-muted/50"
           onClick={onPromptFocus}
         >
