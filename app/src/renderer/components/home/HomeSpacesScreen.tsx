@@ -69,16 +69,26 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
     return groupSpacesByRepo(visibleSpaces)
   }, [groupByRepo, visibleSpaces])
 
-  const handleCreateSpace = () => {
-    if (!spacePrompt.trim()) {
-      return
+  const selectedSpace = useMemo(() => {
+    if (!spaces.length) {
+      return null
     }
+
+    if (!selectedSpaceId) {
+      return spaces[0]
+    }
+
+    return spaces.find((space) => space.id === selectedSpaceId) ?? spaces[0]
+  }, [selectedSpaceId, spaces])
+
+  const handleCreateSpace = () => {
+    const trimmedPrompt = spacePrompt.trim()
 
     const nextSpace: MockSpace = {
       id: `space-${Date.now()}`,
-      name: spacePrompt.trim(),
-      repo: 'gannonh/kata-cloud',
-      branch: 'main',
+      name: trimmedPrompt || 'Untitled space',
+      repo: selectedSpace?.repo ?? 'gannonh/kata-cloud',
+      branch: selectedSpace?.branch ?? 'main',
       elapsed: 'now',
       archived: false,
       status: 'active'
@@ -112,6 +122,8 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
             prompt={spacePrompt}
             selectedMode={selectedMode}
             rapidFire={rapidFire}
+            repoName={selectedSpace?.repo ?? 'gannonh/kata-cloud'}
+            branchName={selectedSpace?.branch ?? 'main'}
             onPromptChange={setSpacePrompt}
             onPromptFocus={() => {
               setIsCreatePanelActive(true)

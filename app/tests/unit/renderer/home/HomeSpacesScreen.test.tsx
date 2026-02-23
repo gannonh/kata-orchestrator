@@ -48,18 +48,35 @@ describe('HomeSpacesScreen', () => {
     expect(screen.getByRole('button', { name: 'Select space Unblock Wave 1 verification' }).getAttribute('aria-pressed')).toBe('true')
   })
 
-  it('supports grouped toggle, no-result state, and ignores empty create submissions', () => {
+  it('supports grouped toggle, no-result state, and creates default space for empty prompt', () => {
     render(<HomeSpacesScreen onOpenSpace={() => {}} />)
 
     const initialRows = screen.getAllByRole('button', { name: /Select space/ }).length
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-    expect(screen.getAllByRole('button', { name: /Select space/ })).toHaveLength(initialRows)
+    expect(screen.getAllByRole('button', { name: /Select space/ })).toHaveLength(initialRows + 1)
+    expect(screen.getByText('Untitled space')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Group spaces by repository' }))
     expect(screen.getByText('All spaces')).toBeTruthy()
 
     fireEvent.change(screen.getByLabelText('Search spaces'), { target: { value: 'no-such-space' } })
     expect(screen.getByText('No spaces match your filters.')).toBeTruthy()
+  })
+
+  it('binds repo and branch context strip to selected space state', () => {
+    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+
+    const contextStrip = screen.getByTestId('repo-branch-context')
+    expect(contextStrip.textContent).toContain('gannonh/kata-cloud')
+    expect(contextStrip.textContent).toContain('main')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select space Left panel parity follow-ups' }))
+    expect(contextStrip.textContent).toContain('gannonh/kata-cloud')
+    expect(contextStrip.textContent).toContain('feature/left-panel')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select space Docs and release sync' }))
+    expect(contextStrip.textContent).toContain('gannonh/kata-orchestrator')
+    expect(contextStrip.textContent).toContain('main')
   })
 
   it('opens the currently selected space', () => {

@@ -5,6 +5,8 @@ type CreateSpacePanelProps = {
   prompt: string
   selectedMode: 'team' | 'single'
   rapidFire: boolean
+  repoName: string
+  branchName: string
   onPromptChange: (value: string) => void
   onPromptFocus: () => void
   onSelectMode: (mode: 'team' | 'single') => void
@@ -17,6 +19,8 @@ export function CreateSpacePanel({
   prompt,
   selectedMode,
   rapidFire,
+  repoName,
+  branchName,
   onPromptChange,
   onPromptFocus,
   onSelectMode,
@@ -91,10 +95,13 @@ export function CreateSpacePanel({
         </button>
       </div>
 
-      <div className="mt-4 flex items-center justify-between rounded-lg border border-border/70 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+      <div
+        data-testid="repo-branch-context"
+        className="mt-4 flex items-center justify-between rounded-lg border border-border/70 bg-background/60 px-3 py-2 text-xs text-muted-foreground"
+      >
         <p>
-          Work on <span className="font-semibold text-foreground">kata-cloud</span> off{' '}
-          <span className="font-semibold text-foreground">main</span>
+          Work on <span className="font-semibold text-foreground">{repoName}</span> off{' '}
+          <span className="font-semibold text-foreground">{branchName}</span>
         </p>
         <button
           type="button"
