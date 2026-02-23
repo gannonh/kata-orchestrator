@@ -66,6 +66,18 @@ describe('FilesTab', () => {
     expect((draftInput as HTMLInputElement).value).toBe('my-file.txt')
   })
 
+  it('closes the draft file row when new-file action is clicked again', () => {
+    render(<FilesTab files={mockFiles} />)
+
+    const newFileButton = screen.getByRole('button', { name: 'New file' })
+
+    fireEvent.click(newFileButton)
+    expect(screen.getByRole('textbox', { name: 'New file name' })).toBeTruthy()
+
+    fireEvent.click(newFileButton)
+    expect(screen.queryByRole('textbox', { name: 'New file name' })).toBeNull()
+  })
+
   it('filters tree results based on search input', () => {
     render(<FilesTab files={mockFiles} />)
 
