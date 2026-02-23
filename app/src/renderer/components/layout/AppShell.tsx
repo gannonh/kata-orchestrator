@@ -16,6 +16,10 @@ export const THEME_STORAGE_KEY = 'kata-theme'
 
 type Theme = 'dark' | 'light'
 type DocumentSplit = { center: number; right: number }
+type AppShellProps = {
+  activeSpaceId?: string | null
+  onOpenHome?: () => void
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
@@ -47,7 +51,7 @@ function getDocumentSplit(documentWidth: number, offset: number): DocumentSplit 
   }
 }
 
-export function AppShell() {
+export function AppShell({ activeSpaceId, onOpenHome }: AppShellProps = {}) {
   const shellRef = useRef<HTMLDivElement | null>(null)
   const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT)
   const [centerRightOffset, setCenterRightOffset] = useState(0)
@@ -148,6 +152,7 @@ export function AppShell() {
   return (
     <main
       data-testid="app-shell-root"
+      data-active-space-id={activeSpaceId ?? ''}
       className="h-screen w-screen overflow-hidden bg-background text-foreground"
     >
       <section
@@ -168,6 +173,7 @@ export function AppShell() {
           onToggleTheme={() => {
             setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))
           }}
+          onOpenHome={onOpenHome}
         />
 
         {leftCollapsed ? (

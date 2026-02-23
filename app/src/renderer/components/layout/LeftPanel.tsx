@@ -1,5 +1,5 @@
 import { type ComponentType, useMemo, useState } from 'react'
-import { ChevronDown, Folder, GitBranch, Layers3, Moon, PanelLeftClose, PanelLeftOpen, Sun, Users } from 'lucide-react'
+import { ChevronDown, Folder, GitBranch, House, Layers3, Moon, PanelLeftClose, PanelLeftOpen, Sun, Users } from 'lucide-react'
 
 import logoDark from '../../assets/brand/icon-dark.svg'
 import logoLight from '../../assets/brand/icon-light.svg'
@@ -25,6 +25,7 @@ type LeftPanelProps = {
   onCollapsedChange?: (collapsed: boolean) => void
   theme?: 'dark' | 'light'
   onToggleTheme?: () => void
+  onOpenHome?: () => void
 }
 
 export type PreviewState = 0 | 1 | 2 | 3
@@ -61,7 +62,7 @@ function nextPreviewState(current: PreviewState): PreviewState {
   return PREVIEW_CYCLE[current] ?? 0
 }
 
-export function LeftPanel({ collapsed, onCollapsedChange, theme, onToggleTheme }: LeftPanelProps = {}) {
+export function LeftPanel({ collapsed, onCollapsedChange, theme, onToggleTheme, onOpenHome }: LeftPanelProps = {}) {
   const [activeTab, setActiveTab] = useState<LeftPanelTab>('agents')
   const [internalCollapsed, setInternalCollapsed] = useState(false)
   const [previewState, setPreviewState] = useState<PreviewState>(0)
@@ -137,6 +138,16 @@ export function LeftPanel({ collapsed, onCollapsedChange, theme, onToggleTheme }
             aria-label="Left panel modules"
             className="w-full flex-col justify-start gap-2 rounded-none bg-background p-2"
           >
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Open Home spaces view"
+              className="h-10 w-10"
+              onClick={onOpenHome}
+            >
+              <House className="h-4 w-4" />
+            </Button>
             {tabs.map((tab) => {
               const Icon = tab.icon
               return (

@@ -149,4 +149,15 @@ test.describe('Desktop app navigation @uat', () => {
     await rightTabs.getByRole('tab', { name: 'New Note' }).click()
     await expect(appWindow.getByText(noteScaffold)).toBeVisible()
   })
+
+  test('opens home screen, hides workspace content, and returns on open space @uat @ci @quality-gate', async ({
+    appWindow
+  }) => {
+    await appWindow.getByRole('button', { name: 'Open Home spaces view' }).first().click()
+    await expect(appWindow.getByRole('heading', { name: 'Home' })).toBeVisible()
+    await expect(appWindow.getByRole('heading', { name: 'Orchestrator Chat' })).toHaveCount(0)
+
+    await appWindow.getByRole('button', { name: 'Open selected space' }).click()
+    await expect(appWindow.getByRole('heading', { name: 'Orchestrator Chat' })).toBeVisible()
+  })
 })
