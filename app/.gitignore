@@ -2,7 +2,9 @@ node_modules/
 dist/
 out/
 .playwright/
+.playwright-cli/
 *.tsbuildinfo
 coverage/
 playwright-report/
 test-results/
+output/
