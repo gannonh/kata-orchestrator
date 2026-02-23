@@ -8,8 +8,6 @@ export type DynamicPanelTab = {
   id: string
   label: string
   kind: 'base' | 'note'
-  closable: boolean
-  renamable: boolean
 }
 
 type DynamicPanelTabsProps = {
@@ -81,7 +79,7 @@ export function DynamicPanelTabs({
   }, [editingTabId])
 
   const beginRename = (tab: DynamicPanelTab) => {
-    if (!tab.renamable) {
+    if (tab.kind === 'base') {
       return
     }
     setEditingTabId(tab.id)
@@ -102,7 +100,7 @@ export function DynamicPanelTabs({
 
     const tab = tabs.find((candidate) => candidate.id === editingTabId)
     /* v8 ignore start -- defensive guard if edited tab disappears mid-commit */
-    if (!tab || !tab.renamable) {
+    if (!tab || tab.kind === 'base') {
       cancelRename()
       return
     }
@@ -116,11 +114,23 @@ export function DynamicPanelTabs({
     cancelRename()
   }
 
-  const handleMenuAction = (action: 'note' | 'agent' | 'terminal' | 'browser') => {
-    if (action === 'note') {
-      onCreateNote()
+  const handleTablistKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') {
+      return
     }
-    setIsMenuOpen(false)
+    event.preventDefault()
+
+    const currentIndex = tabs.findIndex((t) => t.id === activeTabId)
+    if (currentIndex < 0) {
+      return
+    }
+
+    const nextIndex =
+      event.key === 'ArrowRight'
+        ? (currentIndex + 1) % tabs.length
+        : (currentIndex - 1 + tabs.length) % tabs.length
+
+    onActiveTabChange(tabs[nextIndex].id)
   }
 
   return (
@@ -132,10 +142,12 @@ export function DynamicPanelTabs({
         role="tablist"
         aria-label={ariaLabel}
         className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pl-0 pr-1"
+        onKeyDown={handleTablistKeyDown}
       >
         {tabs.map((tab, tabIndex) => {
           const isActive = tab.id === activeTabId
           const isEditing = tab.id === editingTabId
+          const isClosable = tab.kind !== 'base'
 
           return (
             <div
@@ -175,6 +187,7 @@ export function DynamicPanelTabs({
                   type="button"
                   role="tab"
                   aria-selected={isActive}
+                  aria-controls={`${tab.id}-panel`}
                   className="flex h-9 max-w-52 items-center gap-1 px-2 pb-[3px] text-sm"
                   onClick={() => {
                     onActiveTabChange(tab.id)
@@ -188,7 +201,7 @@ export function DynamicPanelTabs({
                 </button>
               )}
 
-              {tab.closable ? (
+              {isClosable ? (
                 <button
                   type="button"
                   aria-label={`Close ${tab.label} tab`}
@@ -236,10 +249,8 @@ export function DynamicPanelTabs({
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-              onClick={() => {
-                handleMenuAction('agent')
-              }}
+              aria-disabled="true"
+              className="flex w-full cursor-not-allowed items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm opacity-50"
             >
               <Bot className="h-4 w-4" />
               New Agent
@@ -249,7 +260,8 @@ export function DynamicPanelTabs({
               role="menuitem"
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
               onClick={() => {
-                handleMenuAction('note')
+                onCreateNote()
+                setIsMenuOpen(false)
               }}
             >
               <FileText className="h-4 w-4" />
@@ -258,10 +270,8 @@ export function DynamicPanelTabs({
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-              onClick={() => {
-                handleMenuAction('terminal')
-              }}
+              aria-disabled="true"
+              className="flex w-full cursor-not-allowed items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm opacity-50"
             >
               <Terminal className="h-4 w-4" />
               New Terminal
@@ -269,10 +279,8 @@ export function DynamicPanelTabs({
             <button
               type="button"
               role="menuitem"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-              onClick={() => {
-                handleMenuAction('browser')
-              }}
+              aria-disabled="true"
+              className="flex w-full cursor-not-allowed items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm opacity-50"
             >
               <Globe className="h-4 w-4" />
               New Browser

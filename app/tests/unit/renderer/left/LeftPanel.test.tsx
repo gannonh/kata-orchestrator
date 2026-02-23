@@ -168,6 +168,13 @@ describe('LeftPanel', () => {
     expect(content.className).toContain('opacity-100')
   })
 
+  it('does not render the theme toggle when theme is provided without onToggleTheme', () => {
+    render(<LeftPanel theme="dark" />)
+
+    expect(screen.queryByRole('button', { name: 'Switch to light theme' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Switch to dark theme' })).toBeNull()
+  })
+
   it('does not render the theme toggle when theme prop is omitted', () => {
     render(<LeftPanel />)
 

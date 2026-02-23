@@ -78,6 +78,21 @@ describe('RightPanel', () => {
     expect(header.contains(newTabButton)).toBe(true)
   })
 
+  it('resets to the base Spec tab when the active project changes', () => {
+    const projectA = { ...mockProject, id: 'project-a' }
+    const projectB = { ...mockProject, id: 'project-b' }
+    const { rerender } = render(<RightPanel project={projectA} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'New tab' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New Note' }))
+    expect(screen.getByRole('tab', { name: /New Note/ })).toBeTruthy()
+
+    rerender(<RightPanel project={projectB} />)
+
+    expect(screen.queryByRole('tab', { name: /New Note/ })).toBeNull()
+    expect(screen.getByRole('tab', { name: /Spec/ }).getAttribute('aria-selected')).toBe('true')
+  })
+
   it('toggles right column collapse state', () => {
     const { getByTestId } = render(<RightPanel project={mockProject} />)
 

@@ -1,57 +1,22 @@
-import { type ReactNode, useMemo, useRef, useState } from 'react'
+import { type ReactNode } from 'react'
 
-import { DynamicPanelTabs, type DynamicPanelTab } from '../shared/DynamicPanelTabs'
+import { DynamicPanelTabs } from '../shared/DynamicPanelTabs'
 import { NewNoteScaffold } from '../shared/NewNoteScaffold'
+import { useDynamicTabs } from '../../hooks/useDynamicTabs'
 
 type CenterPanelProps = {
   children: ReactNode
 }
 
 const BASE_TAB_ID = 'center-coordinator'
+
 export function CenterPanel({ children }: CenterPanelProps) {
-  const noteIdCounter = useRef(1)
-  const [tabs, setTabs] = useState<DynamicPanelTab[]>([
-    { id: BASE_TAB_ID, label: 'Coordinator', kind: 'base', closable: false, renamable: false }
-  ])
-  const [activeTabId, setActiveTabId] = useState(BASE_TAB_ID)
-
-  const activeTab = useMemo(
-    () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0],
-    [activeTabId, tabs]
-  )
-
-  const handleCreateNote = () => {
-    const nextId = `center-note-${noteIdCounter.current}`
-    noteIdCounter.current += 1
-
-    setTabs((currentTabs) => [
-      ...currentTabs,
-      { id: nextId, label: 'New Note', kind: 'note', closable: true, renamable: true }
-    ])
-    setActiveTabId(nextId)
-  }
-
-  const handleCloseTab = (tabId: string) => {
-    setTabs((currentTabs) => {
-      const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId)
-      if (tabIndex < 0) {
-        return currentTabs
-      }
-
-      const remainingTabs = currentTabs.filter((tab) => tab.id !== tabId)
-
-      if (activeTabId === tabId) {
-        const fallbackTab = currentTabs[tabIndex - 1] ?? currentTabs[tabIndex + 1] ?? remainingTabs[0]
-        setActiveTabId(fallbackTab?.id ?? BASE_TAB_ID)
-      }
-
-      return remainingTabs
+  const { tabs, activeTabId, setActiveTabId, activeTab, handleCreateNote, handleCloseTab, handleRenameTab } =
+    useDynamicTabs({
+      prefix: 'center',
+      baseTabId: BASE_TAB_ID,
+      baseTab: { id: BASE_TAB_ID, label: 'Coordinator', kind: 'base' }
     })
-  }
-
-  const handleRenameTab = (tabId: string, label: string) => {
-    setTabs((currentTabs) => currentTabs.map((tab) => (tab.id === tabId ? { ...tab, label } : tab)))
-  }
 
   return (
     <section
@@ -70,7 +35,12 @@ export function CenterPanel({ children }: CenterPanelProps) {
           className="w-full border-0 px-0"
         />
       </header>
-      <div className="relative flex min-h-0 flex-1 flex-col p-4">
+      <div
+        id={`${activeTabId}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${activeTabId}-tab`}
+        className="relative flex min-h-0 flex-1 flex-col p-4"
+      >
         {activeTab?.kind === 'note' ? (
           <NewNoteScaffold />
         ) : (

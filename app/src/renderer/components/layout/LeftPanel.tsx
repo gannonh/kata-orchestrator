@@ -153,7 +153,7 @@ export function LeftPanel({ collapsed, onCollapsedChange, theme, onToggleTheme }
               )
             })}
           </TabsList>
-          {theme ? (
+          {theme && onToggleTheme ? (
             <div className="mt-auto p-2 pt-0">
               <Button
                 type="button"

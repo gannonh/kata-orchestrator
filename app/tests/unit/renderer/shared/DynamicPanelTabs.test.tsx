@@ -9,8 +9,8 @@ describe('DynamicPanelTabs', () => {
   })
 
   const baseTabs = [
-    { id: 'base', label: 'Coordinator', kind: 'base' as const, closable: false, renamable: false },
-    { id: 'note', label: 'New Note', kind: 'note' as const, closable: true, renamable: true }
+    { id: 'base', label: 'Coordinator', kind: 'base' as const },
+    { id: 'note', label: 'New Note', kind: 'note' as const }
   ]
 
   const openMenu = () => {
@@ -38,7 +38,7 @@ describe('DynamicPanelTabs', () => {
     expect(onCreateNote).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps non-note menu items enabled but does not trigger note creation', () => {
+  it('marks agent, terminal, and browser menu items as disabled with aria-disabled', () => {
     const onCreateNote = vi.fn()
 
     render(
@@ -54,13 +54,95 @@ describe('DynamicPanelTabs', () => {
     )
 
     openMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'New Agent' }))
-    openMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'New Terminal' }))
-    openMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'New Browser' }))
 
+    const agentItem = screen.getByRole('menuitem', { name: 'New Agent' })
+    const terminalItem = screen.getByRole('menuitem', { name: 'New Terminal' })
+    const browserItem = screen.getByRole('menuitem', { name: 'New Browser' })
+
+    expect(agentItem.getAttribute('aria-disabled')).toBe('true')
+    expect(terminalItem.getAttribute('aria-disabled')).toBe('true')
+    expect(browserItem.getAttribute('aria-disabled')).toBe('true')
+
+    fireEvent.click(agentItem)
     expect(onCreateNote).not.toHaveBeenCalled()
+    expect(screen.getByRole('menu')).toBeTruthy()
+  })
+
+  it('closes menu when new-tab button is clicked while menu is already open', () => {
+    render(
+      <DynamicPanelTabs
+        ariaLabel="Center tabs"
+        tabs={baseTabs}
+        activeTabId="base"
+        onActiveTabChange={() => {}}
+        onCreateNote={() => {}}
+        onCloseTab={() => {}}
+        onRenameTab={() => {}}
+      />
+    )
+
+    openMenu()
+    expect(screen.getByRole('menu')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'New tab' }))
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('gives each tab button an aria-controls pointing to its panel region', () => {
+    render(
+      <DynamicPanelTabs
+        ariaLabel="Center tabs"
+        tabs={baseTabs}
+        activeTabId="base"
+        onActiveTabChange={() => {}}
+        onCreateNote={() => {}}
+        onCloseTab={() => {}}
+        onRenameTab={() => {}}
+      />
+    )
+
+    const baseTab = screen.getByRole('tab', { name: /Coordinator/ })
+    expect(baseTab.getAttribute('aria-controls')).toBe('base-panel')
+
+    const noteTab = screen.getByRole('tab', { name: /New Note/ })
+    expect(noteTab.getAttribute('aria-controls')).toBe('note-panel')
+  })
+
+  it('activates adjacent tabs on ArrowRight and ArrowLeft keyboard navigation', () => {
+    const onActiveTabChange = vi.fn()
+    const { rerender } = render(
+      <DynamicPanelTabs
+        ariaLabel="Center tabs"
+        tabs={baseTabs}
+        activeTabId="base"
+        onActiveTabChange={onActiveTabChange}
+        onCreateNote={() => {}}
+        onCloseTab={() => {}}
+        onRenameTab={() => {}}
+      />
+    )
+
+    const tablist = screen.getByRole('tablist', { name: 'Center tabs' })
+
+    fireEvent.keyDown(tablist, { key: 'ArrowRight' })
+    expect(onActiveTabChange).toHaveBeenCalledWith('note')
+
+    onActiveTabChange.mockClear()
+
+    rerender(
+      <DynamicPanelTabs
+        ariaLabel="Center tabs"
+        tabs={baseTabs}
+        activeTabId="note"
+        onActiveTabChange={onActiveTabChange}
+        onCreateNote={() => {}}
+        onCloseTab={() => {}}
+        onRenameTab={() => {}}
+      />
+    )
+
+    fireEvent.keyDown(tablist, { key: 'ArrowLeft' })
+    expect(onActiveTabChange).toHaveBeenCalledWith('base')
   })
 
   it('renders the open menu outside the tablist scrolling container to avoid clipping', () => {

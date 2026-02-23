@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
 import { mockProject } from '../../mock/project'
 import type { ProjectSpec } from '../../types/project'
 import { cn } from '../../lib/cn'
 import { SpecTab } from '../right/SpecTab'
-import { DynamicPanelTabs, type DynamicPanelTab } from '../shared/DynamicPanelTabs'
+import { DynamicPanelTabs } from '../shared/DynamicPanelTabs'
 import { NewNoteScaffold } from '../shared/NewNoteScaffold'
 import { Button } from '../ui/button'
 import { ScrollArea } from '../ui/scroll-area'
+import { useDynamicTabs } from '../../hooks/useDynamicTabs'
 
 const BASE_TAB_ID = 'right-spec'
 
@@ -17,56 +18,15 @@ type RightPanelProps = {
 }
 
 export function RightPanel({ project = mockProject }: RightPanelProps) {
-  const noteIdCounter = useRef(1)
-  const [tabs, setTabs] = useState<DynamicPanelTab[]>([
-    { id: BASE_TAB_ID, label: 'Spec', kind: 'base', closable: false, renamable: false }
-  ])
-  const [activeTabId, setActiveTabId] = useState(BASE_TAB_ID)
   const [isCollapsed, setIsCollapsed] = useState(false)
 
-  useEffect(() => {
-    noteIdCounter.current = 1
-    setTabs([{ id: BASE_TAB_ID, label: 'Spec', kind: 'base', closable: false, renamable: false }])
-    setActiveTabId(BASE_TAB_ID)
-  }, [project.id])
-
-  const activeTab = useMemo(
-    () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0],
-    [activeTabId, tabs]
-  )
-
-  const handleCreateNote = () => {
-    const nextId = `right-note-${noteIdCounter.current}`
-    noteIdCounter.current += 1
-
-    setTabs((currentTabs) => [
-      ...currentTabs,
-      { id: nextId, label: 'New Note', kind: 'note', closable: true, renamable: true }
-    ])
-    setActiveTabId(nextId)
-  }
-
-  const handleCloseTab = (tabId: string) => {
-    setTabs((currentTabs) => {
-      const tabIndex = currentTabs.findIndex((tab) => tab.id === tabId)
-      if (tabIndex < 0) {
-        return currentTabs
-      }
-
-      const remainingTabs = currentTabs.filter((tab) => tab.id !== tabId)
-
-      if (activeTabId === tabId) {
-        const fallbackTab = currentTabs[tabIndex - 1] ?? currentTabs[tabIndex + 1] ?? remainingTabs[0]
-        setActiveTabId(fallbackTab?.id ?? BASE_TAB_ID)
-      }
-
-      return remainingTabs
+  const { tabs, activeTabId, setActiveTabId, activeTab, handleCreateNote, handleCloseTab, handleRenameTab } =
+    useDynamicTabs({
+      prefix: 'right',
+      baseTabId: BASE_TAB_ID,
+      baseTab: { id: BASE_TAB_ID, label: 'Spec', kind: 'base' },
+      resetKey: project.id
     })
-  }
-
-  const handleRenameTab = (tabId: string, label: string) => {
-    setTabs((currentTabs) => currentTabs.map((tab) => (tab.id === tabId ? { ...tab, label } : tab)))
-  }
 
   const activeContent = useMemo(() => {
     if (activeTab?.kind === 'note') {
@@ -106,6 +66,9 @@ export function RightPanel({ project = mockProject }: RightPanelProps) {
       </header>
 
       <div
+        id={`${activeTabId}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${activeTabId}-tab`}
         data-testid="right-panel-content"
         className={cn(
           'flex min-h-0 flex-1 flex-col overflow-hidden p-4 transition-[opacity] duration-200 ease-linear',
