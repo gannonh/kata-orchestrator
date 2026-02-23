@@ -121,9 +121,11 @@ export function DynamicPanelTabs({
     event.preventDefault()
 
     const currentIndex = tabs.findIndex((t) => t.id === activeTabId)
+    /* v8 ignore start -- defensive guard; activeTabId is always a valid tab id in practice */
     if (currentIndex < 0) {
       return
     }
+    /* v8 ignore stop */
 
     const nextIndex =
       event.key === 'ArrowRight'
