@@ -134,17 +134,19 @@ test.describe('Desktop app navigation @uat', () => {
   })
 
   test('switches right panel tabs and preserves notes state @uat @ci @quality-gate', async ({ appWindow }) => {
-    const rightTabs = appWindow.getByRole('tablist', { name: 'Right panel tabs' })
-    const note = 'Integration checkpoint: merged waves 2B-5 and validating UAT.'
+    const rightPanel = appWindow.getByTestId('right-panel')
+    const rightTabs = rightPanel.getByRole('tablist', { name: 'Right panel tabs' })
+    const noteScaffold = 'Start drafting a specification for what you want to build. Or brainstorm with an agent <-'
 
-    await rightTabs.getByRole('tab', { name: 'Notes' }).click()
-    await appWindow.getByLabel('Project notes').fill(note)
-    await expect(appWindow.getByLabel('Project notes')).toHaveValue(note)
+    await rightPanel.getByLabel('New tab').click()
+    await rightPanel.getByRole('menuitem', { name: 'New Note' }).click()
+    await expect(appWindow.getByText(noteScaffold)).toBeVisible()
 
     await rightTabs.getByRole('tab', { name: 'Spec' }).click()
     await expect(appWindow.getByRole('heading', { name: /^Goal$/ })).toBeVisible()
+    await expect(appWindow.getByText(noteScaffold)).toHaveCount(0)
 
-    await rightTabs.getByRole('tab', { name: 'Notes' }).click()
-    await expect(appWindow.getByLabel('Project notes')).toHaveValue(note)
+    await rightTabs.getByRole('tab', { name: 'New Note' }).click()
+    await expect(appWindow.getByText(noteScaffold)).toBeVisible()
   })
 })

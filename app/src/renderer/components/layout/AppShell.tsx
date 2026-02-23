@@ -164,6 +164,10 @@ export function AppShell() {
         <LeftPanel
           collapsed={leftCollapsed}
           onCollapsedChange={setLeftCollapsed}
+          theme={theme}
+          onToggleTheme={() => {
+            setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))
+          }}
         />
 
         {leftCollapsed ? (
@@ -184,7 +188,7 @@ export function AppShell() {
         <PanelResizer
           label="Resize center-right divider"
           testId="right-resizer"
-          lineAt="start"
+          lineAt="end"
           onDelta={handleCenterRightDelta}
           onReset={handleCenterRightReset}
         />
@@ -193,12 +197,7 @@ export function AppShell() {
           data-testid="right-panel"
           className="overflow-hidden bg-background"
         >
-          <RightPanel
-            theme={theme}
-            onToggleTheme={() => {
-              setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))
-            }}
-          />
+          <RightPanel />
         </aside>
       </section>
     </main>

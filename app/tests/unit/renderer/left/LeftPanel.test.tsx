@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { LeftPanel } from '../../../../src/renderer/components/layout/LeftPanel'
 import { LEFT_STATUS_SCENARIO_KEY } from '../../../../src/renderer/mock/project'
@@ -166,5 +166,44 @@ describe('LeftPanel', () => {
 
     expect(content.getAttribute('aria-hidden')).toBe('false')
     expect(content.className).toContain('opacity-100')
+  })
+
+  it('does not render the theme toggle when theme is provided without onToggleTheme', () => {
+    render(<LeftPanel theme="dark" />)
+
+    expect(screen.queryByRole('button', { name: 'Switch to light theme' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Switch to dark theme' })).toBeNull()
+  })
+
+  it('does not render the theme toggle when theme prop is omitted', () => {
+    render(<LeftPanel />)
+
+    expect(screen.queryByRole('button', { name: 'Switch to light theme' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Switch to dark theme' })).toBeNull()
+  })
+
+  it('renders dark theme toggle label and icon', () => {
+    render(<LeftPanel theme="dark" onToggleTheme={() => {}} />)
+
+    const button = screen.getByRole('button', { name: 'Switch to light theme' })
+    expect(button.querySelector('svg')).toBeTruthy()
+    expect(button.querySelector('svg')?.classList.contains('lucide-sun')).toBe(true)
+  })
+
+  it('renders light theme toggle label and icon', () => {
+    render(<LeftPanel theme="light" onToggleTheme={() => {}} />)
+
+    const button = screen.getByRole('button', { name: 'Switch to dark theme' })
+    expect(button.querySelector('svg')).toBeTruthy()
+    expect(button.querySelector('svg')?.classList.contains('lucide-moon')).toBe(true)
+  })
+
+  it('calls onToggleTheme when clicking the theme toggle', () => {
+    const onToggleTheme = vi.fn()
+
+    render(<LeftPanel theme="dark" onToggleTheme={onToggleTheme} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to light theme' }))
+
+    expect(onToggleTheme).toHaveBeenCalledTimes(1)
   })
 })
