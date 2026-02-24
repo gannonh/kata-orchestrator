@@ -48,15 +48,12 @@ export function MockChatPanel() {
               )
             case 'collapsedSummary':
               return (
-                <article
+                <MessageBubble
                   key={block.id}
-                  className="flex flex-col gap-2 items-end"
-                >
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">You</span>
-                  <div className="max-w-[85%] rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-foreground">
-                    {block.summary}
-                  </div>
-                </article>
+                  message={{ id: block.id, role: 'user', content: block.summary }}
+                  variant="collapsed"
+                  summary={block.summary}
+                />
               )
             case 'statusBadge': {
               const isThinking = block.variant === 'thinking'

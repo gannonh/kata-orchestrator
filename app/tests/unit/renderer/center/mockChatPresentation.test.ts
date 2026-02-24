@@ -86,4 +86,21 @@ describe('deriveMockChatPresentation', () => {
 
     expect(result.viewState).toBe('initial')
   })
+
+  it('prioritizes the latest user turn for view-state inference', () => {
+    const result = deriveMockChatPresentation({
+      messages: [
+        { id: 'u-context', role: 'user', content: 'Read ## Context now for # Kata Cloud (Kata V2)' },
+        { id: 'a-2', role: 'assistant', content: 'Context loaded.' },
+        {
+          id: 'u-analyze-latest',
+          role: 'user',
+          content: 'Please provide an overview and analyze migration risks before implementation.'
+        }
+      ],
+      isStreaming: true
+    })
+
+    expect(result.viewState).toBe('analyzing')
+  })
 })

@@ -87,4 +87,22 @@ describe('MockChatPanel', () => {
     ).toBeTruthy()
     expect(screen.queryByText(mockMessages[0].content)).toBeNull()
   })
+
+  it('renders collapsed summaries through the shared message bubble variant', () => {
+    mockMessages = [
+      {
+        id: 'user-5',
+        role: 'user',
+        content:
+          'Please provide an overview of this migration and analyze the implementation approach with risks, dependencies, and rollout details for stakeholders.'
+      }
+    ]
+    mockIsStreaming = true
+
+    render(<MockChatPanel />)
+
+    const summaryNode = screen.getByText((text) => text.startsWith('Please provide an overview of this migration'))
+    const summaryBubble = summaryNode.closest('div')
+    expect(summaryBubble?.className).toContain('border-dashed')
+  })
 })

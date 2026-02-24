@@ -58,21 +58,22 @@ function inferViewState({ messages, isStreaming, forceAnalyzing = false }: Deriv
     return 'analyzing'
   }
 
-  const userContent = messages
-    .filter((message) => message.role === 'user')
-    .map((message) => message.content)
-    .join('\n')
+  const userMessages = [...messages].reverse().filter((message) => message.role === 'user')
 
-  if (/pasted\s+\d+\s+lines/i.test(userContent)) {
-    return 'pastedContext'
-  }
+  for (const message of userMessages) {
+    const userContent = message.content
 
-  if (/(#\s?kata cloud|##\s?context|\bcontext\b)/i.test(userContent)) {
-    return 'contextReading'
-  }
+    if (/pasted\s+\d+\s+lines/i.test(userContent)) {
+      return 'pastedContext'
+    }
 
-  if (isStreaming && ANALYZING_TRIGGER.test(userContent)) {
-    return 'analyzing'
+    if (/(#\s?kata cloud|##\s?context|\bcontext\b)/i.test(userContent)) {
+      return 'contextReading'
+    }
+
+    if (isStreaming && ANALYZING_TRIGGER.test(userContent)) {
+      return 'analyzing'
+    }
   }
 
   return 'initial'
