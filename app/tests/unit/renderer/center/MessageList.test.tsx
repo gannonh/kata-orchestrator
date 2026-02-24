@@ -43,6 +43,7 @@ describe('MessageList', () => {
     const listInner = viewport?.querySelector('div > .space-y-5') as HTMLDivElement | null
     expect(viewport?.scrollTop).toBe(640)
     expect(listInner).toBeTruthy()
+    expect(messageList.className).toContain('px-0')
 
     rerender(
       <MessageList>

@@ -24,7 +24,7 @@ export function MessageList({ children }: MessageListProps) {
     <ScrollArea
       ref={listRef}
       data-testid="message-list"
-      className="min-h-0 flex-1 px-3 py-4"
+      className="min-h-0 flex-1 px-0 py-4"
     >
       <div className="space-y-5">{children}</div>
     </ScrollArea>
