@@ -195,7 +195,7 @@ export function AppShell({ activeSpaceId, onOpenHome }: AppShellProps = {}) {
         <PanelResizer
           label="Resize center-right divider"
           testId="right-resizer"
-          lineAt="end"
+          lineAt="start"
           onDelta={handleCenterRightDelta}
           onReset={handleCenterRightReset}
         />
