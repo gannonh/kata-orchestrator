@@ -34,4 +34,21 @@ describe('MessageBubble', () => {
     expect(screen.getByRole('heading', { name: 'Summary', level: 2 })).toBeTruthy()
     expect(screen.getByText('Added tests')).toBeTruthy()
   })
+
+  it('renders collapsed summary variant for analyzing mode', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 'user-2',
+          role: 'user',
+          content: 'Long content that should not be shown when collapsed.'
+        }}
+        variant="collapsed"
+        summary="I would like to build the following product..."
+      />
+    )
+
+    expect(screen.getByText('I would like to build the following product...')).toBeTruthy()
+    expect(screen.queryByText('Long content that should not be shown when collapsed.')).toBeNull()
+  })
 })
