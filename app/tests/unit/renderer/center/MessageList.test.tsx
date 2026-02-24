@@ -40,7 +40,9 @@ describe('MessageList', () => {
 
     const messageList = getByTestId('message-list')
     const viewport = messageList.querySelector('[data-radix-scroll-area-viewport]') as HTMLDivElement | null
+    const listInner = viewport?.querySelector('div > .space-y-5') as HTMLDivElement | null
     expect(viewport?.scrollTop).toBe(640)
+    expect(listInner).toBeTruthy()
 
     rerender(
       <MessageList>

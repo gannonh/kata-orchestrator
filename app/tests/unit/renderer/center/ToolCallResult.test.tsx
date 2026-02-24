@@ -32,5 +32,6 @@ describe('ToolCallResult', () => {
     expect(argumentsCode).toBeTruthy()
     expect(screen.getByText('Current phase: 2')).toBeTruthy()
     expect(screen.getByText((_, node) => node?.tagName === 'CODE' && node.textContent?.includes('Current phase: 2') === true).className).toContain('language-text')
+    expect(toggle.closest('div[data-state]')?.className).toContain('bg-card/60')
   })
 })
