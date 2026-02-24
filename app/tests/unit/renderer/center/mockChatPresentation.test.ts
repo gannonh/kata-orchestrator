@@ -36,6 +36,25 @@ describe('deriveMockChatPresentation', () => {
     expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'thinking')).toBe(true)
   })
 
+  it('infers analyzing from user content while streaming and truncates collapsed summaries', () => {
+    const longOverviewRequest = [
+      'Please give me an overview of this rollout and analyze tradeoffs.',
+      'I also need risks, constraints, and a complete proposal covering implementation details end to end.'
+    ].join(' ')
+    const result = deriveMockChatPresentation({
+      messages: [{ id: 'u4', role: 'user', content: longOverviewRequest }],
+      isStreaming: true
+    })
+
+    expect(result.viewState).toBe('analyzing')
+    const collapsedSummary = result.blocks.find((block) => block.type === 'collapsedSummary')
+    expect(collapsedSummary?.type).toBe('collapsedSummary')
+    if (collapsedSummary?.type === 'collapsedSummary') {
+      expect(collapsedSummary.summary.endsWith('...')).toBe(true)
+      expect(collapsedSummary.summary.length).toBeLessThan(longOverviewRequest.length)
+    }
+  })
+
   it('defaults to initial view state when no markers are present', () => {
     const result = deriveMockChatPresentation({
       messages: [{ id: 'u3', role: 'user', content: 'Quick follow up' }],

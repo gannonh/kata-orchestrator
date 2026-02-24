@@ -65,4 +65,26 @@ describe('MockChatPanel', () => {
 
     expect(screen.getByText('Stopped')).toBeTruthy()
   })
+
+  it('renders a collapsed summary bubble in inferred analyzing state', () => {
+    mockMessages = [
+      {
+        id: 'user-3',
+        role: 'user',
+        content:
+          'Please provide an overview of this migration and analyze the implementation approach with risks, dependencies, and rollout details for stakeholders.'
+      }
+    ]
+    mockIsStreaming = true
+
+    render(<MockChatPanel />)
+
+    expect(screen.getByText('You')).toBeTruthy()
+    expect(
+      screen.getByText(
+        (text) => text.startsWith('Please provide an overview of this migration and analyze') && text.endsWith('...')
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(mockMessages[0].content)).toBeNull()
+  })
 })
