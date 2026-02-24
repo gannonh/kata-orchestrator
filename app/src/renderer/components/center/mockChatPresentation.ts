@@ -42,6 +42,7 @@ type DeriveMockChatPresentationInput = {
 }
 
 const CONTEXT_CHIPS = ['# Kata Cloud (Kata V2)', '## Context...']
+const ANALYZING_TRIGGER = /(overview|analyz|following product)/i
 
 function summarizeContent(content: string): string {
   const compact = content.replace(/\s+/g, ' ').trim()
@@ -70,7 +71,7 @@ function inferViewState({ messages, isStreaming, forceAnalyzing = false }: Deriv
     return 'contextReading'
   }
 
-  if (isStreaming && /(overview|analyz|following product)/i.test(userContent)) {
+  if (isStreaming && ANALYZING_TRIGGER.test(userContent)) {
     return 'analyzing'
   }
 
@@ -81,11 +82,16 @@ export function deriveMockChatPresentation(input: DeriveMockChatPresentationInpu
   const viewState = inferViewState(input)
   const statusVariant: StatusBadgeVariant = input.isStreaming ? 'thinking' : 'stopped'
   const latestUser = [...input.messages].reverse().find((message) => message.role === 'user')
+  const latestAnalyzingUser = [...input.messages]
+    .reverse()
+    .find((message) => message.role === 'user' && ANALYZING_TRIGGER.test(message.content))
+  const analyzingTarget =
+    viewState === 'analyzing' ? (input.forceAnalyzing ? latestUser : latestAnalyzingUser ?? latestUser) : undefined
 
   const blocks: MockChatPresentationBlock[] = []
 
   for (const message of input.messages) {
-    if (viewState === 'analyzing' && latestUser && message.id === latestUser.id) {
+    if (viewState === 'analyzing' && analyzingTarget && message.id === analyzingTarget.id) {
       blocks.push({
         id: `summary-${message.id}`,
         type: 'collapsedSummary',

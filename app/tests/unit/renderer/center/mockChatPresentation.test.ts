@@ -55,6 +55,29 @@ describe('deriveMockChatPresentation', () => {
     }
   })
 
+  it('collapses the latest user message that matches analyzing triggers', () => {
+    const analyzingRequest =
+      'Please provide an overview of this migration and analyze implementation risks, dependencies, and rollout strategy.'
+    const followUpMessage = 'Thanks. Also include a timeline later.'
+    const result = deriveMockChatPresentation({
+      messages: [
+        { id: 'u-analyze', role: 'user', content: analyzingRequest },
+        { id: 'a-1', role: 'assistant', content: 'Working on it now.' },
+        { id: 'u-followup', role: 'user', content: followUpMessage }
+      ],
+      isStreaming: true
+    })
+
+    const collapsedSummary = result.blocks.find((block) => block.type === 'collapsedSummary')
+    expect(collapsedSummary?.type).toBe('collapsedSummary')
+    if (collapsedSummary?.type === 'collapsedSummary') {
+      expect(collapsedSummary.summary).toContain('overview of this migration')
+      expect(collapsedSummary.summary).not.toContain('timeline later')
+    }
+
+    expect(result.blocks.some((block) => block.type === 'message' && block.message.id === 'u-followup')).toBe(true)
+  })
+
   it('defaults to initial view state when no markers are present', () => {
     const result = deriveMockChatPresentation({
       messages: [{ id: 'u3', role: 'user', content: 'Quick follow up' }],
