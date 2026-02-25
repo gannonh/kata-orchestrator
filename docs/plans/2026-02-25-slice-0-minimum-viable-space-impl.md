@@ -1039,55 +1039,35 @@ If any fixes were needed, commit them individually with descriptive messages.
 
 ---
 
-### Task 10: Pencil Design Sync (Code-First)
+## Pencil Design Sync (Code-First)
 
-**Files:**
-- Pencil file: `pencil/ui-01.pen` (via Pencil MCP tools only)
+Per `app/AGENTS.md`, this is behavior-driven work. Follow the **code-first** workflow: build the React component, then update Pencil to reflect the shipped state.
 
-**Context:** Per `app/AGENTS.md`, this is behavior-driven work, so we follow the **code-first** Pencil design sync workflow:
-1. Code is already built (Tasks 1-9)
-2. Update or create the corresponding Pencil frame to reflect the shipped state
-3. Keep Pencil as a living record, not a stale spec
+Pencil sync is NOT a standalone final task. It is integrated into every task that creates or modifies a UI component:
 
-**Step 1: Review current Pencil state**
+- **Task 7 (KAT-99):** After wiring HomeSpacesScreen IPC, update the Home/Spaces Pencil frame to reflect real data flow. Update component context notes for `HomeSpacesScreen`, `CreateSpacePanel`, and `SpacesListPanel` with their code paths. Ensure `$variable` references. `get_screenshot` for verification.
+- **Task 8 (KAT-100):** After changing App.tsx navigation, update any app-level navigation frames to show home-first startup flow. `get_screenshot` for verification.
 
-Use Pencil MCP `get_editor_state()` to check what's currently in the design file.
-Use `batch_get` to find existing frames related to "Home", "Create Space", "Spaces List".
-
-**Step 2: Update Pencil frames**
-
-Using `batch_design` operations:
-- If a "Home / Spaces" frame exists, update it to reflect the shipped layout (real data flow, no mocks)
-- If frames reference `MockSpace`, update component context notes to reference `SpaceRecord` / `DisplaySpace`
-- Ensure all components use `$variable` references, not hardcoded colors
-- Note target code paths in component `context` properties:
-  - `HomeSpacesScreen` → `app/src/renderer/components/home/HomeSpacesScreen.tsx`
-  - `CreateSpacePanel` → `app/src/renderer/components/home/CreateSpacePanel.tsx`
-  - `SpacesListPanel` → `app/src/renderer/components/home/SpacesListPanel.tsx`
-
-**Step 3: Screenshot for verification**
-
-Use `get_screenshot` to capture the updated Pencil frame and compare visually with the running app.
-
-**Step 4: Commit design sync notes (if any)**
-
-If the Pencil sync required any code-side token or component changes, commit them.
+Tasks that do NOT need Pencil updates:
+- Tasks 1-5 (backend: types, state store, IPC, preload) — no visible UI
+- Task 6 (type refactor) — no visual change
+- Task 9 (integration verification) — verification only
 
 ---
 
 ## Linear Sub-Issues
 
-Create these as sub-issues of KAT-92 in Linear:
+Sub-issues of KAT-92:
 
-| # | Title | Task |
-|---|-------|------|
-| 1 | [Slice 0] Shared types: SpaceRecord, SessionRecord, AppState | Task 1 |
-| 2 | [Slice 0] State store: JSON file persistence with atomic writes | Task 2 |
-| 3 | [Slice 0] Space and session IPC handlers | Task 3 |
-| 4 | [Slice 0] Wire state store into main process initialization | Task 4 |
-| 5 | [Slice 0] Preload bridge: space and session IPC methods | Task 5 |
-| 6 | [Slice 0] Replace MockSpace with SpaceRecord/DisplaySpace | Task 6 |
-| 7 | [Slice 0] HomeSpacesScreen IPC wiring | Task 7 |
-| 8 | [Slice 0] App.tsx startup navigation | Task 8 |
-| 9 | [Slice 0] Integration verification and quality gate | Task 9 |
-| 10 | [Slice 0] Pencil design sync (code-first) | Task 10 |
+| Issue | Title | Task |
+|-------|-------|------|
+| KAT-93 | [Slice 0] Shared types: SpaceRecord, SessionRecord, AppState | Task 1 |
+| KAT-94 | [Slice 0] State store: JSON file persistence with atomic writes | Task 2 |
+| KAT-95 | [Slice 0] Space and session IPC handlers | Task 3 |
+| KAT-96 | [Slice 0] Wire state store into main process initialization | Task 4 |
+| KAT-97 | [Slice 0] Preload bridge: space and session IPC methods | Task 5 |
+| KAT-98 | [Slice 0] Replace MockSpace with SpaceRecord/DisplaySpace | Task 6 |
+| KAT-99 | [Slice 0] HomeSpacesScreen IPC wiring + Pencil sync | Task 7 |
+| KAT-100 | [Slice 0] App.tsx startup navigation + Pencil sync | Task 8 |
+| KAT-101 | [Slice 0] Integration verification and quality gate | Task 9 |
+| ~~KAT-102~~ | ~~Pencil design sync~~ | Canceled — folded into KAT-99/KAT-100 |
