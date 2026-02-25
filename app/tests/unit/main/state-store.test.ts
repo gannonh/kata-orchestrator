@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest'
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -59,6 +59,28 @@ describe('createStateStore', () => {
     expect(state).toEqual(createDefaultAppState())
   })
 
+  test('returns default state when JSON has wrong shape', () => {
+    fs.writeFileSync(filePath, JSON.stringify({ foo: 'bar' }))
+
+    const store = createStateStore(filePath)
+    const state = store.load()
+    expect(state).toEqual(createDefaultAppState())
+  })
+
+  test('rethrows non-ENOENT file system errors when loading', () => {
+    const store = createStateStore(filePath)
+    const readError = Object.assign(new Error('permission denied'), {
+      code: 'EACCES'
+    })
+
+    const readSpy = vi.spyOn(fs, 'readFileSync').mockImplementation(() => {
+      throw readError
+    })
+
+    expect(() => store.load()).toThrow(readError)
+    readSpy.mockRestore()
+  })
+
   test('writes state to disk and can reload it', () => {
     const store = createStateStore(filePath)
 
@@ -96,5 +118,14 @@ describe('createStateStore', () => {
     // No leftover temp files in the directory
     const files = fs.readdirSync(tmpDir)
     expect(files).toEqual(['state.json'])
+  })
+
+  test('creates parent directory if it does not exist before saving', () => {
+    const nestedPath = path.join(tmpDir, 'nested', 'state.json')
+    const store = createStateStore(nestedPath)
+
+    store.save(createDefaultAppState())
+
+    expect(fs.existsSync(nestedPath)).toBe(true)
   })
 })
