@@ -148,4 +148,42 @@ describe('registerIpcHandlers', () => {
       })
     )
   })
+
+  it('rejects malformed payloads for space and session handlers', async () => {
+    registerIpcHandlers()
+    const handlers = getHandlersByChannel()
+    const spaceCreate = handlers.get('space:create')
+    const spaceGet = handlers.get('space:get')
+    const sessionCreate = handlers.get('session:create')
+
+    await expect(spaceCreate?.({}, null)).rejects.toThrow('Space input must be an object')
+
+    await expect(
+      spaceCreate?.({}, {
+        name: 'My Space',
+        repoUrl: 'https://github.com/user/repo',
+        rootPath: '/Users/me/repo'
+      })
+    ).rejects.toThrow('Space input is missing required string fields')
+
+    await expect(
+      spaceCreate?.({}, {
+        name: 'My Space',
+        repoUrl: 'https://github.com/user/repo',
+        rootPath: '/Users/me/repo',
+        branch: 'main',
+        orchestrationMode: 'invalid-mode'
+      })
+    ).rejects.toThrow('Space input has an invalid orchestrationMode')
+
+    await expect(spaceGet?.({}, { id: 123 })).rejects.toThrow(
+      'space:get input must be an object with string id'
+    )
+
+    await expect(sessionCreate?.({}, null)).rejects.toThrow('Session input must be an object')
+
+    await expect(sessionCreate?.({}, { spaceId: 'space-1' })).rejects.toThrow(
+      'Session input is missing required string fields'
+    )
+  })
 })
