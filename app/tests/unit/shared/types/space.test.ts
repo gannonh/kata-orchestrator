@@ -37,6 +37,14 @@ describe('createDefaultAppState', () => {
     expect(state.activeSpaceId).toBeNull()
     expect(state.activeSessionId).toBeNull()
   })
+
+  it('returns a new object on each call', () => {
+    const a = createDefaultAppState()
+    const b = createDefaultAppState()
+    expect(a).not.toBe(b)
+    expect(a.spaces).not.toBe(b.spaces)
+    expect(a.sessions).not.toBe(b.sessions)
+  })
 })
 
 describe('SpaceRecord type', () => {
