@@ -1,8 +1,8 @@
-import type { MockSpace } from '../../mock/spaces'
+import type { DisplaySpace } from '../../mock/spaces'
 
 type SpaceGroup = {
   repo: string
-  spaces: MockSpace[]
+  spaces: DisplaySpace[]
 }
 
 type SpacesListPanelProps = {
@@ -22,7 +22,7 @@ type SpacesListPanelProps = {
 // Note: archived spaces are filtered out by showArchived before reaching this
 // function under default settings, so the 'archived' branch is only reachable
 // when showArchived is true.
-function statusDotClassName(status: MockSpace['status']): string {
+function statusDotClassName(status: DisplaySpace['status']): string {
   if (status === 'active') {
     return 'bg-blue-500'
   }
