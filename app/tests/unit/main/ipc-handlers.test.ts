@@ -105,7 +105,8 @@ describe('registerIpcHandlers', () => {
       name: 'Fallback Space',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/repo',
-      branch: 'main'
+      branch: 'main',
+      workspaceMode: 'external'
     })
 
     await expect(spaceList?.({})).resolves.toEqual([createdSpace])

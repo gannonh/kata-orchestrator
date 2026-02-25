@@ -25,6 +25,13 @@ describe('HomeSpacesScreen', () => {
   })
 
   it('toggles create panel active visuals and mode selections', async () => {
+    const createdRecord = makeSpaceRecord({
+      id: 'space-created-toggle',
+      name: 'Create KAT-65 shell'
+    })
+    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
+    window.kata = { ...window.kata, spaceCreate }
+
     render(<HomeSpacesScreen onOpenSpace={() => {}} />)
 
     fireEvent.click(screen.getByRole('textbox', { name: 'Space prompt' }))
@@ -71,6 +78,13 @@ describe('HomeSpacesScreen', () => {
   })
 
   it('supports grouped toggle, no-result state, and creates default space for empty prompt', async () => {
+    const createdRecord = makeSpaceRecord({
+      id: 'space-created-untitled',
+      name: 'Untitled space'
+    })
+    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
+    window.kata = { ...window.kata, spaceCreate }
+
     render(<HomeSpacesScreen onOpenSpace={() => {}} />)
 
     const initialRows = screen.getAllByRole('button', { name: /Select space/ }).length
@@ -85,6 +99,20 @@ describe('HomeSpacesScreen', () => {
 
     fireEvent.change(screen.getByLabelText('Search spaces'), { target: { value: 'no-such-space' } })
     expect(screen.getByText('No spaces match your filters.')).toBeTruthy()
+  })
+
+  it('shows an error and does not create a local space when IPC is unavailable', async () => {
+    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+
+    const initialRows = screen.getAllByRole('button', { name: /Select space/ }).length
+    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain(
+        'Create Space is only available in the desktop app'
+      )
+    })
+    expect(screen.getAllByRole('button', { name: /Select space/ })).toHaveLength(initialRows)
   })
 
   it('binds repo and branch context strip to selected space state', () => {

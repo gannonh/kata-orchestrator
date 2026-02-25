@@ -75,6 +75,7 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
   const [showArchived, setShowArchived] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [spaces, setSpaces] = useState(initialSpaces)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(initialSpaces.find((space) => !space.archived)?.id ?? null)
 
   useEffect(() => {
@@ -159,6 +160,14 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
   }, [selectedSpace, workspaceMode, workspacePath])
 
   async function handleCreateSpace() {
+    setCreateError(null)
+
+    const spaceCreate = window.kata?.spaceCreate
+    if (!spaceCreate) {
+      setCreateError('Create Space is only available in the desktop app (IPC unavailable).')
+      return
+    }
+
     const createInput: CreateSpaceInput = {
       name: spacePrompt.trim() || 'Untitled space',
       repoUrl: selectedSpace?.repoUrl ?? '',
@@ -171,23 +180,15 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
     }
 
     try {
-      const createdRecord = await window.kata?.spaceCreate?.(createInput)
-      const nextSpace = createdRecord
-        ? toDisplaySpace(createdRecord)
-        : createDisplaySpaceForHome({
-          prompt: spacePrompt,
-          selectedSpace,
-          selectedMode,
-          workspaceMode,
-          workspacePath
-        })
+      const createdRecord = await spaceCreate(createInput)
+      const nextSpace = toDisplaySpace(createdRecord)
 
       setSpaces((current) => [nextSpace, ...current.filter((space) => space.id !== nextSpace.id)])
       setSelectedSpaceId(nextSpace.id)
       setSpacePrompt('')
       setIsCreatePanelActive(false)
     } catch {
-      // Preserve current prompt and selection when create fails.
+      setCreateError('Failed to create space. Please check settings and try again.')
     }
   }
 
@@ -217,6 +218,7 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
             rapidFire={rapidFire}
             repoName={selectedSpace?.repo ?? 'gannonh/kata-cloud'}
             branchName={selectedSpace?.branch ?? 'main'}
+            createError={createError}
             onPromptChange={setSpacePrompt}
             onPromptFocus={() => {
               setIsCreatePanelActive(true)

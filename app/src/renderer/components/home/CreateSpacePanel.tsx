@@ -10,6 +10,7 @@ type CreateSpacePanelProps = {
   rapidFire: boolean
   repoName: string
   branchName: string
+  createError: string | null
   onPromptChange: (value: string) => void
   onPromptFocus: () => void
   onSelectMode: (mode: 'team' | 'single') => void
@@ -28,6 +29,7 @@ export function CreateSpacePanel({
   rapidFire,
   repoName,
   branchName,
+  createError,
   onPromptChange,
   onPromptFocus,
   onSelectMode,
@@ -120,6 +122,11 @@ export function CreateSpacePanel({
           Create space
         </button>
       </div>
+      {createError && (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {createError}
+        </p>
+      )}
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <button
