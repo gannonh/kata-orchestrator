@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { HomeSpacesScreen } from '../../../../src/renderer/components/home/HomeSpacesScreen'
+import { HomeSpacesScreen, createDisplaySpaceForHome } from '../../../../src/renderer/components/home/HomeSpacesScreen'
 
 describe('HomeSpacesScreen', () => {
   afterEach(() => {
@@ -132,8 +132,8 @@ describe('HomeSpacesScreen', () => {
 
   it('groups spaces with the same repository regardless of casing', () => {
     const casingMismatch = [
-      { id: 'a', name: 'Space A', repo: 'MyOrg/my-repo', branch: 'main', elapsed: '1h', archived: false, status: 'active' as const },
-      { id: 'b', name: 'Space B', repo: 'myorg/my-repo', branch: 'feature/x', elapsed: '2h', archived: false, status: 'idle' as const }
+      { id: 'a', name: 'Space A', repoUrl: 'https://github.com/MyOrg/my-repo', rootPath: '/tmp/my-repo', repo: 'MyOrg/my-repo', branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-01-01T00:00:00.000Z', elapsed: '1h', archived: false, status: 'active' as const },
+      { id: 'b', name: 'Space B', repoUrl: 'https://github.com/myorg/my-repo', rootPath: '/tmp/my-repo', repo: 'myorg/my-repo', branch: 'feature/x', orchestrationMode: 'team' as const, createdAt: '2026-01-02T00:00:00.000Z', elapsed: '2h', archived: false, status: 'idle' as const }
     ]
     render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={casingMismatch} />)
 
@@ -142,5 +142,46 @@ describe('HomeSpacesScreen', () => {
 
     // Case-insensitive dedup: both spaces should be in a single group (one <ul>)
     expect(screen.getAllByRole('list')).toHaveLength(1)
+  })
+
+  it('builds a new space using the selected orchestration mode', () => {
+    const selectedSpace = {
+      id: 'existing',
+      name: 'Existing Space',
+      repoUrl: 'https://github.com/gannonh/kata-cloud',
+      rootPath: '/Users/gannonh/dev/kata/kata-cloud',
+      repo: 'gannonh/kata-cloud',
+      branch: 'main',
+      orchestrationMode: 'team' as const,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      elapsed: '10m',
+      archived: false,
+      status: 'active' as const
+    }
+
+    const created = createDisplaySpaceForHome({
+      prompt: 'Spin up single-mode workspace',
+      selectedSpace,
+      selectedMode: 'single',
+      now: new Date('2026-02-25T00:00:00.000Z')
+    })
+
+    expect(created.orchestrationMode).toBe('single')
+    expect(created.name).toBe('Spin up single-mode workspace')
+    expect(created.repo).toBe('gannonh/kata-cloud')
+  })
+
+  it('uses safe empty defaults when no selected space is available', () => {
+    const created = createDisplaySpaceForHome({
+      prompt: '',
+      selectedSpace: null,
+      selectedMode: 'team',
+      now: new Date('2026-02-25T00:00:00.000Z')
+    })
+
+    expect(created.repoUrl).toBe('')
+    expect(created.rootPath).toBe('')
+    expect(created.repo).toBe('')
+    expect(created.branch).toBe('')
   })
 })
