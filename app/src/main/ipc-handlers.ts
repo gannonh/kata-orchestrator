@@ -114,8 +114,13 @@ function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
 
   const normalizedWorkspaceMode = workspaceMode ?? 'managed'
   const normalizedRootPath = rootPath?.trim()
-  if (normalizedWorkspaceMode === 'external' && !normalizedRootPath) {
-    throw new Error('External workspace mode requires a non-empty rootPath')
+  if (normalizedWorkspaceMode === 'external') {
+    if (!normalizedRootPath) {
+      throw new Error('External workspace mode requires a non-empty rootPath')
+    }
+    if (!path.isAbsolute(normalizedRootPath)) {
+      throw new Error('External workspace rootPath must be an absolute path')
+    }
   }
 
   return {
@@ -177,7 +182,7 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
     const state = stateStore.load()
     const spaceId = randomUUID()
 
-    const rootPath = (() => {
+    const rootPath = await (async () => {
       if (parsedInput.workspaceMode === 'external') {
         return parsedInput.rootPath as string
       }
@@ -187,8 +192,13 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
       const workspaceRepoPath = path.join(workspaceRootPath, 'repo')
       const workspaceMetadataPath = path.join(workspaceRootPath, '.kata')
 
-      fs.mkdirSync(workspaceRepoPath, { recursive: true })
-      fs.mkdirSync(workspaceMetadataPath, { recursive: true })
+      try {
+        await fs.promises.mkdir(workspaceRepoPath, { recursive: true })
+        await fs.promises.mkdir(workspaceMetadataPath, { recursive: true })
+      } catch (fsError) {
+        const code = (fsError as NodeJS.ErrnoException).code ?? 'UNKNOWN'
+        throw new Error(`Failed to create managed workspace directory (${code}): ${workspaceRootPath}`)
+      }
 
       return workspaceRepoPath
     })()
@@ -205,11 +215,16 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
       status: 'active'
     }
 
-    stateStore.save({
-      ...state,
-      spaces: { ...state.spaces, [createdSpace.id]: createdSpace },
-      activeSpaceId: state.activeSpaceId ?? createdSpace.id
-    })
+    try {
+      stateStore.save({
+        ...state,
+        spaces: { ...state.spaces, [createdSpace.id]: createdSpace },
+        activeSpaceId: state.activeSpaceId ?? createdSpace.id
+      })
+    } catch (saveError) {
+      const code = (saveError as NodeJS.ErrnoException).code ?? 'UNKNOWN'
+      throw new Error(`Space created but failed to save state (${code})`)
+    }
 
     return createdSpace
   })

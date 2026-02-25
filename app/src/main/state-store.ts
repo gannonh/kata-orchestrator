@@ -100,11 +100,13 @@ export function createStateStore(filePath: string): StateStore {
 
       try {
         parsed = JSON.parse(raw)
-      } catch {
+      } catch (parseError) {
+        console.error('[StateStore] Failed to parse state file, returning default state:', filePath, parseError)
         return createDefaultAppState()
       }
 
       if (!isAppState(parsed)) {
+        console.warn('[StateStore] State file failed schema validation, returning default state:', filePath)
         return createDefaultAppState()
       }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import type { CreateSpaceInput, WorkspaceMode } from '@shared/types/space'
+import type { CreateSpaceInput, OrchestrationMode, WorkspaceMode } from '@shared/types/space'
 import { mockSpaces, toDisplaySpace, type DisplaySpace } from '../../mock/spaces'
 import { CreateSpacePanel } from './CreateSpacePanel'
 import { SpacesListPanel } from './SpacesListPanel'
@@ -10,7 +10,7 @@ type HomeSpacesScreenProps = {
   initialSpaces?: DisplaySpace[]
 }
 
-type Mode = 'team' | 'single'
+type Mode = OrchestrationMode
 
 type CreateDisplaySpaceForHomeInput = {
   prompt: string
@@ -96,8 +96,8 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
           }
           return fetchedSpaces.find((space) => !space.archived)?.id ?? fetchedSpaces[0]?.id ?? null
         })
-      } catch {
-        // Keep existing UI state when IPC is unavailable or fails.
+      } catch (error) {
+        console.error('[HomeSpacesScreen] spaceList IPC failed:', error)
       }
     }
 
@@ -187,8 +187,10 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
       setSelectedSpaceId(nextSpace.id)
       setSpacePrompt('')
       setIsCreatePanelActive(false)
-    } catch {
-      setCreateError('Failed to create space. Please check settings and try again.')
+    } catch (error) {
+      console.error('[HomeSpacesScreen] spaceCreate IPC failed:', error)
+      const message = error instanceof Error ? error.message : String(error)
+      setCreateError(message || 'Failed to create space.')
     }
   }
 

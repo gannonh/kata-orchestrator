@@ -20,6 +20,9 @@ function createWindow(): void {
       preload: path.join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      // sandbox: false allows the preload script to import Electron modules
+      // (contextBridge, ipcRenderer) via standard imports. The renderer stays
+      // isolated: contextIsolation is true and nodeIntegration is false.
       sandbox: false
     }
   })

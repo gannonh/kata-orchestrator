@@ -317,6 +317,17 @@ describe('registerIpcHandlers', () => {
       spaceCreate?.({}, {
         name: 'My Space',
         repoUrl: 'https://github.com/user/repo',
+        rootPath: 'relative/path',
+        branch: 'main',
+        workspaceMode: 'external',
+        orchestrationMode: 'team'
+      })
+    ).rejects.toThrow('External workspace rootPath must be an absolute path')
+
+    await expect(
+      spaceCreate?.({}, {
+        name: 'My Space',
+        repoUrl: 'https://github.com/user/repo',
         branch: 'main',
         workspaceMode: 'invalid-mode',
         orchestrationMode: 'team'
@@ -330,7 +341,7 @@ describe('registerIpcHandlers', () => {
   })
 
   it('space:create derives managed workspace paths and creates repo and .kata directories', async () => {
-    const mkdirSpy = vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined)
+    const mkdirSpy = vi.spyOn(fs.promises, 'mkdir').mockResolvedValue(undefined)
     const store = createMockStore(createDefaultAppState())
     registerIpcHandlers(store, {
       workspaceBaseDir: '/tmp/kata/workspaces'

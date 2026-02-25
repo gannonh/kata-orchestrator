@@ -260,9 +260,9 @@ describe('HomeSpacesScreen', () => {
 
     await waitFor(() => {
       expect(spaceList).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('IPC Loaded Space')).toBeTruthy()
+      expect(screen.getByText('IPC Loaded Space 2')).toBeTruthy()
     })
-    expect(screen.getByText('IPC Loaded Space')).toBeTruthy()
-    expect(screen.getByText('IPC Loaded Space 2')).toBeTruthy()
   })
 
   it('preserves current selection when IPC refresh includes the selected space', async () => {
@@ -370,9 +370,7 @@ describe('HomeSpacesScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
 
     await waitFor(() => {
-      expect(screen.getByRole('alert').textContent).toContain(
-        'Failed to create space. Please check settings and try again.'
-      )
+      expect(screen.getByRole('alert').textContent).toContain('create failed')
     })
   })
 })
