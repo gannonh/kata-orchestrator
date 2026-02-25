@@ -259,4 +259,40 @@ describe('AppShell', () => {
     unmount()
     restoreClientWidth()
   })
+
+  it('keeps the center-right divider line aligned to the start edge across drag and reset', () => {
+    const restoreClientWidth = mockClientWidth(1600)
+    globalThis.ResizeObserver = undefined
+
+    const { getByTestId, unmount } = render(<AppShell />)
+    const grid = getByTestId('app-shell-grid')
+    const rightResizer = screen.getByLabelText('Resize center-right divider')
+
+    const dividerLines = rightResizer.querySelectorAll('span')
+    expect(dividerLines.length).toBe(2)
+    dividerLines.forEach((line) => {
+      expect(line.className).toContain('left-0')
+      expect(line.className).not.toContain('right-0')
+      expect(line.className).not.toContain('left-1/2')
+    })
+
+    fireEvent.keyDown(rightResizer, { key: 'ArrowRight', shiftKey: true })
+    let columns = parseShellColumns(grid.style.gridTemplateColumns)
+    expect(columns.center).toBeGreaterThan(columns.right)
+
+    dividerLines.forEach((line) => {
+      expect(line.className).toContain('left-0')
+    })
+
+    fireEvent.doubleClick(rightResizer)
+    columns = parseShellColumns(grid.style.gridTemplateColumns)
+    expect(columns.center).toBe(columns.right)
+
+    dividerLines.forEach((line) => {
+      expect(line.className).toContain('left-0')
+    })
+
+    unmount()
+    restoreClientWidth()
+  })
 })

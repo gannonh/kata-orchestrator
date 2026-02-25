@@ -10,7 +10,7 @@ export function ToolCallResult({ toolCall }: ToolCallResultProps) {
     <CollapsibleSection
       title={`Tool: ${toolCall.name}`}
       defaultOpen={false}
-      className="bg-muted/30"
+      className="rounded-xl border-border/70 bg-card/60"
     >
       <div className="grid gap-3">
         <div className="space-y-1">

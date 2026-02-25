@@ -70,4 +70,11 @@ describe('ChatInput', () => {
     fireEvent.submit(textarea.closest('form') as HTMLFormElement)
     expect(onSend).not.toHaveBeenCalled()
   })
+
+  it('renders model affordance and context-first placeholder copy', () => {
+    render(<ChatInput onSend={vi.fn()} />)
+
+    expect(screen.getByText('GPT-5.3 Codex')).toBeTruthy()
+    expect(screen.getByPlaceholderText('Ask anything or type @ for context')).toBeTruthy()
+  })
 })

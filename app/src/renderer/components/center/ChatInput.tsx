@@ -40,7 +40,7 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
     <div className="-mx-4 shrink-0 border-t bg-background px-4 py-3">
       <form
         onSubmit={onSubmit}
-        className="rounded-lg border bg-card"
+        className="rounded-xl border border-border/70 bg-card/70 shadow-sm"
       >
         <div className="flex items-center gap-2 border-b px-3 py-2">
           <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -58,18 +58,21 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
 
         <Textarea
           aria-label="Message input"
-          className="min-h-[96px] resize-none border-0 bg-transparent focus-visible:ring-0"
+          className="min-h-[96px] resize-none border-0 bg-transparent px-3 py-2 text-sm leading-6 focus-visible:ring-0"
           value={value}
           disabled={disabled}
           onChange={(event) => {
             setValue(event.target.value)
           }}
           onKeyDown={onKeyDown}
-          placeholder="Write a reply..."
+          placeholder="Ask anything or type @ for context"
         />
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-[11px] font-medium text-foreground">
+              GPT-5.3 Codex
+            </span>
             <Button
               type="button"
               variant="ghost"
