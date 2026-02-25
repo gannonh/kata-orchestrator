@@ -132,8 +132,8 @@ describe('HomeSpacesScreen', () => {
 
   it('groups spaces with the same repository regardless of casing', () => {
     const casingMismatch = [
-      { id: 'a', name: 'Space A', repo: 'MyOrg/my-repo', branch: 'main', elapsed: '1h', archived: false, status: 'active' as const },
-      { id: 'b', name: 'Space B', repo: 'myorg/my-repo', branch: 'feature/x', elapsed: '2h', archived: false, status: 'idle' as const }
+      { id: 'a', name: 'Space A', repoUrl: 'https://github.com/MyOrg/my-repo', rootPath: '/tmp/my-repo', repo: 'MyOrg/my-repo', branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-01-01T00:00:00.000Z', elapsed: '1h', archived: false, status: 'active' as const },
+      { id: 'b', name: 'Space B', repoUrl: 'https://github.com/myorg/my-repo', rootPath: '/tmp/my-repo', repo: 'myorg/my-repo', branch: 'feature/x', orchestrationMode: 'team' as const, createdAt: '2026-01-02T00:00:00.000Z', elapsed: '2h', archived: false, status: 'idle' as const }
     ]
     render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={casingMismatch} />)
 

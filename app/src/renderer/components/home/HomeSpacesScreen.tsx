@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 
-import { mockSpaces, type MockSpace } from '../../mock/spaces'
+import { mockSpaces, type DisplaySpace } from '../../mock/spaces'
 import { CreateSpacePanel } from './CreateSpacePanel'
 import { SpacesListPanel } from './SpacesListPanel'
 
 type HomeSpacesScreenProps = {
   onOpenSpace: (spaceId: string) => void
-  initialSpaces?: MockSpace[]
+  initialSpaces?: DisplaySpace[]
 }
 
 type Mode = 'team' | 'single'
@@ -14,8 +14,8 @@ type Mode = 'team' | 'single'
 // Groups spaces by repository, normalizing the repo key to lowercase so that
 // differently-cased repo strings (e.g. 'MyOrg/repo' vs 'myorg/repo') land in
 // the same group. The display name preserves the first occurrence's casing.
-function groupSpacesByRepo(spaces: MockSpace[]): Array<{ repo: string; spaces: MockSpace[] }> {
-  const grouped = new Map<string, { repo: string; spaces: MockSpace[] }>()
+function groupSpacesByRepo(spaces: DisplaySpace[]): Array<{ repo: string; spaces: DisplaySpace[] }> {
+  const grouped = new Map<string, { repo: string; spaces: DisplaySpace[] }>()
 
   for (const space of spaces) {
     const key = space.repo.toLowerCase()
@@ -93,11 +93,15 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
     // TODO(KAT-65): Space creation is currently UI-only (no persistence).
     // When wiring persistence, replace this local state mutation with an IPC call
     // and surface errors to the user if the call fails.
-    const nextSpace: MockSpace = {
+    const nextSpace: DisplaySpace = {
       id: `space-${Date.now()}`,
       name: spacePrompt.trim() || 'Untitled space',
+      repoUrl: selectedSpace?.repoUrl ?? 'https://github.com/gannonh/kata-cloud',
+      rootPath: selectedSpace?.rootPath ?? '/Users/gannonh/dev/kata/kata-cloud',
       repo: selectedSpace?.repo ?? 'gannonh/kata-cloud',
       branch: selectedSpace?.branch ?? 'main',
+      orchestrationMode: selectedSpace?.orchestrationMode ?? 'team',
+      createdAt: new Date().toISOString(),
       elapsed: 'now',
       archived: false,
       status: 'active'
