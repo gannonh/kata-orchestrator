@@ -259,3 +259,7 @@ About, Alert & Dialog, Avatar, Blog, Button, Card, Chart, Contact, Content, CTA,
 2. Pick an entry, note `name` and `url`
 3. (Optional) `GET /r/{name}.json` — inspect full source and dependencies
 4. Install: `npx shadcn add @kata-shadcn/{name}`
+
+## Validating Work
+
+- In addition to unit and e2e tests, validate your work using agent-browser and / or playwright cli. Use screenshots and video as proof when applicable.

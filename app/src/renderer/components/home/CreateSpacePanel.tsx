@@ -1,15 +1,21 @@
 import { Globe, Pin, Timer, TrendingUp } from 'lucide-react'
+import type { WorkspaceMode } from '@shared/types/space'
 
 type CreateSpacePanelProps = {
   isActive: boolean
   prompt: string
   selectedMode: 'team' | 'single'
+  workspaceMode: WorkspaceMode
+  workspacePath: string
   rapidFire: boolean
   repoName: string
   branchName: string
+  createError: string | null
   onPromptChange: (value: string) => void
   onPromptFocus: () => void
   onSelectMode: (mode: 'team' | 'single') => void
+  onSelectWorkspaceMode: (mode: WorkspaceMode) => void
+  onWorkspacePathChange: (value: string) => void
   onToggleRapidFire: () => void
   onCreateSpace: () => void
 }
@@ -18,12 +24,17 @@ export function CreateSpacePanel({
   isActive,
   prompt,
   selectedMode,
+  workspaceMode,
+  workspacePath,
   rapidFire,
   repoName,
   branchName,
+  createError,
   onPromptChange,
   onPromptFocus,
   onSelectMode,
+  onSelectWorkspaceMode,
+  onWorkspacePathChange,
   onToggleRapidFire,
   onCreateSpace
 }: CreateSpacePanelProps) {
@@ -111,6 +122,11 @@ export function CreateSpacePanel({
           Create space
         </button>
       </div>
+      {createError && (
+        <p role="alert" className="mt-2 text-xs text-destructive">
+          {createError}
+        </p>
+      )}
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <button
@@ -138,6 +154,53 @@ export function CreateSpacePanel({
           <p className="font-semibold text-foreground">Start with single agent</p>
           <p className="mt-1 text-muted-foreground">Developer plans then implements in one stream.</p>
         </button>
+      </div>
+
+      <div className="mt-4 rounded-lg border border-border/70 bg-background/60 p-3 text-xs text-muted-foreground">
+        <p className="mb-2 font-medium text-foreground">Workspace ownership</p>
+        <div className="grid gap-2 md:grid-cols-2">
+          <button
+            type="button"
+            aria-label="Use managed workspace"
+            aria-pressed={workspaceMode === 'managed'}
+            onClick={() => {
+              onSelectWorkspaceMode('managed')
+            }}
+            className="rounded-md border px-2 py-2 text-left text-xs aria-pressed:border-foreground aria-pressed:text-foreground"
+          >
+            Create managed worktree
+          </button>
+          <button
+            type="button"
+            aria-label="Use my existing folder/worktree (developer-managed)"
+            aria-pressed={workspaceMode === 'external'}
+            onClick={() => {
+              onSelectWorkspaceMode('external')
+            }}
+            className="rounded-md border px-2 py-2 text-left text-xs aria-pressed:border-foreground aria-pressed:text-foreground"
+          >
+            Use my existing folder/worktree
+          </button>
+        </div>
+
+        {workspaceMode === 'external' && (
+          <div className="mt-3">
+            <label className="mb-1 block text-xs text-foreground" htmlFor="workspace-path-input">
+              Workspace path
+            </label>
+            <input
+              id="workspace-path-input"
+              type="text"
+              aria-label="Workspace path"
+              value={workspacePath}
+              onChange={(event) => {
+                onWorkspacePathChange(event.target.value)
+              }}
+              placeholder="/Users/you/dev/my-repo"
+              className="h-8 w-full rounded-md border border-border bg-background/70 px-2 text-xs outline-none focus:border-ring"
+            />
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex items-center justify-between rounded-lg border border-border/70 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
