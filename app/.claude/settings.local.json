@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "mcp__plugin_linear_linear__get_issue",
+      "mcp__plugin_linear_linear__update_issue",
       "mcp__plugin_linear_linear__update_issue"
     ]
   }
