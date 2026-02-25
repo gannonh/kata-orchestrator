@@ -93,7 +93,9 @@ describe('registerIpcHandlers', () => {
   })
 
   it('falls back to in-memory store when no store is injected', async () => {
-    registerIpcHandlers()
+    vi.resetModules()
+    const { registerIpcHandlers: register } = await import('../../../src/main/ipc-handlers')
+    register()
     const handlers = getHandlersByChannel()
     const spaceCreate = handlers.get('space:create')
     const spaceList = handlers.get('space:list')
@@ -204,6 +206,10 @@ describe('registerIpcHandlers', () => {
       })
     )
     expect(store.save).toHaveBeenCalledTimes(1)
+    const [savedState] = store.save.mock.calls[0]
+    expect(savedState.activeSpaceId).toBe(existingSpace.id)
+    expect(savedState.activeSessionId).toBe((createdSession as { id: string }).id)
+    expect(savedState.sessions[(createdSession as { id: string }).id]).toMatchObject(createdSession as object)
   })
 
   it('rejects malformed payloads for space and session handlers', async () => {
@@ -213,14 +219,14 @@ describe('registerIpcHandlers', () => {
     const spaceGet = handlers.get('space:get')
     const sessionCreate = handlers.get('session:create')
 
-    await expect(spaceCreate?.({}, null)).rejects.toThrow()
+    await expect(spaceCreate?.({}, null)).rejects.toThrow('Space input must be an object')
     await expect(
       spaceCreate?.({}, {
         name: 'My Space',
         repoUrl: 'https://github.com/user/repo',
         rootPath: '/Users/me/repo'
       })
-    ).rejects.toThrow()
+    ).rejects.toThrow('Space input is missing required string fields')
 
     await expect(
       spaceCreate?.({}, {
@@ -230,11 +236,11 @@ describe('registerIpcHandlers', () => {
         branch: 'main',
         orchestrationMode: 'invalid-mode'
       })
-    ).rejects.toThrow()
+    ).rejects.toThrow('Space input has an invalid orchestrationMode')
 
-    await expect(spaceGet?.({}, { id: 123 })).rejects.toThrow()
-    await expect(sessionCreate?.({}, null)).rejects.toThrow()
+    await expect(spaceGet?.({}, { id: 123 })).rejects.toThrow('space:get input must be an object with string id')
+    await expect(sessionCreate?.({}, null)).rejects.toThrow('Session input must be an object')
 
-    await expect(sessionCreate?.({}, { spaceId: 'space-1' })).rejects.toThrow()
+    await expect(sessionCreate?.({}, { spaceId: 'space-1' })).rejects.toThrow('Session input is missing required string fields')
   })
 })
