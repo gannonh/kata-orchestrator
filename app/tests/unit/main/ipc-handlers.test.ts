@@ -376,4 +376,115 @@ describe('registerIpcHandlers', () => {
 
     mkdirSpy.mockRestore()
   })
+
+  it('space:create throws descriptive error when mkdir fails for managed workspace', async () => {
+    const eaccesError = Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    const mkdirSpy = vi.spyOn(fs.promises, 'mkdir').mockRejectedValue(eaccesError)
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store, {
+      workspaceBaseDir: '/tmp/kata/workspaces'
+    })
+
+    const spaceCreate = getHandlersByChannel().get('space:create')
+
+    await expect(
+      spaceCreate?.({}, {
+        name: 'Will Fail',
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'managed'
+      })
+    ).rejects.toThrow('Failed to create managed workspace directory (EACCES)')
+
+    expect(store.save).not.toHaveBeenCalled()
+    mkdirSpy.mockRestore()
+  })
+
+  it('space:create falls back to workspace slug when name has no alphanumeric chars', async () => {
+    const mkdirSpy = vi.spyOn(fs.promises, 'mkdir').mockResolvedValue(undefined)
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store, {
+      workspaceBaseDir: '/tmp/kata/workspaces'
+    })
+
+    const spaceCreate = getHandlersByChannel().get('space:create')
+    const createdSpace = await spaceCreate?.({}, {
+      name: '!!!',
+      repoUrl: 'https://github.com/user/repo',
+      branch: 'main',
+      workspaceMode: 'managed'
+    })
+
+    expect((createdSpace as { rootPath: string }).rootPath).toMatch(
+      /^\/tmp\/kata\/workspaces\/workspace-[0-9a-f]{8}\/repo$/
+    )
+
+    mkdirSpy.mockRestore()
+  })
+
+  it('space:create uses UNKNOWN when mkdir error has no code', async () => {
+    const mkdirSpy = vi.spyOn(fs.promises, 'mkdir').mockRejectedValue(new Error('unexpected'))
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store, {
+      workspaceBaseDir: '/tmp/kata/workspaces'
+    })
+
+    const spaceCreate = getHandlersByChannel().get('space:create')
+
+    await expect(
+      spaceCreate?.({}, {
+        name: 'No Code',
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'managed'
+      })
+    ).rejects.toThrow('Failed to create managed workspace directory (UNKNOWN)')
+
+    mkdirSpy.mockRestore()
+  })
+
+  it('space:create throws descriptive error when stateStore.save fails', async () => {
+    const mkdirSpy = vi.spyOn(fs.promises, 'mkdir').mockResolvedValue(undefined)
+    const enospcError = Object.assign(new Error('no space left'), { code: 'ENOSPC' })
+    const store = createMockStore(createDefaultAppState())
+    store.save.mockImplementation(() => { throw enospcError })
+    registerIpcHandlers(store, {
+      workspaceBaseDir: '/tmp/kata/workspaces'
+    })
+
+    const spaceCreate = getHandlersByChannel().get('space:create')
+
+    await expect(
+      spaceCreate?.({}, {
+        name: 'Save Fail',
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'managed'
+      })
+    ).rejects.toThrow('Space created but failed to save state (ENOSPC)')
+
+    mkdirSpy.mockRestore()
+  })
+
+  it('space:create uses UNKNOWN when save error has no code', async () => {
+    const mkdirSpy = vi.spyOn(fs.promises, 'mkdir').mockResolvedValue(undefined)
+    const store = createMockStore(createDefaultAppState())
+    store.save.mockImplementation(() => { throw new Error('generic') })
+    registerIpcHandlers(store, {
+      workspaceBaseDir: '/tmp/kata/workspaces'
+    })
+
+    const spaceCreate = getHandlersByChannel().get('space:create')
+
+    await expect(
+      spaceCreate?.({}, {
+        name: 'Generic Fail',
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'managed'
+      })
+    ).rejects.toThrow('Space created but failed to save state (UNKNOWN)')
+
+    mkdirSpy.mockRestore()
+  })
 })

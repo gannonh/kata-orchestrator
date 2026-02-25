@@ -265,6 +265,19 @@ describe('HomeSpacesScreen', () => {
     })
   })
 
+  it('keeps initial spaces when spaceList IPC rejects', async () => {
+    const spaceList = vi.fn<() => Promise<SpaceRecord[]>>().mockRejectedValue(new Error('IPC unavailable'))
+    window.kata = { ...window.kata, spaceList }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+
+    await waitFor(() => {
+      expect(spaceList).toHaveBeenCalledTimes(1)
+    })
+    // Initial mock spaces should still be visible after IPC failure
+    expect(screen.getByText('Unblock Wave 1 verification')).toBeTruthy()
+  })
+
   it('preserves current selection when IPC refresh includes the selected space', async () => {
     const onOpenSpace = vi.fn()
     const refreshedSpaces: SpaceRecord[] = [
