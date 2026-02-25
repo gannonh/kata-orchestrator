@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { Agentation } from 'agentation'
 
 import { App } from './App'
 import './app.css'
@@ -13,5 +14,6 @@ if (!root) {
 createRoot(root).render(
   <StrictMode>
     <App />
+    {process.env.NODE_ENV === 'development' && <Agentation endpoint="http://localhost:4747" />}
   </StrictMode>
 )
