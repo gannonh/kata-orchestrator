@@ -6,8 +6,10 @@ import {
   ORCHESTRATION_MODES,
   createDefaultAppState
 } from '../shared/types/space'
+import type { StateStore } from './state-store'
 
 import type {
+  AppState,
   CreateSessionInput,
   CreateSpaceInput,
   OrchestrationMode,
@@ -21,7 +23,16 @@ const SPACE_LIST_CHANNEL = 'space:list'
 const SPACE_GET_CHANNEL = 'space:get'
 const SESSION_CREATE_CHANNEL = 'session:create'
 
-const state = createDefaultAppState()
+let inMemoryState = createDefaultAppState()
+
+function getFallbackStore(): StateStore {
+  return {
+    load: () => inMemoryState,
+    save: (nextState: AppState) => {
+      inMemoryState = nextState
+    }
+  }
+}
 
 function isExternalHttpUrl(url: unknown): url is string {
   if (typeof url !== 'string') {
@@ -88,7 +99,9 @@ function parseCreateSessionInput(input: unknown): CreateSessionInput {
   return { spaceId, label }
 }
 
-export function registerIpcHandlers(): void {
+export function registerIpcHandlers(store?: StateStore): void {
+  const stateStore = store ?? getFallbackStore()
+
   ipcMain.removeHandler(OPEN_EXTERNAL_URL_CHANNEL)
   ipcMain.removeHandler(SPACE_CREATE_CHANNEL)
   ipcMain.removeHandler(SPACE_LIST_CHANNEL)
@@ -106,6 +119,7 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(SPACE_CREATE_CHANNEL, async (_event, input: unknown) => {
     const parsedInput = parseCreateSpaceInput(input)
+    const state = stateStore.load()
     const createdSpace: SpaceRecord = {
       id: randomUUID(),
       name: parsedInput.name,
@@ -117,23 +131,25 @@ export function registerIpcHandlers(): void {
       status: 'active'
     }
 
-    state.spaces[createdSpace.id] = createdSpace
-    if (!state.activeSpaceId) {
-      state.activeSpaceId = createdSpace.id
-    }
+    stateStore.save({
+      ...state,
+      spaces: { ...state.spaces, [createdSpace.id]: createdSpace },
+      activeSpaceId: state.activeSpaceId ?? createdSpace.id
+    })
 
     return createdSpace
   })
 
-  ipcMain.handle(SPACE_LIST_CHANNEL, async () => Object.values(state.spaces))
+  ipcMain.handle(SPACE_LIST_CHANNEL, async () => Object.values(stateStore.load().spaces))
 
   ipcMain.handle(SPACE_GET_CHANNEL, async (_event, input: unknown) => {
     const { id } = parseSpaceGetInput(input)
-    return state.spaces[id] ?? null
+    return stateStore.load().spaces[id] ?? null
   })
 
   ipcMain.handle(SESSION_CREATE_CHANNEL, async (_event, input: unknown) => {
     const parsedInput = parseCreateSessionInput(input)
+    const state = stateStore.load()
     if (!state.spaces[parsedInput.spaceId]) {
       throw new Error(`Cannot create session for unknown space: ${parsedInput.spaceId}`)
     }
@@ -145,9 +161,12 @@ export function registerIpcHandlers(): void {
       createdAt: new Date().toISOString()
     }
 
-    state.sessions[createdSession.id] = createdSession
-    state.activeSpaceId = parsedInput.spaceId
-    state.activeSessionId = createdSession.id
+    stateStore.save({
+      ...state,
+      sessions: { ...state.sessions, [createdSession.id]: createdSession },
+      activeSpaceId: parsedInput.spaceId,
+      activeSessionId: createdSession.id
+    })
 
     return createdSession
   })
