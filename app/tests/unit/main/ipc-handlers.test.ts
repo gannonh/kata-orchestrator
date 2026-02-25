@@ -146,6 +146,26 @@ describe('registerIpcHandlers', () => {
     expect(savedState.spaces[(createdSpace as { id: string }).id]).toMatchObject(createdSpace as object)
   })
 
+  it('space:create preserves existing activeSpaceId', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      activeSpaceId: 'existing-space-id'
+    })
+    registerIpcHandlers(store)
+
+    const spaceCreate = getHandlersByChannel().get('space:create')
+
+    await spaceCreate?.({}, {
+      name: 'Second Space',
+      repoUrl: 'https://github.com/user/repo',
+      rootPath: '/Users/me/repo',
+      branch: 'main'
+    })
+
+    const [savedState] = store.save.mock.calls[0]
+    expect(savedState.activeSpaceId).toBe('existing-space-id')
+  })
+
   it('space:list and space:get read from store state', async () => {
     const existing = {
       id: 'space-1',
@@ -210,6 +230,34 @@ describe('registerIpcHandlers', () => {
     expect(savedState.activeSpaceId).toBe(existingSpace.id)
     expect(savedState.activeSessionId).toBe((createdSession as { id: string }).id)
     expect(savedState.sessions[(createdSession as { id: string }).id]).toMatchObject(createdSession as object)
+  })
+
+  it('session:create overwrites existing activeSpaceId and activeSessionId', async () => {
+    const existingSpace = {
+      id: 'space-1',
+      name: 'Existing',
+      repoUrl: 'https://github.com/user/repo',
+      rootPath: '/Users/me/repo',
+      branch: 'main',
+      orchestrationMode: 'team' as const,
+      createdAt: '2026-02-25T00:00:00.000Z',
+      status: 'active' as const
+    }
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      spaces: { [existingSpace.id]: existingSpace },
+      activeSpaceId: 'other-space',
+      activeSessionId: 'old-session'
+    })
+    registerIpcHandlers(store)
+
+    const sessionCreate = getHandlersByChannel().get('session:create')
+
+    await sessionCreate?.({}, { spaceId: existingSpace.id, label: 'New Session' })
+
+    const [savedState] = store.save.mock.calls[0]
+    expect(savedState.activeSpaceId).toBe(existingSpace.id)
+    expect(savedState.activeSessionId).not.toBe('old-session')
   })
 
   it('rejects malformed payloads for space and session handlers', async () => {
