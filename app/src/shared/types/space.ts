@@ -1,7 +1,7 @@
 export const SPACE_STATUSES = ['active', 'idle', 'archived'] as const
 export type SpaceStatus = (typeof SPACE_STATUSES)[number]
 
-export const ORCHESTRATION_MODES = ['plan', 'execute', 'verify'] as const
+export const ORCHESTRATION_MODES = ['team', 'single'] as const
 export type OrchestrationMode = (typeof ORCHESTRATION_MODES)[number]
 
 export type SpaceRecord = {
@@ -36,16 +36,16 @@ export type CreateSessionInput = {
 }
 
 export type AppState = {
-  spaces: SpaceRecord[]
-  sessions: SessionRecord[]
+  spaces: Record<string, SpaceRecord>
+  sessions: Record<string, SessionRecord>
   activeSpaceId: string | null
   activeSessionId: string | null
 }
 
 export function createDefaultAppState(): AppState {
   return {
-    spaces: [],
-    sessions: [],
+    spaces: {},
+    sessions: {},
     activeSpaceId: null,
     activeSessionId: null
   }

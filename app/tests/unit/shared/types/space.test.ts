@@ -23,8 +23,8 @@ describe('SPACE_STATUSES', () => {
 })
 
 describe('ORCHESTRATION_MODES', () => {
-  it('contains plan, execute, and verify', () => {
-    expect(ORCHESTRATION_MODES).toEqual(['plan', 'execute', 'verify'])
+  it('contains team and single', () => {
+    expect(ORCHESTRATION_MODES).toEqual(['team', 'single'])
   })
 })
 
@@ -32,8 +32,8 @@ describe('createDefaultAppState', () => {
   it('returns empty state with null selections', () => {
     const state = createDefaultAppState()
 
-    expect(state.spaces).toEqual([])
-    expect(state.sessions).toEqual([])
+    expect(state.spaces).toEqual({})
+    expect(state.sessions).toEqual({})
     expect(state.activeSpaceId).toBeNull()
     expect(state.activeSessionId).toBeNull()
   })
@@ -47,7 +47,7 @@ describe('SpaceRecord type', () => {
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/projects/repo',
       branch: 'main',
-      orchestrationMode: 'plan',
+      orchestrationMode: 'team',
       createdAt: '2026-01-01T00:00:00Z',
       status: 'active'
     }
@@ -57,7 +57,7 @@ describe('SpaceRecord type', () => {
     expect(space.repoUrl).toBe('https://github.com/user/repo')
     expect(space.rootPath).toBe('/Users/me/projects/repo')
     expect(space.branch).toBe('main')
-    expect(space.orchestrationMode).toBe('plan')
+    expect(space.orchestrationMode).toBe('team')
     expect(space.createdAt).toBe('2026-01-01T00:00:00Z')
     expect(space.status).toBe('active')
   })
@@ -110,10 +110,10 @@ describe('CreateSpaceInput type', () => {
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/projects/repo',
       branch: 'main',
-      orchestrationMode: 'plan'
+      orchestrationMode: 'team'
     }
 
-    expect(input.orchestrationMode).toBe('plan')
+    expect(input.orchestrationMode).toBe('team')
   })
 })
 
@@ -131,14 +131,14 @@ describe('CreateSessionInput type', () => {
 })
 
 describe('AppState type', () => {
-  it('holds SpaceRecord and SessionRecord arrays with active selections', () => {
+  it('holds SpaceRecord and SessionRecord records with active selections', () => {
     const space: SpaceRecord = {
       id: 'space-1',
       name: 'Test',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/path',
       branch: 'main',
-      orchestrationMode: 'plan',
+      orchestrationMode: 'team',
       createdAt: '2026-01-01T00:00:00Z',
       status: 'active'
     }
@@ -151,14 +151,14 @@ describe('AppState type', () => {
     }
 
     const state: AppState = {
-      spaces: [space],
-      sessions: [session],
+      spaces: { 'space-1': space },
+      sessions: { 'session-1': session },
       activeSpaceId: 'space-1',
       activeSessionId: 'session-1'
     }
 
-    expect(state.spaces).toHaveLength(1)
-    expect(state.sessions).toHaveLength(1)
+    expect(Object.keys(state.spaces)).toHaveLength(1)
+    expect(Object.keys(state.sessions)).toHaveLength(1)
     expect(state.activeSpaceId).toBe('space-1')
     expect(state.activeSessionId).toBe('session-1')
   })
