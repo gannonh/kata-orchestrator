@@ -50,6 +50,11 @@ describe('HomeSpacesScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select team mode' }))
     expect(screen.getByRole('button', { name: 'Select team mode' }).getAttribute('aria-pressed')).toBe('true')
 
+    fireEvent.click(screen.getByRole('button', { name: 'Use my existing folder/worktree (developer-managed)' }))
+    expect(screen.getByRole('button', { name: 'Use my existing folder/worktree (developer-managed)' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Use managed workspace' }))
+    expect(screen.getByRole('button', { name: 'Use managed workspace' }).getAttribute('aria-pressed')).toBe('true')
+
     fireEvent.click(screen.getByRole('button', { name: 'Toggle rapid fire mode' }))
     expect(screen.getByRole('button', { name: 'Toggle rapid fire mode' }).getAttribute('aria-pressed')).toBe('true')
 
@@ -260,6 +265,38 @@ describe('HomeSpacesScreen', () => {
     expect(screen.getByText('IPC Loaded Space 2')).toBeTruthy()
   })
 
+  it('preserves current selection when IPC refresh includes the selected space', async () => {
+    const onOpenSpace = vi.fn()
+    const refreshedSpaces: SpaceRecord[] = [
+      makeSpaceRecord({
+        id: 'space-other',
+        name: 'Other Space',
+        repoUrl: 'https://github.com/gannonh/kata-orchestrator',
+        rootPath: '/Users/gannonh/dev/kata/kata-orchestrator',
+        status: 'idle'
+      }),
+      makeSpaceRecord({
+        id: 'space-wave-1',
+        name: 'Unblock Wave 1 verification',
+        repoUrl: 'https://github.com/gannonh/kata-cloud',
+        rootPath: '/Users/gannonh/dev/kata/kata-cloud',
+        status: 'active'
+      })
+    ]
+    const spaceList = vi.fn<() => Promise<SpaceRecord[]>>().mockResolvedValue(refreshedSpaces)
+    window.kata = { ...window.kata, spaceList }
+
+    render(<HomeSpacesScreen onOpenSpace={onOpenSpace} />)
+
+    await waitFor(() => {
+      expect(spaceList).toHaveBeenCalledTimes(1)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
+    expect(onOpenSpace).toHaveBeenCalledTimes(1)
+    expect(onOpenSpace.mock.calls[0]?.[0]).toBe('space-wave-1')
+  })
+
   it('creates a space via window.kata.spaceCreate when submitting create space', async () => {
     const createdRecord = makeSpaceRecord({
       id: 'space-created-from-ipc',
@@ -318,6 +355,24 @@ describe('HomeSpacesScreen', () => {
       branch: 'main',
       workspaceMode: 'external',
       orchestrationMode: 'team'
+    })
+  })
+
+  it('shows a create failure alert when IPC create rejects', async () => {
+    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockRejectedValue(new Error('create failed'))
+    window.kata = { ...window.kata, spaceCreate }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Space prompt' }), {
+      target: { value: 'Will Fail' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain(
+        'Failed to create space. Please check settings and try again.'
+      )
     })
   })
 })

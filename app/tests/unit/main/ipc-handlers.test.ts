@@ -277,6 +277,17 @@ describe('registerIpcHandlers', () => {
       spaceCreate?.({}, {
         name: 'My Space',
         repoUrl: 'https://github.com/user/repo',
+        rootPath: 123,
+        branch: 'main',
+        workspaceMode: 'external',
+        orchestrationMode: 'team'
+      })
+    ).rejects.toThrow('Space input rootPath must be a string when provided')
+
+    await expect(
+      spaceCreate?.({}, {
+        name: 'My Space',
+        repoUrl: 'https://github.com/user/repo',
         rootPath: '/Users/me/repo'
       })
     ).rejects.toThrow('Space input is missing required string fields')
