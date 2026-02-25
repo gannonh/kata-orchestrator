@@ -67,6 +67,62 @@ describe('createStateStore', () => {
     expect(state).toEqual(createDefaultAppState())
   })
 
+  test('returns default state when JSON root is not an object', () => {
+    fs.writeFileSync(filePath, JSON.stringify(42))
+
+    const store = createStateStore(filePath)
+    const state = store.load()
+    expect(state).toEqual(createDefaultAppState())
+  })
+
+  test('returns default state when active ids are not string or null', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        activeSpaceId: 123,
+        activeSessionId: false
+      })
+    )
+
+    const store = createStateStore(filePath)
+    const state = store.load()
+    expect(state).toEqual(createDefaultAppState())
+  })
+
+  test('returns default state when a space record is not an object', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: { s1: 'invalid-space-record' },
+        sessions: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const store = createStateStore(filePath)
+    const state = store.load()
+    expect(state).toEqual(createDefaultAppState())
+  })
+
+  test('returns default state when a session record is not an object', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: { sess1: 'invalid-session-record' },
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const store = createStateStore(filePath)
+    const state = store.load()
+    expect(state).toEqual(createDefaultAppState())
+  })
+
   test('rethrows non-ENOENT file system errors when loading', () => {
     const store = createStateStore(filePath)
     const readError = Object.assign(new Error('permission denied'), {
