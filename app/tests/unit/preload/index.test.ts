@@ -50,6 +50,46 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith('kata:openExternalUrl', 'https://example.com')
   })
 
+  it('exposes space and session IPC methods', async () => {
+    const mockSpace = { id: '1', name: 'test' }
+    const mockSpaces = [mockSpace]
+
+    await import('../../../src/preload/index')
+
+    const [, api] = exposeInMainWorld.mock.calls[0] as [
+      string,
+      {
+        spaceCreate: (input: unknown) => Promise<unknown>
+        spaceList: () => Promise<unknown>
+        spaceGet: (id: string) => Promise<unknown>
+        sessionCreate: (input: unknown) => Promise<unknown>
+      }
+    ]
+
+    // spaceCreate
+    invoke.mockResolvedValueOnce(mockSpace)
+    const createInput = { name: 'test', repoUrl: 'url', rootPath: '/', branch: 'main' }
+    await expect(api.spaceCreate(createInput)).resolves.toEqual(mockSpace)
+    expect(invoke).toHaveBeenCalledWith('space:create', createInput)
+
+    // spaceList
+    invoke.mockResolvedValueOnce(mockSpaces)
+    await expect(api.spaceList()).resolves.toEqual(mockSpaces)
+    expect(invoke).toHaveBeenCalledWith('space:list')
+
+    // spaceGet
+    invoke.mockResolvedValueOnce(mockSpace)
+    await expect(api.spaceGet('1')).resolves.toEqual(mockSpace)
+    expect(invoke).toHaveBeenCalledWith('space:get', { id: '1' })
+
+    // sessionCreate
+    const sessionInput = { spaceId: '1', label: 'session-1' }
+    const mockSession = { id: 's1', ...sessionInput, createdAt: 'now' }
+    invoke.mockResolvedValueOnce(mockSession)
+    await expect(api.sessionCreate(sessionInput)).resolves.toEqual(mockSession)
+    expect(invoke).toHaveBeenCalledWith('session:create', sessionInput)
+  })
+
   it('returns false when external open invoke throws', async () => {
     invoke.mockRejectedValue(new Error('ipc unavailable'))
 
