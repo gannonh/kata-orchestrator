@@ -10,9 +10,32 @@ export type DisplaySpace = SpaceRecord & {
   archived: boolean
 }
 
+function parseRepoName(repoUrl: string): string {
+  const trimmed = repoUrl.trim()
+  const sshMatch = /^git@[^:]+:(.+)$/.exec(trimmed)
+  const candidatePath = sshMatch?.[1] ?? (() => {
+    try {
+      return new URL(trimmed).pathname
+    } catch {
+      return trimmed
+    }
+  })()
+
+  const normalizedPath = candidatePath
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+    .replace(/\.git$/, '')
+
+  const segments = normalizedPath.split('/').filter(Boolean)
+  if (segments.length >= 2) {
+    return `${segments[segments.length - 2]}/${segments[segments.length - 1]}`
+  }
+
+  return ''
+}
+
 export function toDisplaySpace(record: SpaceRecord): DisplaySpace {
-  const urlParts = record.repoUrl.split('/')
-  const repo = urlParts.slice(-2).join('/')
+  const repo = parseRepoName(record.repoUrl)
 
   return {
     ...record,
