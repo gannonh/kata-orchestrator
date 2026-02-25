@@ -130,6 +130,48 @@ Port 5199 is hardcoded (`strictPort: true`) to avoid the mismatch where Vite aut
 2. Write tests before implementation, ensure they fail, then implement the feature until tests pass.
 3. Use the Test Driven Development Agent Skill (`test-driven-development`) for guidance.
 
+## Pencil Design Sync
+
+Design source of truth: `pencil/ui-01.pen` (Pencil MCP). Code source of truth: `app/src/renderer/`.
+
+### Token Contract
+
+Both systems share the same CSS variable names. The canonical values live in `app/src/renderer/app.css` (OkLCh format). Pencil stores hex equivalents.
+
+When a token changes:
+1. Update `app.css` first (OkLCh values)
+2. Convert to hex and push to Pencil via `set_variables`
+
+Current token set (55 variables): core shadcn palette, sidebar, chart, status, alert, gradient, magicui, font, and radius tokens.
+
+### Component Coverage
+
+Pencil has 87 reusable components (variant-level). Code has 22 shadcn primitives in `src/renderer/components/ui/`. The Pencil components that have no code equivalent yet:
+
+select, radio-group, switch, progress, accordion, alert, pagination, table, modal, list items, combobox, input-otp
+
+Install these via `npx shadcn@latest add <name>` when a feature requires them. Do not install speculatively.
+
+### Iteration Workflow
+
+**Pencil-first** (new screens, layout exploration):
+1. Design in Pencil using existing reusable components and `$variable` references
+2. `get_screenshot` the frame for visual reference
+3. Implement in React to match, using the same CSS variables
+4. Verify with side-by-side comparison
+
+**Code-first** (behavior-driven changes):
+1. Build the React component
+2. Update or create the corresponding Pencil frame to reflect the shipped state
+3. Keep Pencil as a living record, not a stale spec
+
+### Rules
+
+- New Pencil components must use `$variable` references, not hardcoded colors
+- Pencil component names should map to code: `Button/Default` = `button.tsx` variant `default`
+- When adding a shadcn primitive to code, check if Pencil already has the component designed
+- When designing a new component in Pencil, note the target code path in the component's `context` property
+
 ## SHADCN Adoption
 
 - Desktop renderer UI standard is now SHADCN-first.
