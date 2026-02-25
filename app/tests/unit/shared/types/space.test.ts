@@ -90,7 +90,7 @@ describe('SessionRecord type', () => {
 })
 
 describe('CreateSpaceInput type', () => {
-  it('contains IPC payload fields without id, createdAt, or status', () => {
+  it('contains required IPC payload fields without id, createdAt, or status', () => {
     const input: CreateSpaceInput = {
       name: 'New Space',
       repoUrl: 'https://github.com/user/repo',
@@ -102,7 +102,18 @@ describe('CreateSpaceInput type', () => {
     expect(input.repoUrl).toBe('https://github.com/user/repo')
     expect(input.rootPath).toBe('/Users/me/projects/repo')
     expect(input.branch).toBe('main')
-    expect(Object.keys(input)).toHaveLength(4)
+  })
+
+  it('accepts optional orchestrationMode', () => {
+    const input: CreateSpaceInput = {
+      name: 'New Space',
+      repoUrl: 'https://github.com/user/repo',
+      rootPath: '/Users/me/projects/repo',
+      branch: 'main',
+      orchestrationMode: 'plan'
+    }
+
+    expect(input.orchestrationMode).toBe('plan')
   })
 })
 

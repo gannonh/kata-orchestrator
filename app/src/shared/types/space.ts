@@ -27,6 +27,7 @@ export type CreateSpaceInput = {
   repoUrl: string
   rootPath: string
   branch: string
+  orchestrationMode?: OrchestrationMode
 }
 
 export type CreateSessionInput = {
