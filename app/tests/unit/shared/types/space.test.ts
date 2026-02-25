@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   SPACE_STATUSES,
   ORCHESTRATION_MODES,
+  WORKSPACE_MODES,
   createDefaultAppState
 } from '../../../../src/shared/types/space'
 
@@ -25,6 +26,12 @@ describe('SPACE_STATUSES', () => {
 describe('ORCHESTRATION_MODES', () => {
   it('contains team and single', () => {
     expect(ORCHESTRATION_MODES).toEqual(['team', 'single'])
+  })
+})
+
+describe('WORKSPACE_MODES', () => {
+  it('contains managed and external', () => {
+    expect(WORKSPACE_MODES).toEqual(['managed', 'external'])
   })
 })
 
@@ -55,6 +62,7 @@ describe('SpaceRecord type', () => {
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/projects/repo',
       branch: 'main',
+      workspaceMode: 'external',
       orchestrationMode: 'team',
       createdAt: '2026-01-01T00:00:00Z',
       status: 'active'
@@ -65,6 +73,7 @@ describe('SpaceRecord type', () => {
     expect(space.repoUrl).toBe('https://github.com/user/repo')
     expect(space.rootPath).toBe('/Users/me/projects/repo')
     expect(space.branch).toBe('main')
+    expect(space.workspaceMode).toBe('external')
     expect(space.orchestrationMode).toBe('team')
     expect(space.createdAt).toBe('2026-01-01T00:00:00Z')
     expect(space.status).toBe('active')
@@ -102,14 +111,14 @@ describe('CreateSpaceInput type', () => {
     const input: CreateSpaceInput = {
       name: 'New Space',
       repoUrl: 'https://github.com/user/repo',
-      rootPath: '/Users/me/projects/repo',
-      branch: 'main'
+      branch: 'main',
+      workspaceMode: 'managed'
     }
 
     expect(input.name).toBe('New Space')
     expect(input.repoUrl).toBe('https://github.com/user/repo')
-    expect(input.rootPath).toBe('/Users/me/projects/repo')
     expect(input.branch).toBe('main')
+    expect(input.workspaceMode).toBe('managed')
   })
 
   it('accepts optional orchestrationMode', () => {
@@ -118,9 +127,12 @@ describe('CreateSpaceInput type', () => {
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/projects/repo',
       branch: 'main',
+      workspaceMode: 'external',
       orchestrationMode: 'team'
     }
 
+    expect(input.workspaceMode).toBe('external')
+    expect(input.rootPath).toBe('/Users/me/projects/repo')
     expect(input.orchestrationMode).toBe('team')
   })
 })
@@ -146,6 +158,7 @@ describe('AppState type', () => {
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/path',
       branch: 'main',
+      workspaceMode: 'external',
       orchestrationMode: 'team',
       createdAt: '2026-01-01T00:00:00Z',
       status: 'active'

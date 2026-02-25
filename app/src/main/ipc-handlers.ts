@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 import { ipcMain, shell } from 'electron'
 
 import {
   ORCHESTRATION_MODES,
+  WORKSPACE_MODES,
   createDefaultAppState
 } from '../shared/types/space'
 import type { StateStore } from './state-store'
@@ -11,10 +15,10 @@ import type { StateStore } from './state-store'
 import type {
   AppState,
   CreateSessionInput,
-  CreateSpaceInput,
   OrchestrationMode,
   SessionRecord,
-  SpaceRecord
+  SpaceRecord,
+  WorkspaceMode
 } from '../shared/types/space'
 
 const OPEN_EXTERNAL_URL_CHANNEL = 'kata:openExternalUrl'
@@ -55,25 +59,71 @@ function isOrchestrationMode(value: unknown): value is OrchestrationMode {
   return typeof value === 'string' && ORCHESTRATION_MODES.includes(value as OrchestrationMode)
 }
 
-function parseCreateSpaceInput(input: unknown): CreateSpaceInput {
+function isWorkspaceMode(value: unknown): value is WorkspaceMode {
+  return typeof value === 'string' && WORKSPACE_MODES.includes(value as WorkspaceMode)
+}
+
+function slugifyWorkspaceName(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '')
+
+  return slug || 'workspace'
+}
+
+type ParsedCreateSpaceInput = {
+  name: string
+  repoUrl: string
+  branch: string
+  rootPath?: string
+  workspaceMode: WorkspaceMode
+  orchestrationMode?: OrchestrationMode
+}
+
+function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
   if (!isObjectRecord(input)) {
     throw new Error('Space input must be an object')
   }
 
-  const { name, repoUrl, rootPath, branch, orchestrationMode } = input
-  if (typeof name !== 'string' || typeof repoUrl !== 'string' || typeof rootPath !== 'string' || typeof branch !== 'string') {
+  const {
+    name,
+    repoUrl,
+    rootPath,
+    branch,
+    workspaceMode,
+    orchestrationMode
+  } = input
+  if (typeof name !== 'string' || typeof repoUrl !== 'string' || typeof branch !== 'string') {
     throw new Error('Space input is missing required string fields')
+  }
+
+  if (rootPath !== undefined && typeof rootPath !== 'string') {
+    throw new Error('Space input rootPath must be a string when provided')
   }
 
   if (orchestrationMode !== undefined && !isOrchestrationMode(orchestrationMode)) {
     throw new Error('Space input has an invalid orchestrationMode')
   }
 
+  if (workspaceMode !== undefined && !isWorkspaceMode(workspaceMode)) {
+    throw new Error('Space input has an invalid workspaceMode')
+  }
+
+  const normalizedWorkspaceMode = workspaceMode ?? 'managed'
+  const normalizedRootPath = rootPath?.trim()
+  if (normalizedWorkspaceMode === 'external' && !normalizedRootPath) {
+    throw new Error('External workspace mode requires a non-empty rootPath')
+  }
+
   return {
     name,
     repoUrl,
-    rootPath,
     branch,
+    rootPath: normalizedRootPath,
+    workspaceMode: normalizedWorkspaceMode,
     orchestrationMode
   }
 }
@@ -99,8 +149,13 @@ function parseCreateSessionInput(input: unknown): CreateSessionInput {
   return { spaceId, label }
 }
 
-export function registerIpcHandlers(store?: StateStore): void {
+export type RegisterIpcOptions = {
+  workspaceBaseDir?: string
+}
+
+export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOptions): void {
   const stateStore = store ?? getFallbackStore()
+  const workspaceBaseDir = options?.workspaceBaseDir ?? path.join(os.homedir(), '.kata', 'workspaces')
 
   ipcMain.removeHandler(OPEN_EXTERNAL_URL_CHANNEL)
   ipcMain.removeHandler(SPACE_CREATE_CHANNEL)
@@ -120,12 +175,31 @@ export function registerIpcHandlers(store?: StateStore): void {
   ipcMain.handle(SPACE_CREATE_CHANNEL, async (_event, input: unknown) => {
     const parsedInput = parseCreateSpaceInput(input)
     const state = stateStore.load()
+    const spaceId = randomUUID()
+
+    const rootPath = (() => {
+      if (parsedInput.workspaceMode === 'external') {
+        return parsedInput.rootPath as string
+      }
+
+      const workspaceSlug = slugifyWorkspaceName(parsedInput.name)
+      const workspaceRootPath = path.join(workspaceBaseDir, `${workspaceSlug}-${spaceId.slice(0, 8)}`)
+      const workspaceRepoPath = path.join(workspaceRootPath, 'repo')
+      const workspaceMetadataPath = path.join(workspaceRootPath, '.kata')
+
+      fs.mkdirSync(workspaceRepoPath, { recursive: true })
+      fs.mkdirSync(workspaceMetadataPath, { recursive: true })
+
+      return workspaceRepoPath
+    })()
+
     const createdSpace: SpaceRecord = {
-      id: randomUUID(),
+      id: spaceId,
       name: parsedInput.name,
       repoUrl: parsedInput.repoUrl,
-      rootPath: parsedInput.rootPath,
+      rootPath,
       branch: parsedInput.branch,
+      workspaceMode: parsedInput.workspaceMode,
       orchestrationMode: parsedInput.orchestrationMode ?? 'team',
       createdAt: new Date().toISOString(),
       status: 'active'

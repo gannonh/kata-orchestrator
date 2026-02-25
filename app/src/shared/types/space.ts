@@ -4,12 +4,16 @@ export type SpaceStatus = (typeof SPACE_STATUSES)[number]
 export const ORCHESTRATION_MODES = ['team', 'single'] as const
 export type OrchestrationMode = (typeof ORCHESTRATION_MODES)[number]
 
+export const WORKSPACE_MODES = ['managed', 'external'] as const
+export type WorkspaceMode = (typeof WORKSPACE_MODES)[number]
+
 export type SpaceRecord = {
   id: string
   name: string
   repoUrl: string
   rootPath: string
   branch: string
+  workspaceMode?: WorkspaceMode
   orchestrationMode: OrchestrationMode
   createdAt: string
   status: SpaceStatus
@@ -25,8 +29,9 @@ export type SessionRecord = {
 export type CreateSpaceInput = {
   name: string
   repoUrl: string
-  rootPath: string
+  rootPath?: string
   branch: string
+  workspaceMode?: WorkspaceMode
   orchestrationMode?: OrchestrationMode
 }
 

@@ -1,14 +1,30 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HomeSpacesScreen, createDisplaySpaceForHome } from '../../../../src/renderer/components/home/HomeSpacesScreen'
+import type { SpaceRecord } from '../../../../src/shared/types/space'
+
+function makeSpaceRecord(overrides: Partial<SpaceRecord> = {}): SpaceRecord {
+  return {
+    id: 'space-ipc-1',
+    name: 'IPC Loaded Space',
+    repoUrl: 'https://github.com/gannonh/kata-cloud',
+    rootPath: '/Users/gannonh/dev/kata/kata-cloud',
+    branch: 'main',
+    orchestrationMode: 'team',
+    createdAt: '2026-02-25T00:00:00.000Z',
+    status: 'active',
+    ...overrides
+  }
+}
 
 describe('HomeSpacesScreen', () => {
   afterEach(() => {
+    window.kata = undefined
     cleanup()
   })
 
-  it('toggles create panel active visuals and mode selections', () => {
+  it('toggles create panel active visuals and mode selections', async () => {
     render(<HomeSpacesScreen onOpenSpace={() => {}} />)
 
     fireEvent.click(screen.getByRole('textbox', { name: 'Space prompt' }))
@@ -35,8 +51,10 @@ describe('HomeSpacesScreen', () => {
     expect(screen.getByRole('button', { name: 'Toggle rapid fire mode' }).getAttribute('aria-pressed')).toBe('false')
 
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-    expect(screen.getByText('Create KAT-65 shell')).toBeTruthy()
-    expect(screen.getByTestId('create-space-panel').getAttribute('data-active')).toBe('false')
+    await waitFor(() => {
+      expect(screen.getByText('Create KAT-65 shell')).toBeTruthy()
+      expect(screen.getByTestId('create-space-panel').getAttribute('data-active')).toBe('false')
+    })
   })
 
   it('filters spaces by search and archived toggle, and supports row selection', () => {
@@ -52,13 +70,15 @@ describe('HomeSpacesScreen', () => {
     expect(screen.getByRole('button', { name: 'Select space Unblock Wave 1 verification' }).getAttribute('aria-pressed')).toBe('true')
   })
 
-  it('supports grouped toggle, no-result state, and creates default space for empty prompt', () => {
+  it('supports grouped toggle, no-result state, and creates default space for empty prompt', async () => {
     render(<HomeSpacesScreen onOpenSpace={() => {}} />)
 
     const initialRows = screen.getAllByRole('button', { name: /Select space/ }).length
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-    expect(screen.getAllByRole('button', { name: /Select space/ })).toHaveLength(initialRows + 1)
-    expect(screen.getByText('Untitled space')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Select space/ })).toHaveLength(initialRows + 1)
+      expect(screen.getByText('Untitled space')).toBeTruthy()
+    })
 
     fireEvent.click(screen.getByRole('button', { name: 'Group spaces by repository' }))
     expect(screen.getByText('All spaces')).toBeTruthy()
@@ -163,6 +183,8 @@ describe('HomeSpacesScreen', () => {
       prompt: 'Spin up single-mode workspace',
       selectedSpace,
       selectedMode: 'single',
+      workspaceMode: 'managed',
+      workspacePath: '',
       now: new Date('2026-02-25T00:00:00.000Z')
     })
 
@@ -176,6 +198,8 @@ describe('HomeSpacesScreen', () => {
       prompt: '',
       selectedSpace: null,
       selectedMode: 'team',
+      workspaceMode: 'managed',
+      workspacePath: '',
       now: new Date('2026-02-25T00:00:00.000Z')
     })
 
@@ -183,5 +207,89 @@ describe('HomeSpacesScreen', () => {
     expect(created.rootPath).toBe('')
     expect(created.repo).toBe('')
     expect(created.branch).toBe('')
+  })
+
+  it('loads spaces from IPC on mount via window.kata.spaceList', async () => {
+    const ipcSpaces: SpaceRecord[] = [
+      makeSpaceRecord(),
+      makeSpaceRecord({
+        id: 'space-ipc-2',
+        name: 'IPC Loaded Space 2',
+        repoUrl: 'https://github.com/gannonh/kata-orchestrator',
+        rootPath: '/Users/gannonh/dev/kata/kata-orchestrator',
+        status: 'idle'
+      })
+    ]
+    const spaceList = vi.fn<() => Promise<SpaceRecord[]>>().mockResolvedValue(ipcSpaces)
+    window.kata = { ...window.kata, spaceList }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    await waitFor(() => {
+      expect(spaceList).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.getByText('IPC Loaded Space')).toBeTruthy()
+    expect(screen.getByText('IPC Loaded Space 2')).toBeTruthy()
+  })
+
+  it('creates a space via window.kata.spaceCreate when submitting create space', async () => {
+    const createdRecord = makeSpaceRecord({
+      id: 'space-created-from-ipc',
+      name: 'Create via IPC'
+    })
+    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
+    window.kata = { ...window.kata, spaceCreate }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Space prompt' }), {
+      target: { value: 'Create via IPC' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
+
+    await waitFor(() => {
+      expect(spaceCreate).toHaveBeenCalledTimes(1)
+    })
+    expect(spaceCreate).toHaveBeenCalledWith({
+      name: 'Create via IPC',
+      repoUrl: 'https://github.com/gannonh/kata-cloud',
+      branch: 'main',
+      orchestrationMode: 'team',
+      workspaceMode: 'managed'
+    })
+    expect(screen.getByText('Create via IPC')).toBeTruthy()
+  })
+
+  it('submits developer-managed mode with explicit workspace path', async () => {
+    const createdRecord = makeSpaceRecord({
+      id: 'space-created-external',
+      name: 'External Path Space',
+      rootPath: '/Users/gannonh/dev/custom/worktree'
+    })
+    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
+    window.kata = { ...window.kata, spaceCreate }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use my existing folder/worktree (developer-managed)' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Workspace path' }), {
+      target: { value: '/Users/gannonh/dev/custom/worktree' }
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Space prompt' }), {
+      target: { value: 'External Path Space' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
+
+    await waitFor(() => {
+      expect(spaceCreate).toHaveBeenCalledTimes(1)
+    })
+    expect(spaceCreate).toHaveBeenCalledWith({
+      name: 'External Path Space',
+      repoUrl: 'https://github.com/gannonh/kata-cloud',
+      rootPath: '/Users/gannonh/dev/custom/worktree',
+      branch: 'main',
+      workspaceMode: 'external',
+      orchestrationMode: 'team'
+    })
   })
 })

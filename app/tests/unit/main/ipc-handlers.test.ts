@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
 import { createDefaultAppState } from '../../../src/shared/types/space'
 import type { AppState } from '../../../src/shared/types/space'
 
@@ -124,7 +125,8 @@ describe('registerIpcHandlers', () => {
       name: 'My Space',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/repo',
-      branch: 'main'
+      branch: 'main',
+      workspaceMode: 'external'
     })
 
     expect(createdSpace).toMatchObject({
@@ -132,6 +134,7 @@ describe('registerIpcHandlers', () => {
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/repo',
       branch: 'main',
+      workspaceMode: 'external',
       orchestrationMode: 'team',
       status: 'active'
     })
@@ -159,7 +162,8 @@ describe('registerIpcHandlers', () => {
       name: 'Second Space',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/repo',
-      branch: 'main'
+      branch: 'main',
+      workspaceMode: 'external'
     })
 
     const [savedState] = store.save.mock.calls[0]
@@ -282,13 +286,71 @@ describe('registerIpcHandlers', () => {
         repoUrl: 'https://github.com/user/repo',
         rootPath: '/Users/me/repo',
         branch: 'main',
+        workspaceMode: 'external',
         orchestrationMode: 'invalid-mode'
       })
     ).rejects.toThrow('Space input has an invalid orchestrationMode')
+
+    await expect(
+      spaceCreate?.({}, {
+        name: 'My Space',
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'external',
+        orchestrationMode: 'team'
+      })
+    ).rejects.toThrow('External workspace mode requires a non-empty rootPath')
+
+    await expect(
+      spaceCreate?.({}, {
+        name: 'My Space',
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'invalid-mode',
+        orchestrationMode: 'team'
+      })
+    ).rejects.toThrow('Space input has an invalid workspaceMode')
 
     await expect(spaceGet?.({}, { id: 123 })).rejects.toThrow('space:get input must be an object with string id')
     await expect(sessionCreate?.({}, null)).rejects.toThrow('Session input must be an object')
 
     await expect(sessionCreate?.({}, { spaceId: 'space-1' })).rejects.toThrow('Session input is missing required string fields')
+  })
+
+  it('space:create derives managed workspace paths and creates repo and .kata directories', async () => {
+    const mkdirSpy = vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined)
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store, {
+      workspaceBaseDir: '/tmp/kata/workspaces'
+    })
+
+    const handlers = getHandlersByChannel()
+    const spaceCreate = handlers.get('space:create')
+    const createdSpace = await spaceCreate?.({}, {
+      name: 'Project A',
+      repoUrl: 'https://github.com/user/repo',
+      branch: 'main',
+      workspaceMode: 'managed'
+    })
+
+    expect(createdSpace).toMatchObject({
+      name: 'Project A',
+      repoUrl: 'https://github.com/user/repo',
+      branch: 'main',
+      workspaceMode: 'managed'
+    })
+    expect((createdSpace as { rootPath: string }).rootPath).toMatch(
+      /^\/tmp\/kata\/workspaces\/project-a-[0-9a-f]{8}\/repo$/
+    )
+    expect(mkdirSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tmp\/kata\/workspaces\/project-a-[0-9a-f]{8}\/repo$/),
+      { recursive: true }
+    )
+    expect(mkdirSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tmp\/kata\/workspaces\/project-a-[0-9a-f]{8}\/\.kata$/),
+      { recursive: true }
+    )
+
+    mkdirSpy.mockRestore()
   })
 })

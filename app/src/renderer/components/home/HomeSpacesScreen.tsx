@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-import { mockSpaces, type DisplaySpace } from '../../mock/spaces'
+import type { CreateSpaceInput, WorkspaceMode } from '@shared/types/space'
+import { mockSpaces, toDisplaySpace, type DisplaySpace } from '../../mock/spaces'
 import { CreateSpacePanel } from './CreateSpacePanel'
 import { SpacesListPanel } from './SpacesListPanel'
 
@@ -15,6 +16,8 @@ type CreateDisplaySpaceForHomeInput = {
   prompt: string
   selectedSpace: DisplaySpace | null
   selectedMode: Mode
+  workspaceMode: WorkspaceMode
+  workspacePath: string
   now?: Date
 }
 
@@ -37,14 +40,22 @@ function groupSpacesByRepo(spaces: DisplaySpace[]): Array<{ repo: string; spaces
   return [...grouped.values()]
 }
 
-export function createDisplaySpaceForHome({ prompt, selectedSpace, selectedMode, now = new Date() }: CreateDisplaySpaceForHomeInput): DisplaySpace {
+export function createDisplaySpaceForHome({
+  prompt,
+  selectedSpace,
+  selectedMode,
+  workspaceMode,
+  workspacePath,
+  now = new Date()
+}: CreateDisplaySpaceForHomeInput): DisplaySpace {
   return {
     id: `space-${now.getTime()}`,
     name: prompt.trim() || 'Untitled space',
     repoUrl: selectedSpace?.repoUrl ?? '',
-    rootPath: selectedSpace?.rootPath ?? '',
+    rootPath: workspaceMode === 'external' ? workspacePath.trim() || selectedSpace?.rootPath || '' : '',
     repo: selectedSpace?.repo ?? '',
     branch: selectedSpace?.branch ?? '',
+    workspaceMode,
     orchestrationMode: selectedMode,
     createdAt: now.toISOString(),
     elapsed: 'now',
@@ -54,18 +65,47 @@ export function createDisplaySpaceForHome({ prompt, selectedSpace, selectedMode,
 }
 
 export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: HomeSpacesScreenProps) {
-  // TODO(KAT-65): Replace mockSpaces default with IPC/API data fetch.
-  // When implementing: add loading state, error state, and empty state.
-  // Remove the mockSpaces default from initialSpaces.
   const [isCreatePanelActive, setIsCreatePanelActive] = useState(false)
   const [spacePrompt, setSpacePrompt] = useState('')
   const [selectedMode, setSelectedMode] = useState<Mode>('team')
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('managed')
+  const [workspacePath, setWorkspacePath] = useState('')
   const [rapidFire, setRapidFire] = useState(false)
   const [groupByRepo, setGroupByRepo] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [spaces, setSpaces] = useState(initialSpaces)
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(initialSpaces.find((space) => !space.archived)?.id ?? null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadSpaces = async () => {
+      try {
+        const records = await window.kata?.spaceList?.()
+        if (!records || cancelled) {
+          return
+        }
+
+        const fetchedSpaces = records.map(toDisplaySpace)
+        setSpaces(fetchedSpaces)
+        setSelectedSpaceId((current) => {
+          if (current && fetchedSpaces.some((space) => space.id === current)) {
+            return current
+          }
+          return fetchedSpaces.find((space) => !space.archived)?.id ?? fetchedSpaces[0]?.id ?? null
+        })
+      } catch {
+        // Keep existing UI state when IPC is unavailable or fails.
+      }
+    }
+
+    void loadSpaces()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const visibleSpaces = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase()
@@ -112,20 +152,43 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
     return spaces.find((space) => space.id === effectiveSelectedSpaceId) ?? null
   }, [effectiveSelectedSpaceId, spaces])
 
-  function handleCreateSpace() {
-    // TODO(KAT-65): Space creation is currently UI-only (no persistence).
-    // When wiring persistence, replace this local state mutation with an IPC call
-    // and surface errors to the user if the call fails.
-    const nextSpace = createDisplaySpaceForHome({
-      prompt: spacePrompt,
-      selectedSpace,
-      selectedMode
-    })
+  useEffect(() => {
+    if (workspaceMode === 'external' && !workspacePath && selectedSpace?.rootPath) {
+      setWorkspacePath(selectedSpace.rootPath)
+    }
+  }, [selectedSpace, workspaceMode, workspacePath])
 
-    setSpaces((current) => [nextSpace, ...current])
-    setSelectedSpaceId(nextSpace.id)
-    setSpacePrompt('')
-    setIsCreatePanelActive(false)
+  async function handleCreateSpace() {
+    const createInput: CreateSpaceInput = {
+      name: spacePrompt.trim() || 'Untitled space',
+      repoUrl: selectedSpace?.repoUrl ?? '',
+      branch: selectedSpace?.branch ?? '',
+      workspaceMode,
+      ...(workspaceMode === 'external'
+        ? { rootPath: workspacePath.trim() || selectedSpace?.rootPath || '' }
+        : {}),
+      orchestrationMode: selectedMode
+    }
+
+    try {
+      const createdRecord = await window.kata?.spaceCreate?.(createInput)
+      const nextSpace = createdRecord
+        ? toDisplaySpace(createdRecord)
+        : createDisplaySpaceForHome({
+          prompt: spacePrompt,
+          selectedSpace,
+          selectedMode,
+          workspaceMode,
+          workspacePath
+        })
+
+      setSpaces((current) => [nextSpace, ...current.filter((space) => space.id !== nextSpace.id)])
+      setSelectedSpaceId(nextSpace.id)
+      setSpacePrompt('')
+      setIsCreatePanelActive(false)
+    } catch {
+      // Preserve current prompt and selection when create fails.
+    }
   }
 
   return (
@@ -149,6 +212,8 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
             isActive={isCreatePanelActive}
             prompt={spacePrompt}
             selectedMode={selectedMode}
+            workspaceMode={workspaceMode}
+            workspacePath={workspacePath}
             rapidFire={rapidFire}
             repoName={selectedSpace?.repo ?? 'gannonh/kata-cloud'}
             branchName={selectedSpace?.branch ?? 'main'}
@@ -157,6 +222,8 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
               setIsCreatePanelActive(true)
             }}
             onSelectMode={setSelectedMode}
+            onSelectWorkspaceMode={setWorkspaceMode}
+            onWorkspacePathChange={setWorkspacePath}
             onToggleRapidFire={() => {
               setRapidFire((current) => !current)
             }}

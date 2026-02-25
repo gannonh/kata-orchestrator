@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { ORCHESTRATION_MODES, SPACE_STATUSES, createDefaultAppState } from '@shared/types/space'
+import { ORCHESTRATION_MODES, SPACE_STATUSES, WORKSPACE_MODES, createDefaultAppState } from '@shared/types/space'
 import type { AppState } from '@shared/types/space'
 
 export type StateStore = {
@@ -23,6 +23,9 @@ function isSpaceRecord(value: unknown): boolean {
     typeof value.repoUrl === 'string' &&
     typeof value.rootPath === 'string' &&
     typeof value.branch === 'string' &&
+    (value.workspaceMode === undefined ||
+      (typeof value.workspaceMode === 'string' &&
+        WORKSPACE_MODES.includes(value.workspaceMode as (typeof WORKSPACE_MODES)[number]))) &&
     typeof value.orchestrationMode === 'string' &&
     ORCHESTRATION_MODES.includes(
       value.orchestrationMode as (typeof ORCHESTRATION_MODES)[number]
