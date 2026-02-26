@@ -710,9 +710,77 @@ rm -f /tmp/phase-plan-checklist.md
 
 Store `ISSUE_NUMBER` and `PLAN_COUNT` for display in `<offer_next>` if update succeeded.
 
-**After GitHub check completes (success or skip), proceed to Step 14.**
+**After GitHub check completes (success or skip), proceed to Linear check.**
 
 **Error handling principle:** All GitHub operations are non-blocking. Missing issue, auth issues, or update failures warn but do not stop the planning workflow.
+
+## 13b. Linear Integration Check
+
+**Check config guards:**
+
+```bash
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
+LINEAR_ISSUE_MODE=$(node scripts/kata-lib.cjs read-config "linear.issue_mode" "never")
+```
+
+**If `LINEAR_ENABLED != true` OR `LINEAR_ISSUE_MODE = never`:**
+- Log: `Skipping Linear issue update (linear.enabled=${LINEAR_ENABLED}, issue_mode=${LINEAR_ISSUE_MODE})`
+- Skip to Step 14
+
+**If enabled, find phase issue:**
+
+```bash
+LINEAR_TEAM_ID=$(node scripts/kata-lib.cjs read-config "linear.team_id" "")
+LINEAR_PROJECT_ID=$(node scripts/kata-lib.cjs read-config "linear.project_id" "")
+```
+
+Call `mcp__plugin_linear_linear__list_issues` with:
+- `teamId`: `LINEAR_TEAM_ID`
+- `projectId`: `LINEAR_PROJECT_ID`
+- `labels`: `["phase"]`
+
+Filter results where title starts with `"Phase ${PHASE}:"`. Extract the issue ID and identifier.
+
+If no matching issue found:
+```
+Warning: Could not find Linear Issue for Phase ${PHASE}. Skipping checklist update.
+```
+Continue to Step 14 (non-blocking).
+
+**Build plan checklist from PLAN.md files** (reuse same logic as GitHub section above):
+
+```bash
+PLAN_CHECKLIST=""
+PLAN_COUNT=0
+for plan_file in $(find "${PHASE_DIR}" -maxdepth 1 -name "*-PLAN.md" 2>/dev/null | sort); do
+  PLAN_NUM=$(basename "$plan_file" | sed -E 's/.*-([0-9]+)-PLAN\.md/\1/')
+  PLAN_OBJECTIVE=$(grep -A2 "<objective>" "$plan_file" | head -2 | tail -1 | sed 's/^ *//' | head -c 60)
+  if [ -z "$PLAN_OBJECTIVE" ]; then
+    PLAN_OBJECTIVE=$(basename "$plan_file" .md | sed 's/-PLAN$//' | sed 's/-/ /g')
+  fi
+  PLAN_CHECKLIST="${PLAN_CHECKLIST}- [ ] Plan ${PLAN_NUM}: ${PLAN_OBJECTIVE}
+"
+  PLAN_COUNT=$((PLAN_COUNT + 1))
+done
+```
+
+**Update issue description with plan checklist:**
+
+1. Call `mcp__plugin_linear_linear__get_issue` with the issue ID to get current description.
+2. Replace the plans placeholder section:
+   - Find: `<!-- Checklist added by /kata-plan-phase -->\n_Plans will be added after phase planning completes._`
+   - Replace with: the `PLAN_CHECKLIST` content
+3. Call `mcp__plugin_linear_linear__save_issue` with:
+   - `id`: issue ID
+   - `description`: updated description
+
+**Track result for display:**
+
+Store issue identifier and `PLAN_COUNT` for display in `<offer_next>` if update succeeded. Set `LINEAR_UPDATE_SUCCESS=true`.
+
+**After Linear check completes (success or skip), proceed to Step 14.**
+
+**Error handling principle:** All Linear operations are non-blocking. Missing issue, MCP failures, or update failures warn but do not stop the planning workflow.
 
 ## 14. Present Final Status
 
@@ -739,6 +807,9 @@ Verification: {Passed | Passed with override | Skipped}
 
 {If GITHUB_UPDATE_SUCCESS=true:}
 GitHub Issue: #{ISSUE_NUMBER} updated with {PLAN_COUNT} plan checklist items
+
+{If LINEAR_UPDATE_SUCCESS=true:}
+Linear Issue: {IDENTIFIER} updated with {PLAN_COUNT} plan checklist items
 
 ───────────────────────────────────────────────────────────────
 

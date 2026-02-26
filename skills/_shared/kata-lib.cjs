@@ -65,6 +65,12 @@ const DEFAULTS = {
   'worktree.enabled': 'false',
   'github.enabled': 'false',
   'github.issue_mode': 'never',
+  'linear.enabled': 'false',
+  'linear.issue_mode': 'never',
+  'linear.team_id': '',
+  'linear.team_name': '',
+  'linear.project_id': '',
+  'linear.project_name': '',
   'workflows.execute-phase.post_task_command': '',
   'workflows.execute-phase.commit_style': 'conventional',
   'workflows.execute-phase.commit_scope_format': '{phase}-{plan}',
@@ -87,6 +93,12 @@ const KNOWN_KEYS = {
   'workflow.verifier': { type: 'boolean' },
   'github.enabled': { type: 'boolean' },
   'github.issue_mode': { type: 'enum', values: ['auto', 'ask', 'never'] },
+  'linear.enabled': { type: 'boolean' },
+  'linear.issue_mode': { type: 'enum', values: ['auto', 'ask', 'never'] },
+  'linear.team_id': { type: 'string' },
+  'linear.team_name': { type: 'string' },
+  'linear.project_id': { type: 'string' },
+  'linear.project_name': { type: 'string' },
   'workflows.execute-phase.post_task_command': { type: 'string' },
   'workflows.execute-phase.commit_style': { type: 'enum', values: ['conventional', 'semantic', 'simple'] },
   'workflows.execute-phase.commit_scope_format': { type: 'string' },
@@ -207,6 +219,12 @@ function cmdCheckConfig() {
       }
       const error = validateValue(key, value, schema);
       if (error) console.log(error);
+    }
+    // Cross-key validation: warn if both github and linear are enabled
+    const githubEnabled = resolveNested(config, 'github.enabled');
+    const linearEnabled = resolveNested(config, 'linear.enabled');
+    if (githubEnabled === true && linearEnabled === true) {
+      console.log(`[kata] Config warning: Both 'github.enabled' and 'linear.enabled' are true. These are mutually exclusive — only one tracker should be enabled.`);
     }
   } catch {
     // Silent fail

@@ -26,6 +26,12 @@ fi
 GITHUB_ENABLED=$(node "$SCRIPT_DIR/kata-lib.cjs" read-config "github.enabled" "false")
 ISSUE_MODE=$(node "$SCRIPT_DIR/kata-lib.cjs" read-config "github.issue_mode" "never")
 
+LINEAR_ENABLED=$(node "$SCRIPT_DIR/kata-lib.cjs" read-config "linear.enabled" "false")
+if [ "$LINEAR_ENABLED" = "true" ]; then
+  echo "Skipped: Linear updates handled by orchestrator via MCP tools"
+  exit 0
+fi
+
 if [ "$GITHUB_ENABLED" != "true" ] || [ "$ISSUE_MODE" = "never" ]; then
   echo "Skipped: GitHub issues not enabled"
   exit 0

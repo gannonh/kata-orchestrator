@@ -36,6 +36,16 @@ VERIFIER=$(node scripts/kata-lib.cjs read-pref "workflow.verifier" "true")
 WORKTREE_ENABLED=$(node scripts/kata-lib.cjs read-pref "worktree.enabled" "false")
 PR_WORKFLOW_VAL=$(node scripts/kata-lib.cjs read-pref "pr_workflow" "false")
 
+# Issue tracker
+GITHUB_ENABLED=$(node scripts/kata-lib.cjs read-pref "github.enabled" "false")
+GITHUB_ISSUE_MODE=$(node scripts/kata-lib.cjs read-pref "github.issue_mode" "never")
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-pref "linear.enabled" "false")
+LINEAR_ISSUE_MODE=$(node scripts/kata-lib.cjs read-pref "linear.issue_mode" "never")
+LINEAR_TEAM_ID=$(node scripts/kata-lib.cjs read-pref "linear.team_id" "")
+LINEAR_TEAM_NAME=$(node scripts/kata-lib.cjs read-pref "linear.team_name" "")
+LINEAR_PROJECT_ID=$(node scripts/kata-lib.cjs read-pref "linear.project_id" "")
+LINEAR_PROJECT_NAME=$(node scripts/kata-lib.cjs read-pref "linear.project_name" "")
+
 # Workflow variants
 EXEC_POST_TASK=$(node scripts/kata-lib.cjs read-pref "workflows.execute-phase.post_task_command" "")
 EXEC_COMMIT_STYLE=$(node scripts/kata-lib.cjs read-pref "workflows.execute-phase.commit_style" "conventional")
@@ -119,7 +129,29 @@ AskUserQuestion([
       { label: "Yes", description: "Verify must-haves after execution" },
       { label: "No", description: "Skip post-execution verification" }
     ]
+  },
+  {
+    question: "External issue tracker for milestones and phases?",
+    header: "Issue Tracker",
+    multiSelect: false,
+    options: [
+      { label: "Linear", description: "Linear Project + Milestone tracking, Issues for phases" },
+      { label: "GitHub", description: "GitHub Milestones, optionally Issues for phases" },
+      { label: "None", description: "Keep planning local to .planning/ directory only" }
+    ]
+    // Pre-select based on: LINEAR_ENABLED=true → "Linear", GITHUB_ENABLED=true → "GitHub", else → "None"
   }
+  // If Issue Tracker = "Linear" or "GitHub", follow up with issue_mode question:
+  // {
+  //   question: "When should phase Issues be created?",
+  //   header: "Issue Mode",
+  //   multiSelect: false,
+  //   options: [
+  //     { label: "Auto", description: "Create Issues automatically for each phase" },
+  //     { label: "Ask", description: "Prompt once per milestone" },
+  //     { label: "Never", description: "Milestones only, no phase Issues" }
+  //   ]
+  // }
 ])
 ```
 
@@ -174,6 +206,42 @@ node scripts/kata-lib.cjs set-config "worktree.enabled" "$NEW_WORKTREE_ENABLED"
 node scripts/kata-lib.cjs set-config "workflow.research" "$NEW_RESEARCH"
 node scripts/kata-lib.cjs set-config "workflow.plan_check" "$NEW_PLAN_CHECK"
 node scripts/kata-lib.cjs set-config "workflow.verifier" "$NEW_VERIFIER"
+```
+
+### Issue Tracker (via kata-lib.cjs set-config)
+
+**If Issue Tracker = "Linear":**
+
+1. If `LINEAR_TEAM_ID` is empty (first-time setup), trigger Linear setup flow:
+   - Call `mcp__plugin_linear_linear__list_teams` → present teams via AskUserQuestion
+   - Call `mcp__plugin_linear_linear__list_projects` for selected team → present projects via AskUserQuestion (include "Create new project" option)
+   - If "Create new project": call `mcp__plugin_linear_linear__save_project`
+   - Store team/project IDs and names
+
+2. Write config:
+   ```bash
+   node scripts/kata-lib.cjs set-config "linear.enabled" "true"
+   node scripts/kata-lib.cjs set-config "linear.issue_mode" "$NEW_ISSUE_MODE"
+   node scripts/kata-lib.cjs set-config "linear.team_id" "$NEW_TEAM_ID"
+   node scripts/kata-lib.cjs set-config "linear.team_name" "$NEW_TEAM_NAME"
+   node scripts/kata-lib.cjs set-config "linear.project_id" "$NEW_PROJECT_ID"
+   node scripts/kata-lib.cjs set-config "linear.project_name" "$NEW_PROJECT_NAME"
+   node scripts/kata-lib.cjs set-config "github.enabled" "false"
+   ```
+
+**If Issue Tracker = "GitHub":**
+
+```bash
+node scripts/kata-lib.cjs set-config "github.enabled" "true"
+node scripts/kata-lib.cjs set-config "github.issue_mode" "$NEW_ISSUE_MODE"
+node scripts/kata-lib.cjs set-config "linear.enabled" "false"
+```
+
+**If Issue Tracker = "None":**
+
+```bash
+node scripts/kata-lib.cjs set-config "github.enabled" "false"
+node scripts/kata-lib.cjs set-config "linear.enabled" "false"
 ```
 
 ### Workflow Variants (via kata-lib.cjs set-config)
@@ -232,15 +300,17 @@ Kata > SETTINGS UPDATED
 
 **Session Settings** (config.json)
 
-| Setting            | Value                     |
-| ------------------ | ------------------------- |
-| Model Profile      | {quality/balanced/budget} |
-| Commit Docs        | {On/Off}                  |
-| PR Workflow        | {On/Off}                  |
-| Git Worktrees      | {On/Off}                  |
-| Plan Researcher    | {On/Off}                  |
-| Plan Checker       | {On/Off}                  |
-| Execution Verifier | {On/Off}                  |
+| Setting            | Value                        |
+| ------------------ | ---------------------------- |
+| Model Profile      | {quality/balanced/budget}    |
+| Commit Docs        | {On/Off}                     |
+| PR Workflow        | {On/Off}                     |
+| Git Worktrees      | {On/Off}                     |
+| Plan Researcher    | {On/Off}                     |
+| Plan Checker       | {On/Off}                     |
+| Execution Verifier | {On/Off}                     |
+| Issue Tracker      | {Linear/GitHub/None}         |
+| Issue Mode         | {auto/ask/never or N/A}      |
 
 **Workflow Variants** (config.json)
 

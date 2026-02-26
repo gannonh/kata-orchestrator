@@ -949,6 +949,53 @@ Confirm:
 
 </step>
 
+<step name="close_linear_milestone">
+
+Close the Linear Milestone and phase issues if linear.enabled.
+
+**Note:** GitHub and Linear integration are mutually exclusive. Only one of `close_github_milestone` or `close_linear_milestone` will execute.
+
+```bash
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
+```
+
+If `LINEAR_ENABLED=true`:
+
+1. Read config:
+   ```bash
+   LINEAR_PROJECT_ID=$(node scripts/kata-lib.cjs read-config "linear.project_id" "")
+   ```
+
+2. Find and close phase issues:
+   Call `mcp__plugin_linear_linear__list_issues` with:
+   - `projectId`: `LINEAR_PROJECT_ID`
+   - `labels`: `["phase"]`
+
+   For each phase issue returned:
+   Call `mcp__plugin_linear_linear__save_issue` with:
+   - `id`: issue ID
+   - `state`: `"done"`
+
+3. Find and complete milestone:
+   Call `mcp__plugin_linear_linear__list_milestones` with:
+   - `projectId`: `LINEAR_PROJECT_ID`
+
+   Find milestone matching `v${VERSION}`.
+
+   Call `mcp__plugin_linear_linear__save_milestone` with:
+   - `id`: milestone ID
+   - `targetDate`: today's date (ISO format)
+
+Non-blocking: all MCP operations warn on failure but do not stop milestone completion.
+
+Confirm:
+```
+{If closed: Linear Milestone v[X.Y] closed ([N] phase issues resolved)}
+{If not found: Note: No Linear Milestone for v[X.Y] (skipped)}
+```
+
+</step>
+
 <step name="review_documentation">
 
 Offer final README review before committing milestone completion.

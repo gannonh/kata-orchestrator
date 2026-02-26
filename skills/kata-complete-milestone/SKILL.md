@@ -297,6 +297,28 @@ _Non-blocking: milestone completion continues regardless of choice._
 If github.enabled, close the GitHub Milestone for this version.
 See milestone-complete.md `close_github_milestone` step for details.
 
+6.8. **Close Linear Milestone:**
+
+```bash
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
+```
+
+If `LINEAR_ENABLED=true`:
+
+1. Read `linear.project_id` from config
+2. Find phase issues via `mcp__plugin_linear_linear__list_issues` with project filter and label "phase"
+3. Set each phase issue to "done" via `mcp__plugin_linear_linear__save_issue` with state "done"
+4. Find milestone via `mcp__plugin_linear_linear__list_milestones` with project filter and name `v{{version}}`
+5. Set milestone target date to today via `mcp__plugin_linear_linear__save_milestone` (marks it as complete)
+
+Display:
+```
+{If closed: Linear Milestone v{{version}} closed ({N} phase issues resolved)}
+{If not found: Note: No Linear Milestone for v{{version}} (skipped)}
+```
+
+Non-blocking: warn on failure, continue.
+
 7. **Commit and finalize:**
    - Stage: MILESTONES.md, PROJECT.md, ROADMAP.md, STATE.md, archive files
    - Commit: `chore: complete v{{version}} milestone`
@@ -317,11 +339,13 @@ See milestone-complete.md `close_github_milestone` step for details.
    git push -u origin "$CURRENT_BRANCH"
 
    # Collect all phase issues for this milestone
+   # Skip CLOSES_LINES when Linear enabled (Linear handles PR linking via its own Git integration)
    GITHUB_ENABLED=$(node scripts/kata-lib.cjs read-config "github.enabled" "false")
    ISSUE_MODE=$(node scripts/kata-lib.cjs read-config "github.issue_mode" "never")
+   LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
 
    CLOSES_LINES=""
-   if [ "$GITHUB_ENABLED" = "true" ] && [ "$ISSUE_MODE" != "never" ]; then
+   if [ "$LINEAR_ENABLED" != "true" ] && [ "$GITHUB_ENABLED" = "true" ] && [ "$ISSUE_MODE" != "never" ]; then
      # Get all phase issue numbers for this milestone
      # --state all includes already-closed issues (GitHub ignores redundant Closes #X,
      # but including them ensures PR body reflects all related work)

@@ -90,9 +90,10 @@ Check for area filter in arguments:
 </step>
 
 <step name="list_issues">
-**1. Check GitHub config:**
+**1. Check tracker config:**
 ```bash
 GITHUB_ENABLED=$(node scripts/kata-lib.cjs read-config "github.enabled" "false")
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
 ```
 
 **2. Build dedupe list from local files' provenance fields:**
@@ -100,9 +101,12 @@ GITHUB_ENABLED=$(node scripts/kata-lib.cjs read-config "github.enabled" "false")
 ```bash
 # Get all GitHub issue numbers already tracked locally (from open and in-progress)
 LOCAL_PROVENANCE=$(grep -h "^provenance: github:" .planning/issues/open/*.md .planning/issues/in-progress/*.md 2>/dev/null | grep -oE '#[0-9]+' | tr -d '#' | sort -u)
+
+# Get all Linear identifiers already tracked locally
+LOCAL_PROVENANCE_LINEAR=$(grep -h "^provenance: linear:" .planning/issues/open/*.md .planning/issues/in-progress/*.md 2>/dev/null | grep -oE '[A-Z]+-[0-9]+' | sort -u)
 ```
 
-**3. Query GitHub Issues (if enabled):**
+**3. Query tracker Issues (if enabled):**
 
 ```bash
 if [ "$GITHUB_ENABLED" = "true" ]; then
@@ -111,6 +115,24 @@ if [ "$GITHUB_ENABLED" = "true" ]; then
   GITHUB_ISSUES=$(gh issue list --state open --json number,title,createdAt,labels --jq '.[] | select(.labels[].name == "backlog") | "\(.createdAt)|\(.title)|github|\(.number)"' 2>/dev/null)
 fi
 ```
+
+**3b. Query Linear Issues (if enabled):**
+
+If `LINEAR_ENABLED=true`:
+
+```bash
+LINEAR_TEAM_ID=$(node scripts/kata-lib.cjs read-config "linear.team_id" "")
+LINEAR_PROJECT_ID=$(node scripts/kata-lib.cjs read-config "linear.project_id" "")
+```
+
+Call `mcp__plugin_linear_linear__list_issues` with:
+- `teamId`: `LINEAR_TEAM_ID`
+- `projectId`: `LINEAR_PROJECT_ID`
+- `labels`: `["backlog"]`
+
+Filter out issues whose identifier is in `LOCAL_PROVENANCE_LINEAR` (already tracked locally).
+
+Format remaining as: `{createdAt}|{title}|linear|{identifier}`
 
 **4. Query in-progress issues first:**
 
@@ -143,7 +165,8 @@ Display in-progress issues first (if any), then open issues:
 - In-progress issues marked with `[IN PROGRESS]` indicator
 - Local issues display as-is with their area
 - GitHub-only issues (number NOT in LOCAL_PROVENANCE) display with `[GH]` indicator
-- Format: `1. [IN PROGRESS] Fix auth bug (api, 2d ago)` or `2. Add feature [GH] (bug, 3d ago)`
+- Linear-only issues (identifier NOT in LOCAL_PROVENANCE_LINEAR) display with `[LIN]` indicator
+- Format: `1. [IN PROGRESS] Fix auth bug (api, 2d ago)` or `2. Add feature [GH] (bug, 3d ago)` or `3. Fix login [LIN] (auth, 1d ago)`
 
 Apply area filter if specified. Display as numbered list:
 
@@ -156,7 +179,8 @@ Issues:
 --- Open (Backlog) ---
 2. Add modal z-index fix (ui, 1d ago)
 3. Fix login bug [GH] (bug, 3d ago)
-4. Refactor database connection pool (database, 5h ago)
+4. Improve error handling [LIN] (api, 2d ago)
+5. Refactor database connection pool (database, 5h ago)
 
 ---
 
@@ -165,7 +189,7 @@ Reply with a number to view details, or:
 - `q` to exit
 ```
 
-Format age as relative time. The `[GH]` indicator marks GitHub-only issues (not yet pulled to local).
+Format age as relative time. The `[GH]` indicator marks GitHub-only issues (not yet pulled to local). The `[LIN]` indicator marks Linear-only issues (not yet pulled to local).
 </step>
 
 <step name="handle_selection">
@@ -216,6 +240,27 @@ Display:
 ```
 
 Note: This issue exists only in GitHub, not yet pulled to local.
+
+**If Linear-only issue (has [LIN] indicator):**
+Fetch full issue details from Linear:
+
+Call `mcp__plugin_linear_linear__get_issue` with the issue ID.
+
+Display:
+
+```
+## [title] [LIN]
+
+**Source:** Linear Issue [identifier]
+**Created:** [date] ([relative time] ago)
+**Labels:** [list of labels]
+**State:** [state name]
+
+### Description
+[issue description content]
+```
+
+Note: This issue exists only in Linear, not yet pulled to local.
 </step>
 
 <step name="check_roadmap">
@@ -255,7 +300,19 @@ Use AskUserQuestion:
   - "View on GitHub" — open in browser (gh issue view --web)
   - "Put it back" — return to list
 
-**If user selects "Work on it now" (for GitHub-only issues):**
+**If Linear-only issue (has [LIN] indicator):**
+
+Use AskUserQuestion:
+
+- header: "Action"
+- question: "This is a Linear Issue. What would you like to do?"
+- options:
+  - "Pull to local" — create local file for offline work
+  - "Work on it now" — pull to local AND move to in-progress (shows mode selection)
+  - "View on Linear" — display Linear issue URL
+  - "Put it back" — return to list
+
+**If user selects "Work on it now" (for GitHub-only or Linear-only issues):**
 First pull to local, then show mode selection (see below).
 
 **If open local issue maps to a roadmap phase:**
@@ -282,7 +339,7 @@ Use AskUserQuestion:
   - "Brainstorm approach" — think through before deciding
   - "Put it back" — return to list
 
-**Mode selection (when "Work on it now" selected for open local or GitHub-only issues):**
+**Mode selection (when "Work on it now" selected for open local, GitHub-only, or Linear-only issues):**
 
 After selecting "Work on it now", present execution mode selection:
 
@@ -341,6 +398,43 @@ The `provenance` field enables deduplication on subsequent checks.
 Confirm: "Pulled GitHub Issue #[number] to local: .planning/issues/open/[filename]"
 Return to list or offer to work on it.
 
+**Pull to local (Linear-only issues):**
+Create local file from Linear Issue:
+
+1. Call `mcp__plugin_linear_linear__get_issue` with the issue ID.
+2. Extract title, description, createdAt, identifier from response.
+3. Create local file:
+
+```bash
+timestamp=$(date "+%Y-%m-%dT%H:%M")
+date_prefix=$(date "+%Y-%m-%d")
+slug=$(echo "$TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-' | head -c 40)
+```
+
+Write to `.planning/issues/open/${date_prefix}-${slug}.md`:
+
+```markdown
+created: ${timestamp}
+title: ${TITLE}
+area: general
+provenance: linear:${IDENTIFIER}
+files: []
+
+---
+
+## Problem
+
+${DESCRIPTION}
+
+## Solution
+
+TBD
+```
+
+The `provenance` field enables deduplication on subsequent checks.
+Confirm: "Pulled Linear Issue [identifier] to local: .planning/issues/open/[filename]"
+Return to list or offer to work on it.
+
 **Work on it now (open local issue):**
 
 **Based on mode selection from offer_actions step:**
@@ -352,7 +446,7 @@ Return to list or offer to work on it.
 mv ".planning/issues/open/[filename]" ".planning/issues/in-progress/"
 ISSUE_FILE=".planning/issues/in-progress/[filename]"
 
-# Add in-progress label to GitHub Issue if linked
+# Update tracker status if linked
 PROVENANCE=$(grep "^provenance:" "$ISSUE_FILE" | cut -d' ' -f2)
 if echo "$PROVENANCE" | grep -q "^github:"; then
   ISSUE_NUMBER=$(echo "$PROVENANCE" | grep -oE '#[0-9]+' | tr -d '#')
@@ -365,6 +459,15 @@ if echo "$PROVENANCE" | grep -q "^github:"; then
       gh issue edit "$ISSUE_NUMBER" --add-label "in-progress" 2>/dev/null || true
       gh issue edit "$ISSUE_NUMBER" --add-assignee @me 2>/dev/null || true
     fi
+  fi
+elif echo "$PROVENANCE" | grep -q "^linear:"; then
+  LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
+  if [ "$LINEAR_ENABLED" = "true" ]; then
+    # Extract Linear identifier and set issue state to "in progress" via MCP
+    LINEAR_IDENTIFIER=$(echo "$PROVENANCE" | sed 's/^linear://')
+    # Call mcp__plugin_linear_linear__list_issues to find issue by identifier
+    # Then call mcp__plugin_linear_linear__save_issue with state: "started"
+    # Non-blocking: warn on failure
   fi
 fi
 ````
@@ -933,12 +1036,12 @@ When complete, use `/kata-check-issues` and select "Mark complete".
 Update STATE.md issue count. Present problem/solution context. Begin work or ask how to proceed.
 
 **Mark complete (in-progress issue):**
-Move from in-progress to closed and close GitHub Issue if linked:
+Move from in-progress to closed and close tracker issue if linked:
 
 ```bash
 mv ".planning/issues/in-progress/[filename]" ".planning/issues/closed/"
 
-# Check if issue has GitHub provenance
+# Check if issue has tracker provenance
 PROVENANCE=$(grep "^provenance:" ".planning/issues/closed/[filename]" | cut -d' ' -f2)
 if echo "$PROVENANCE" | grep -q "^github:"; then
   # Extract issue number from provenance (format: github:owner/repo#N)
@@ -954,6 +1057,16 @@ if echo "$PROVENANCE" | grep -q "^github:"; then
         && echo "Closed GitHub Issue #${ISSUE_NUMBER}" \
         || echo "Warning: Failed to close GitHub Issue #${ISSUE_NUMBER}"
     fi
+  fi
+elif echo "$PROVENANCE" | grep -q "^linear:"; then
+  LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
+  if [ "$LINEAR_ENABLED" = "true" ]; then
+    # Extract Linear identifier from provenance (format: linear:TEAM-NUM)
+    LINEAR_IDENTIFIER=$(echo "$PROVENANCE" | sed 's/^linear://')
+    # Find issue by identifier via mcp__plugin_linear_linear__list_issues
+    # Then call mcp__plugin_linear_linear__save_issue with state: "done"
+    # Display: "Closed Linear Issue ${LINEAR_IDENTIFIER}"
+    # Non-blocking: warn on failure
   fi
 fi
 ```
@@ -1135,6 +1248,13 @@ closed/      → Completed
 - Closed when: User selects "Mark complete" on an in-progress issue
 - Alternative: GitHub auto-closes via "Closes #N" in PR description when PR merges
 
+**Linear Issue lifecycle:**
+
+- Created when: `/kata-add-issue` with `linear.enabled=true`
+- Linked via: `provenance: linear:TEAM-NUM` in local file
+- Closed when: User selects "Mark complete" on an in-progress issue
+- Alternative: Linear handles PR linking via its own Git integration
+
 The provenance field is the linchpin - it enables deduplication and bidirectional updates.
 </issue_lifecycle>
 
@@ -1143,8 +1263,10 @@ The provenance field is the linchpin - it enables deduplication and bidirectiona
 - [ ] Open and in-progress issues listed with title, area, age
 - [ ] In-progress issues shown first with [IN PROGRESS] indicator
 - [ ] GitHub backlog issues included (if github.enabled=true)
-- [ ] Deduplication applied (local provenance matches GitHub #)
+- [ ] Linear backlog issues included (if linear.enabled=true)
+- [ ] Deduplication applied (local provenance matches GitHub # or Linear identifier)
 - [ ] GitHub-only issues marked with [GH] indicator
+- [ ] Linear-only issues marked with [LIN] indicator
 - [ ] Area filter applied if specified
 - [ ] Selected issue's full context loaded
 - [ ] Roadmap context checked for phase match
@@ -1154,7 +1276,7 @@ The provenance field is the linchpin - it enables deduplication and bidirectiona
 - [ ] "Planned" mode displays guidance message and returns gracefully
 - [ ] "Work on it now" adds in-progress label to GitHub Issue (if linked, Quick task mode)
 - [ ] "Work on it now" assigns GitHub Issue to @me (if linked, Quick task mode)
-- [ ] "Mark complete" moves to closed AND closes GitHub Issue
+- [ ] "Mark complete" moves to closed AND closes GitHub Issue or Linear Issue
 - [ ] STATE.md updated if issue count changed
 - [ ] Changes committed to git
       </success_criteria>

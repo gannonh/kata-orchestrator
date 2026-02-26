@@ -6,6 +6,8 @@ GitHub integration for Kata projects. Documents all integration points and confi
 
 ## Purpose
 
+**Note:** GitHub and Linear integration are mutually exclusive. Enable one or the other. See [linear-integration.md](linear-integration.md) for the Linear counterpart.
+
 GitHub integration adds automatic Milestone and Issue creation to Kata workflows. When enabled, Kata mirrors your roadmap structure to GitHub:
 
 - **Milestones** map to Kata milestones (e.g., v1.1.0)

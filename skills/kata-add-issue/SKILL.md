@@ -155,14 +155,56 @@ files:
 
 </step>
 
-<step name="sync_to_github">
-**Check GitHub integration:**
+<step name="sync_to_tracker">
+**Check tracker integration:**
 
 ```bash
 GITHUB_ENABLED=$(node scripts/kata-lib.cjs read-config "github.enabled" "false")
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
 ```
 
-**If `GITHUB_ENABLED=false`:** Log "Local-only issue (GitHub integration disabled)" and skip to next step.
+**If both are `false`:** Log "Local-only issue (no tracker integration enabled)" and skip to next step.
+
+**If `LINEAR_ENABLED=true`:**
+
+1. **Check if already synced:**
+   - Read the just-created local file's frontmatter
+   - If `provenance` already contains `linear:`, skip (already synced)
+
+2. **Create backlog label (idempotent):**
+
+   ```bash
+   LINEAR_TEAM_ID=$(node scripts/kata-lib.cjs read-config "linear.team_id" "")
+   ```
+
+   Call `mcp__plugin_linear_linear__create_issue_label` with:
+   - `teamId`: `LINEAR_TEAM_ID`
+   - `name`: `"backlog"`
+   - `description`: `"Kata backlog issues"`
+
+3. **Create Linear Issue:**
+
+   ```bash
+   LINEAR_PROJECT_ID=$(node scripts/kata-lib.cjs read-config "linear.project_id" "")
+   ```
+
+   Call `mcp__plugin_linear_linear__save_issue` with:
+   - `teamId`: `LINEAR_TEAM_ID`
+   - `title`: `"$TITLE"`
+   - `description`: issue body (Problem + Solution sections from local file)
+   - `projectId`: `LINEAR_PROJECT_ID`
+   - `labels`: `["backlog"]`
+
+   Extract the returned issue identifier (e.g., `KAT-42`).
+
+4. **Update local file frontmatter:**
+   - Read the local issue file
+   - Replace `provenance: local` with `provenance: linear:${IDENTIFIER}`
+   - Write updated file
+
+**Non-blocking error handling:** All Linear MCP operations are wrapped to warn but continue on failure. Local file creation is never blocked by Linear failures.
+
+**Skip to next step** (do not also run the GitHub path when Linear is enabled).
 
 **If `GITHUB_ENABLED=true`:**
 
@@ -270,7 +312,7 @@ Issue saved: .planning/issues/open/[filename]
 [title]
 Area: [area]
 Files: [count] referenced
-GitHub: #[number] (if synced, otherwise "local only")
+Tracker: #[number] or [identifier] (if synced, otherwise "local only")
 
 ---
 
@@ -289,6 +331,7 @@ Would you like to:
 - `.planning/issues/open/[date]-[slug].md`
 - Updated `.planning/STATE.md` (if exists)
 - GitHub Issue #N with `backlog` label (if github.enabled=true)
+- Linear Issue with `backlog` label (if linear.enabled=true)
 </output>
 
 <anti_patterns>
@@ -306,6 +349,7 @@ Would you like to:
 - [ ] STATE.md updated if exists
 - [ ] Issue and state committed to git
 - [ ] GitHub Issue created with backlog label (if github.enabled=true)
-- [ ] Provenance field set in local file (if GitHub synced)
+- [ ] Linear Issue created with backlog label (if linear.enabled=true)
+- [ ] Provenance field set in local file (if tracker synced)
 </success_criteria>
 ```

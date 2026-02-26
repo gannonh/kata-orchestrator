@@ -191,6 +191,37 @@ No open PR for current branch.
 Branch: [current_branch]
 ```
 
+## Linear Status
+(Only show this section if LINEAR_ENABLED is true)
+
+```bash
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
+if [ "$LINEAR_ENABLED" = "true" ]; then
+  LINEAR_PROJECT_ID=$(node scripts/kata-lib.cjs read-config "linear.project_id" "")
+  LINEAR_PROJECT_NAME=$(node scripts/kata-lib.cjs read-config "linear.project_name" "")
+fi
+```
+
+If `LINEAR_ENABLED=true`:
+
+1. Call `mcp__plugin_linear_linear__get_project` with `projectId: LINEAR_PROJECT_ID`
+2. Call `mcp__plugin_linear_linear__list_milestones` with `projectId: LINEAR_PROJECT_ID`
+3. Find current milestone matching version from ROADMAP.md
+4. Call `mcp__plugin_linear_linear__list_issues` with `projectId: LINEAR_PROJECT_ID`, `labels: ["phase"]`
+5. Count done vs total issues for current milestone
+
+Display:
+
+```
+## Linear Status
+
+Project: ${LINEAR_PROJECT_NAME}
+Milestone: v${VERSION} (${DONE}/${TOTAL} phase issues done)
+Current Phase: ${IDENTIFIER} (${STATE})
+```
+
+Non-blocking: warn on MCP failure, omit section.
+
 ## What's Next
 
 [Next phase/plan objective from ROADMAP]

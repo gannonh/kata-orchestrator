@@ -54,8 +54,10 @@ PHASE_GOAL=$(grep -A 3 "^#{3,4} Phase ${PHASE_NUM}:" .planning/ROADMAP.md 2>/dev
 [ -z "$MILESTONE" ] && MILESTONE="0.0"
 
 # Get phase issue for linking via two-step API lookup (handles closed milestones)
+# Skip CLOSES_LINE when Linear enabled (Linear handles PR linking via its own Git integration)
+LINEAR_ENABLED=$(node "$SCRIPT_DIR/kata-lib.cjs" read-config "linear.enabled" "false")
 CLOSES_LINE=""
-if [ "$GITHUB_ENABLED" = "true" ] && [ "$ISSUE_MODE" != "never" ]; then
+if [ "$LINEAR_ENABLED" != "true" ] && [ "$GITHUB_ENABLED" = "true" ] && [ "$ISSUE_MODE" != "never" ]; then
   PHASE_ISSUE=$(bash "$SCRIPT_DIR/get-phase-issue.sh" "$MILESTONE" "$PHASE_NUM")
   [ -n "$PHASE_ISSUE" ] && CLOSES_LINE="Closes #${PHASE_ISSUE}"
 fi

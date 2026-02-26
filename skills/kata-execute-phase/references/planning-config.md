@@ -17,6 +17,14 @@ Configuration options for Kata projects in `.planning/config.json`.
     "enabled": true|false,
     "issue_mode": "auto|ask|never"
   },
+  "linear": {
+    "enabled": true|false,
+    "issue_mode": "auto|ask|never",
+    "team_id": "string",
+    "team_name": "string",
+    "project_id": "string",
+    "project_name": "string"
+  },
   "workflow": {
     "research": true|false,
     "plan_check": true|false,
@@ -37,6 +45,12 @@ Configuration options for Kata projects in `.planning/config.json`.
 | `pr_workflow`         | `true`     | Use PR-based release workflow vs direct commits                       |
 | `github.enabled`      | `false`    | Create GitHub Milestones/Issues when true                             |
 | `github.issue_mode`    | `never`    | Issue creation mode: `auto`, `ask`, `never`                           |
+| `linear.enabled`      | `false`    | Create Linear Milestones/Issues when true (mutually exclusive with github.enabled) |
+| `linear.issue_mode`    | `never`    | Issue creation mode: `auto`, `ask`, `never`                           |
+| `linear.team_id`      | `""`       | Linear team ID (set during project init)                              |
+| `linear.team_name`    | `""`       | Linear team name (display only)                                       |
+| `linear.project_id`   | `""`       | Linear project ID (set during project init)                           |
+| `linear.project_name` | `""`       | Linear project name (display only)                                    |
 | `workflow.research`   | `true`     | Spawn researcher before planning each phase                           |
 | `workflow.plan_check` | `true`     | Verify plans achieve phase goals before execution                     |
 | `workflow.verifier`   | `true`     | Confirm deliverables after phase execution                            |
@@ -336,6 +350,56 @@ fi
 **Detailed integration points:** See [github-integration.md](github-integration.md)
 
 </github_integration>
+
+<linear_integration>
+
+## Linear Integration
+
+**Note:** GitHub and Linear integration are mutually exclusive. Enable one or the other.
+
+When `linear.enabled: true`, Kata creates Linear Milestones and Issues via MCP tools to mirror your planning structure.
+
+### Reading Config Values
+
+```bash
+# Read linear.enabled (default: false)
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
+
+# Read linear.issue_mode (default: never)
+LINEAR_ISSUE_MODE=$(node scripts/kata-lib.cjs read-config "linear.issue_mode" "never")
+
+# Read linear.team_id
+LINEAR_TEAM_ID=$(node scripts/kata-lib.cjs read-config "linear.team_id" "")
+
+# Read linear.project_id
+LINEAR_PROJECT_ID=$(node scripts/kata-lib.cjs read-config "linear.project_id" "")
+```
+
+### Conditional Execution
+
+Linear operations use MCP tools (`mcp__plugin_linear_linear__*`) instead of `gh` CLI:
+
+- `list_teams` / `get_team` — Team discovery
+- `list_projects` / `save_project` — Project management
+- `list_milestones` / `save_milestone` — Milestone lifecycle
+- `list_issues` / `save_issue` / `get_issue` — Issue lifecycle
+- `create_issue_label` — Label management (idempotent)
+
+### Issue Mode Values
+
+| Value   | Behavior                                                               |
+| ------- | ---------------------------------------------------------------------- |
+| `auto`  | Create Issues automatically for each phase                             |
+| `ask`   | Prompt once per milestone; decision applies to all phases in milestone |
+| `never` | Never create phase Issues (Milestones still created if enabled)        |
+
+### Provenance Format
+
+Local issue files use `provenance: linear:IDENTIFIER` (e.g., `provenance: linear:KAT-42`).
+
+**Detailed integration points:** See [linear-integration.md](linear-integration.md)
+
+</linear_integration>
 
 <workflow_agents>
 

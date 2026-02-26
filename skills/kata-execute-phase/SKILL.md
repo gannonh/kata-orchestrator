@@ -63,6 +63,15 @@ ISSUE_MODE=$(node scripts/kata-lib.cjs read-config "github.issue_mode" "never")
 
 Store for use in PR creation and issue checkbox updates.
 
+0.6b. **Read Linear Config**
+
+```bash
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
+LINEAR_ISSUE_MODE=$(node scripts/kata-lib.cjs read-config "linear.issue_mode" "never")
+```
+
+Store for use in Linear issue checkbox and status updates.
+
 0.7. **Check Worktree and PR Config**
 
 Read worktree and PR workflow configuration for conditional lifecycle:
@@ -272,6 +281,34 @@ Kata ► EXECUTING PHASE {X}: {Phase Name}
      ```
 
      This update happens ONCE per wave (after all plans in wave complete), not per-plan, avoiding race conditions.
+
+   - **Update Linear issue checkboxes (if enabled):**
+
+     If `LINEAR_ENABLED=true` and `LINEAR_ISSUE_MODE != never`:
+
+     1. Read Linear config:
+        ```bash
+        LINEAR_TEAM_ID=$(node scripts/kata-lib.cjs read-config "linear.team_id" "")
+        LINEAR_PROJECT_ID=$(node scripts/kata-lib.cjs read-config "linear.project_id" "")
+        ```
+
+     2. Find phase issue via `mcp__plugin_linear_linear__list_issues` with:
+        - `teamId`: `LINEAR_TEAM_ID`
+        - `projectId`: `LINEAR_PROJECT_ID`
+        - `labels`: `["phase"]`
+        Filter where title starts with `"Phase ${PHASE}:"`. Extract issue ID.
+
+     3. Get current description via `mcp__plugin_linear_linear__get_issue` with issue ID.
+
+     4. Update checkboxes for completed plans in this wave:
+        For each plan number in `COMPLETED_PLANS_IN_WAVE`:
+        - Replace `- [ ] Plan NN:` with `- [x] Plan NN:` in the description
+
+     5. Call `mcp__plugin_linear_linear__save_issue` with:
+        - `id`: issue ID
+        - `description`: updated description
+
+     This update happens ONCE per wave at the orchestrator level, avoiding race conditions.
 
    - **Open Draft PR (first wave only, pr_workflow only):**
 
@@ -591,6 +628,25 @@ else
 fi
 ```
 
+7b. **Close Linear phase issue (if enabled)**
+
+   If `LINEAR_ENABLED=true` and `LINEAR_ISSUE_MODE != never`:
+
+   1. Find phase issue via `mcp__plugin_linear_linear__list_issues` with:
+      - `teamId`: `LINEAR_TEAM_ID`
+      - `projectId`: `LINEAR_PROJECT_ID`
+      - `labels`: `["phase"]`
+      Filter where title starts with `"Phase ${PHASE}:"`. Extract issue ID.
+
+   2. Set issue state to "done":
+      Call `mcp__plugin_linear_linear__save_issue` with:
+      - `id`: issue ID
+      - `state`: `"done"`
+
+   Display: `Linear Issue ${IDENTIFIER} closed`
+
+   **Error handling:** Non-blocking. If MCP call fails, warn and continue.
+
 8. **Update roadmap and state**
 
    **ROADMAP.md** — two updates:
@@ -698,6 +754,7 @@ Kata ► PHASE {Z} COMPLETE ✓
 {Y} plans executed
 Goal verified ✓
 {If github.enabled: GitHub Issue: #{issue_number} ({checked}/{total} plans checked off)}
+{If linear.enabled: Linear Issue: {identifier} ({checked}/{total} plans checked off)}
 {If PR_WORKFLOW: PR: #{pr_number} ({pr_url}) — ready for review}
 
 ───────────────────────────────────────────────────────────────
@@ -734,6 +791,7 @@ Kata ► MILESTONE COMPLETE 🎉
 
 {N} phases completed
 All phase goals verified ✓
+{If linear.enabled: Linear: All phase issues closed}
 {If PR_WORKFLOW: Phase PR: #{pr_number} ({pr_url}) — ready for review}
 
 ───────────────────────────────────────────────────────────────

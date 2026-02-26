@@ -311,12 +311,13 @@ questions: [
     ]
   },
   {
-    header: "GitHub Tracking",
-    question: "Enable GitHub Milestone/Issue tracking?",
+    header: "Issue Tracker",
+    question: "Enable external issue tracking?",
     multiSelect: false,
     options: [
-      { label: "Yes (Recommended)", description: "Create GitHub Milestones for Kata milestones, optionally create Issues for phases" },
-      { label: "No", description: "Keep planning local to .planning/ directory only" }
+      { label: "Linear", description: "Linear Project + Milestone tracking, Issues for phases" },
+      { label: "GitHub", description: "GitHub Milestones, optionally Issues for phases" },
+      { label: "None", description: "Keep planning local to .planning/ directory only" }
     ]
   }
 ]
@@ -333,10 +334,10 @@ questions: [
 }
 # If PR Workflow = No, skip this question entirely (worktrees require PR workflow).
 
-# If GitHub Tracking = Yes, ask follow-up:
+# If Issue Tracker = Linear or GitHub, ask follow-up:
 {
   header: "Issue Creation",
-  question: "When should GitHub Issues be created for phases?",
+  question: "When should Issues be created for phases?",
   multiSelect: false,
   options: [
     { label: "Auto", description: "Create Issues automatically for each phase (no prompting)" },
@@ -346,9 +347,55 @@ questions: [
 }
 ```
 
+**Linear Setup (conditional):**
+
+**If Issue Tracker = Linear:**
+
+After confirming issue creation preferences, run the Linear setup flow:
+
+1. **List teams:**
+   Call `mcp__plugin_linear_linear__list_teams` to get available teams.
+   Present teams via AskUserQuestion:
+   - header: "Linear Team"
+   - question: "Which Linear team should this project use?"
+   - options: one per team from API response (label: team name, description: team key)
+
+2. **List projects for selected team:**
+   Call `mcp__plugin_linear_linear__list_projects` with selected `teamId`.
+   Present projects via AskUserQuestion:
+   - header: "Linear Project"
+   - question: "Which Linear project should this project use?"
+   - options: one per project (label: project name, description: project description), plus:
+     - { label: "Create new project", description: "Create a new Linear project for this Kata project" }
+
+3. **If "Create new project":**
+   Call `mcp__plugin_linear_linear__save_project` with:
+   - `name`: project name (from earlier in the onboarding)
+   - `teamIds`: [selected team ID]
+   Store the returned project ID and name.
+
+4. **Store config values:**
+   - `linear.team_id` = selected team UUID
+   - `linear.team_name` = selected team name
+   - `linear.project_id` = selected or created project UUID
+   - `linear.project_name` = selected or created project name
+
+5. **Set tracker flags:**
+   - `linear.enabled = true`
+   - `github.enabled = false`
+   - `linear.issue_mode` based on Issue Creation choice:
+     - "Auto" -> `"auto"`
+     - "Ask per milestone" -> `"ask"`
+     - "Never" -> `"never"`
+
+6. **Display confirmation:**
+   "Linear integration enabled. Project: ${PROJECT_NAME} (Team: ${TEAM_NAME})"
+
+**Error handling:** If Linear MCP tools are unavailable, warn and fall back to "None" (local-only planning).
+
 **GitHub Repository Check (conditional):**
 
-**If GitHub Tracking = Yes:**
+**If Issue Tracker = GitHub:**
 
 After confirming GitHub preferences, check for existing remote:
 
@@ -360,7 +407,7 @@ GH_AUTH=$(gh auth status &>/dev/null && echo "true" || echo "false")
 HAS_GITHUB_REMOTE=$(git remote -v 2>/dev/null | grep -q 'github\.com' && echo "true" || echo "false")
 ```
 
-**If `HAS_GITHUB_REMOTE=false` and user selected GitHub Tracking = Yes:**
+**If `HAS_GITHUB_REMOTE=false` and user selected Issue Tracker = GitHub:**
 
 Use AskUserQuestion:
 - header: "GitHub Repository"
@@ -418,6 +465,14 @@ Create `.planning/config.json` with settings (workflow and display defaults are 
   "github": {
     "enabled": true|false,
     "issue_mode": "auto|ask|never"
+  },
+  "linear": {
+    "enabled": true|false,
+    "issue_mode": "auto|ask|never",
+    "team_id": "...",
+    "team_name": "...",
+    "project_id": "...",
+    "project_name": "..."
   }
 }
 ```
@@ -427,25 +482,36 @@ Map user selections to values:
 - "Quality" → `"quality"`
 - "Budget" → `"budget"`
 
-**GitHub Tracking conditional logic:**
+**Issue Tracker conditional logic:**
 
-**If GitHub Tracking = Yes:**
+**If Issue Tracker = Linear:**
+- Ask the Issue Creation follow-up question
+- Run Linear Setup flow (see Linear Setup above)
+- Set `linear.enabled: true`, `github.enabled: false`
+- Set `linear.issue_mode` based on Issue Creation choice:
+  - "Auto" -> `"auto"`
+  - "Ask per milestone" -> `"ask"`
+  - "Never" -> `"never"`
+- Store `linear.team_id`, `linear.team_name`, `linear.project_id`, `linear.project_name`
+
+**If Issue Tracker = GitHub:**
 - Ask the Issue Creation follow-up question
 - Check for GitHub remote (see GitHub Repository Check above)
 - Set `github.enabled` based on final state (true if remote exists or was created, false if skipped)
+- Set `linear.enabled: false`
 - Set `github.issue_mode` based on Issue Creation choice:
-  - "Auto" → `"auto"`
-  - "Ask per milestone" → `"ask"`
-  - "Never" → `"never"`
+  - "Auto" -> `"auto"`
+  - "Ask per milestone" -> `"ask"`
+  - "Never" -> `"never"`
 - Display note based on outcome:
   - If remote exists/created: "GitHub integration enabled. Milestones will be created via `gh` CLI."
-  - If skipped: "GitHub tracking disabled — no repository configured."
+  - If skipped: "GitHub tracking disabled -- no repository configured."
 
-**If GitHub Tracking = No:**
+**If Issue Tracker = None:**
 - Skip the Issue Creation question
-- Skip the GitHub Repository Check
-- Set `github.enabled: false`
-- Set `github.issue_mode: "never"`
+- Skip both Linear Setup and GitHub Repository Check
+- Set `github.enabled: false`, `linear.enabled: false`
+- Set `github.issue_mode: "never"`, `linear.issue_mode: "never"`
 
 **Worktree conditional logic:**
 

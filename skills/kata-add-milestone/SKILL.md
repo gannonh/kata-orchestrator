@@ -27,6 +27,7 @@ This works for both first milestone (after /kata-new-project) and subsequent mil
 @./references/project-template.md
 @./references/requirements-template.md
 @./references/github-mapping.md
+@./references/linear-mapping.md
 </execution_context>
 
 <context>
@@ -255,12 +256,56 @@ fi
 
 Skip GitHub operations silently (no warning needed - user opted out).
 
+## Phase 5.6: Create Linear Milestone (if enabled)
+
+Read Linear config:
+
+```bash
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
+```
+
+**If `LINEAR_ENABLED=true`:**
+
+**Step 1: Read project ID from config**
+
+```bash
+LINEAR_PROJECT_ID=$(node scripts/kata-lib.cjs read-config "linear.project_id" "")
+```
+
+If `LINEAR_PROJECT_ID` is empty, warn and skip:
+```
+Warning: linear.project_id not configured. Run /kata-configure-settings to set up Linear integration.
+```
+
+**Step 2: Check if milestone exists (idempotent)**
+
+Call `mcp__plugin_linear_linear__list_milestones` with `projectId: LINEAR_PROJECT_ID`.
+Check if any returned milestone has `name == "v${VERSION}"`.
+
+**Step 3: Create milestone if doesn't exist**
+
+If no matching milestone found:
+
+Call `mcp__plugin_linear_linear__save_milestone` with:
+- `name`: `"v${VERSION}"`
+- `description`: milestone description (first paragraph of goal, truncated to 500 chars)
+- `projectId`: `LINEAR_PROJECT_ID`
+
+Display: `Linear Milestone v${VERSION} created`
+
+If milestone already exists:
+Display: `Linear Milestone v${VERSION} already exists`
+
+**If `LINEAR_ENABLED=false`:**
+
+Skip Linear operations silently.
+
 **Error handling principle:**
 
-- All GitHub operations are non-blocking
-- Missing remote warns but does not stop milestone initialization
-- Auth failures warn but do not stop milestone initialization
-- Planning files always persist locally regardless of GitHub status
+- All GitHub and Linear operations are non-blocking
+- Missing remote/config warns but does not stop milestone initialization
+- Auth/MCP failures warn but do not stop milestone initialization
+- Planning files always persist locally regardless of tracker status
 
 ## Phase 6: Cleanup and Commit
 
@@ -1209,6 +1254,111 @@ done
 
 **IMPORTANT:** Use temp file approach (--body-file) to handle special characters in phase goals. Direct --body strings break with quotes/backticks.
 
+## Phase 9.6: Create Linear Phase Issues (if enabled)
+
+```bash
+LINEAR_ENABLED=$(node scripts/kata-lib.cjs read-config "linear.enabled" "false")
+```
+
+**If `LINEAR_ENABLED=false`:** Skip to Phase 10.
+
+**1. Check linear.issue_mode** (auto | ask | never):
+
+```bash
+LINEAR_ISSUE_MODE=$(node scripts/kata-lib.cjs read-config "linear.issue_mode" "auto")
+```
+
+- If "never": Skip phase issue creation silently, continue to Phase 10
+- If "ask": Use AskUserQuestion to prompt:
+  - header: "Linear Phase Issues"
+  - question: "Create Linear Issues for each phase in this milestone?"
+  - options:
+    - "Yes" -- Create issues for all phases
+    - "No" -- Skip issue creation for this milestone
+
+- If "auto" or user approved "Yes": Proceed with creation
+
+**2. Read Linear config:**
+
+```bash
+LINEAR_TEAM_ID=$(node scripts/kata-lib.cjs read-config "linear.team_id" "")
+LINEAR_PROJECT_ID=$(node scripts/kata-lib.cjs read-config "linear.project_id" "")
+```
+
+If either is empty, warn and skip:
+```
+Warning: Linear team/project not configured. Skipping phase issue creation.
+```
+
+**3. Create phase label (idempotent):**
+
+Call `mcp__plugin_linear_linear__create_issue_label` with:
+- `teamId`: `LINEAR_TEAM_ID`
+- `name`: `"phase"`
+- `color`: `"#0E8A16"`
+- `description`: `"Kata phase tracking"`
+
+**4. Parse phases from ROADMAP.md** (reuse same parsing logic as Phase 9.5 above):
+
+Extract `PHASE_NUM`, `PHASE_NAME`, `PHASE_GOAL`, `REQUIREMENT_IDS`, `SUCCESS_CRITERIA_AS_CHECKLIST` for each phase in the current milestone section.
+
+**5. For each phase, create Linear issue:**
+
+Check if issue exists:
+Call `mcp__plugin_linear_linear__list_issues` with:
+- `teamId`: `LINEAR_TEAM_ID`
+- `projectId`: `LINEAR_PROJECT_ID`
+- `labels`: `["phase"]`
+
+Filter results where title starts with `"Phase ${PHASE_NUM}:"`.
+
+If matching issue exists, skip and report:
+```
+Phase ${PHASE_NUM} issue already exists: ${IDENTIFIER}
+```
+
+If no matching issue:
+
+Build issue body:
+```markdown
+## Goal
+
+${PHASE_GOAL}
+
+## Success Criteria
+
+${SUCCESS_CRITERIA_AS_CHECKLIST}
+
+## Requirements
+
+${REQUIREMENT_IDS}
+
+## Plans
+
+<!-- Checklist added by /kata-plan-phase -->
+_Plans will be added after phase planning completes._
+
+---
+Created by Kata | Phase ${PHASE_NUM} of milestone v${VERSION}
+```
+
+Call `mcp__plugin_linear_linear__save_issue` with:
+- `teamId`: `LINEAR_TEAM_ID`
+- `title`: `"Phase ${PHASE_NUM}: ${PHASE_NAME}"`
+- `description`: issue body
+- `projectId`: `LINEAR_PROJECT_ID`
+- `labels`: `["phase"]`
+
+Report: `Created issue: Phase ${PHASE_NUM}: ${PHASE_NAME}`
+
+**6. Display summary** (after loop):
+
+```
+◆ Linear Phase Issues: [N] created for milestone v${VERSION}
+```
+
+**Error handling principle:** All operations are non-blocking. MCP tool failures warn but do not stop the milestone flow.
+
 ## Phase 10: Done
 
 Present completion with next steps:
@@ -1229,6 +1379,10 @@ Kata ► MILESTONE INITIALIZED ✓
 **If `GITHUB_ENABLED=true` and milestone created:**
 
 | GitHub | Milestone v${VERSION} created |
+
+**If `LINEAR_ENABLED=true` and milestone created:**
+
+| Linear | Milestone v${VERSION} created (Project: ${PROJECT_NAME}) |
 
 **[N] phases** | **[X] requirements** | Ready to build ✓
 
