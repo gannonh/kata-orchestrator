@@ -1,6 +1,5 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import os from 'node:os'
 
 import { app, BrowserWindow } from 'electron'
 
@@ -41,13 +40,10 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  const stateFilePath = process.env.KATA_STATE_FILE ?? path.join(os.homedir(), '.kata', 'state.json')
+  const stateFilePath = path.join(app.getPath('userData'), 'app-state.json')
   const stateStore = createStateStore(stateFilePath)
 
-  registerIpcHandlers(stateStore, {
-    workspaceBaseDir: process.env.KATA_WORKSPACE_BASE_DIR,
-    repoCacheBaseDir: process.env.KATA_REPO_CACHE_BASE_DIR
-  })
+  registerIpcHandlers(stateStore)
   createWindow()
 
   app.on('activate', () => {
