@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -7,15 +6,23 @@ import { ipcMain, shell } from 'electron'
 
 import {
   ORCHESTRATION_MODES,
+  PROVISIONING_METHODS,
   WORKSPACE_MODES,
   createDefaultAppState
 } from '../shared/types/space'
+import { resolveSpaceName } from '../shared/space-name'
 import type { StateStore } from './state-store'
+import {
+  WorkspaceProvisioningError,
+  provisionManagedWorkspace
+} from './workspace-provisioning'
 
 import type {
   AppState,
   CreateSessionInput,
+  CreateSpaceInput,
   OrchestrationMode,
+  ProvisioningMethod,
   SessionRecord,
   SpaceRecord,
   WorkspaceMode
@@ -63,73 +70,140 @@ function isWorkspaceMode(value: unknown): value is WorkspaceMode {
   return typeof value === 'string' && WORKSPACE_MODES.includes(value as WorkspaceMode)
 }
 
-function slugifyWorkspaceName(name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '')
-
-  return slug || 'workspace'
+function isProvisioningMethod(value: unknown): value is ProvisioningMethod {
+  return typeof value === 'string' && PROVISIONING_METHODS.includes(value as ProvisioningMethod)
 }
 
-type ParsedCreateSpaceInput = {
-  name: string
-  repoUrl: string
-  branch: string
-  rootPath?: string
-  workspaceMode: WorkspaceMode
+type ParsedExternalCreateSpaceInput = Extract<CreateSpaceInput, { workspaceMode: 'external' }> & {
+  workspaceMode: 'external'
   orchestrationMode?: OrchestrationMode
 }
+
+type ParsedManagedCreateSpaceInput = Extract<
+  CreateSpaceInput,
+  { workspaceMode?: 'managed'; provisioningMethod: ProvisioningMethod }
+> & {
+  workspaceMode: 'managed'
+  orchestrationMode?: OrchestrationMode
+}
+
+type ParsedCreateSpaceInput = ParsedExternalCreateSpaceInput | ParsedManagedCreateSpaceInput
 
 function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
   if (!isObjectRecord(input)) {
     throw new Error('Space input must be an object')
   }
 
-  const {
-    name,
-    repoUrl,
-    rootPath,
-    branch,
-    workspaceMode,
-    orchestrationMode
-  } = input
-  if (typeof name !== 'string' || typeof repoUrl !== 'string' || typeof branch !== 'string') {
+  const repoUrlValue = input.repoUrl
+  const branchValue = input.branch
+  if (typeof repoUrlValue !== 'string' || typeof branchValue !== 'string') {
     throw new Error('Space input is missing required string fields')
   }
 
-  if (rootPath !== undefined && typeof rootPath !== 'string') {
-    throw new Error('Space input rootPath must be a string when provided')
-  }
-
-  if (orchestrationMode !== undefined && !isOrchestrationMode(orchestrationMode)) {
-    throw new Error('Space input has an invalid orchestrationMode')
-  }
-
-  if (workspaceMode !== undefined && !isWorkspaceMode(workspaceMode)) {
+  const workspaceModeValue = input.workspaceMode
+  if (workspaceModeValue !== undefined && !isWorkspaceMode(workspaceModeValue)) {
     throw new Error('Space input has an invalid workspaceMode')
   }
 
-  const normalizedWorkspaceMode = workspaceMode ?? 'managed'
-  const normalizedRootPath = rootPath?.trim()
-  if (normalizedWorkspaceMode === 'external') {
-    if (!normalizedRootPath) {
-      throw new Error('External workspace mode requires a non-empty rootPath')
-    }
-    if (!path.isAbsolute(normalizedRootPath)) {
-      throw new Error('External workspace rootPath must be an absolute path')
+  const orchestrationModeValue = input.orchestrationMode
+  if (orchestrationModeValue !== undefined && !isOrchestrationMode(orchestrationModeValue)) {
+    throw new Error('Space input has an invalid orchestrationMode')
+  }
+
+  const baseInput = {
+    repoUrl: repoUrlValue,
+    branch: branchValue,
+    workspaceMode: (workspaceModeValue ?? 'managed') as WorkspaceMode,
+    orchestrationMode: orchestrationModeValue
+  }
+
+  const optionalTextFieldNames: Array<'name' | 'prompt' | 'spaceNameOverride'> = [
+    'name',
+    'prompt',
+    'spaceNameOverride'
+  ]
+  for (const fieldName of optionalTextFieldNames) {
+    const fieldValue = input[fieldName]
+    if (fieldValue !== undefined && typeof fieldValue !== 'string') {
+      throw new Error(`Space input ${fieldName} must be a string when provided`)
     }
   }
 
-  return {
-    name,
-    repoUrl,
-    branch,
-    rootPath: normalizedRootPath,
-    workspaceMode: normalizedWorkspaceMode,
-    orchestrationMode
+  const optionalTexts = {
+    ...(typeof input.name === 'string' ? { name: input.name } : {}),
+    ...(typeof input.prompt === 'string' ? { prompt: input.prompt } : {}),
+    ...(typeof input.spaceNameOverride === 'string' ? { spaceNameOverride: input.spaceNameOverride } : {})
+  }
+
+  if (baseInput.workspaceMode === 'external') {
+    const rootPathValue = input.rootPath
+    if (typeof rootPathValue !== 'string' || !rootPathValue.trim()) {
+      throw new Error('External workspace mode requires a non-empty rootPath')
+    }
+    const normalizedRootPath = rootPathValue.trim()
+    if (!path.isAbsolute(normalizedRootPath)) {
+      throw new Error('External workspace rootPath must be an absolute path')
+    }
+
+    return {
+      ...baseInput,
+      ...optionalTexts,
+      workspaceMode: 'external',
+      rootPath: normalizedRootPath
+    }
+  }
+
+  const provisioningMethodValue = input.provisioningMethod
+  if (!isProvisioningMethod(provisioningMethodValue)) {
+    throw new Error('Space input has an invalid provisioningMethod')
+  }
+
+  switch (provisioningMethodValue) {
+    case 'copy-local': {
+      const sourceLocalPath = input.sourceLocalPath
+      if (typeof sourceLocalPath !== 'string' || !sourceLocalPath.trim()) {
+        throw new Error('Space input sourceLocalPath must be a non-empty string')
+      }
+      return {
+        ...baseInput,
+        ...optionalTexts,
+        workspaceMode: 'managed',
+        provisioningMethod: 'copy-local',
+        sourceLocalPath: sourceLocalPath.trim()
+      }
+    }
+    case 'clone-github': {
+      const sourceRemoteUrl = input.sourceRemoteUrl
+      if (typeof sourceRemoteUrl !== 'string' || !sourceRemoteUrl.trim()) {
+        throw new Error('Space input sourceRemoteUrl must be a non-empty string')
+      }
+      return {
+        ...baseInput,
+        ...optionalTexts,
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: sourceRemoteUrl.trim()
+      }
+    }
+    case 'new-repo': {
+      const newRepoParentDir = input.newRepoParentDir
+      const newRepoFolderName = input.newRepoFolderName
+      if (typeof newRepoParentDir !== 'string') {
+        throw new Error('Space input newRepoParentDir must be a string')
+      }
+      if (typeof newRepoFolderName !== 'string' || !newRepoFolderName.trim()) {
+        throw new Error('Space input newRepoFolderName must be a non-empty string')
+      }
+      const normalizedParentDir = newRepoParentDir.trim() || path.join(os.homedir(), 'dev')
+      return {
+        ...baseInput,
+        ...optionalTexts,
+        workspaceMode: 'managed',
+        provisioningMethod: 'new-repo',
+        newRepoParentDir: normalizedParentDir,
+        newRepoFolderName: newRepoFolderName.trim()
+      }
+    }
   }
 }
 
@@ -137,7 +211,6 @@ function parseSpaceGetInput(input: unknown): { id: string } {
   if (!isObjectRecord(input) || typeof input.id !== 'string') {
     throw new Error('space:get input must be an object with string id')
   }
-
   return { id: input.id }
 }
 
@@ -154,13 +227,36 @@ function parseCreateSessionInput(input: unknown): CreateSessionInput {
   return { spaceId, label }
 }
 
+function extractRepoLabel(value: string): string {
+  const normalized = value.trim().replace(/\/+$/, '').replace(/\.git$/i, '')
+  const segments = normalized.split(/[/:]/)
+  return segments[segments.length - 1] || 'repo'
+}
+
+function deriveRepoLabel(input: ParsedCreateSpaceInput): string {
+  if (input.workspaceMode === 'external') {
+    return extractRepoLabel(input.repoUrl)
+  }
+
+  switch (input.provisioningMethod) {
+    case 'copy-local':
+      return path.basename(input.sourceLocalPath.trim()) || extractRepoLabel(input.repoUrl)
+    case 'clone-github':
+      return extractRepoLabel(input.sourceRemoteUrl) || extractRepoLabel(input.repoUrl)
+    case 'new-repo':
+      return input.newRepoFolderName.trim() || extractRepoLabel(input.repoUrl)
+  }
+}
+
 export type RegisterIpcOptions = {
   workspaceBaseDir?: string
+  repoCacheBaseDir?: string
 }
 
 export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOptions): void {
   const stateStore = store ?? getFallbackStore()
   const workspaceBaseDir = options?.workspaceBaseDir ?? path.join(os.homedir(), '.kata', 'workspaces')
+  const repoCacheBaseDir = options?.repoCacheBaseDir ?? path.join(os.homedir(), '.kata', 'repos')
 
   ipcMain.removeHandler(OPEN_EXTERNAL_URL_CHANNEL)
   ipcMain.removeHandler(SPACE_CREATE_CHANNEL)
@@ -182,33 +278,52 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
     const state = stateStore.load()
     const spaceId = randomUUID()
 
-    const rootPath = await (async () => {
+    const resolvedSpace = await (async () => {
       if (parsedInput.workspaceMode === 'external') {
-        return parsedInput.rootPath as string
+        return {
+          repoUrl: parsedInput.repoUrl,
+          branch: parsedInput.branch,
+          rootPath: parsedInput.rootPath
+        }
       }
-
-      const workspaceSlug = slugifyWorkspaceName(parsedInput.name)
-      const workspaceRootPath = path.join(workspaceBaseDir, `${workspaceSlug}-${spaceId.slice(0, 8)}`)
-      const workspaceRepoPath = path.join(workspaceRootPath, 'repo')
-      const workspaceMetadataPath = path.join(workspaceRootPath, '.kata')
 
       try {
-        await fs.promises.mkdir(workspaceRepoPath, { recursive: true })
-        await fs.promises.mkdir(workspaceMetadataPath, { recursive: true })
-      } catch (fsError) {
-        const code = (fsError as NodeJS.ErrnoException).code ?? 'UNKNOWN'
-        throw new Error(`Failed to create managed workspace directory (${code}): ${workspaceRootPath}`)
+        const provisioned = await provisionManagedWorkspace({
+          workspaceBaseDir,
+          repoCacheBaseDir,
+          input: parsedInput
+        })
+        return {
+          repoUrl: provisioned.repoUrl,
+          branch: provisioned.branch,
+          rootPath: provisioned.rootPath
+        }
+      } catch (error) {
+        if (error instanceof WorkspaceProvisioningError) {
+          const remediation = error.remediation ? ` Remediation: ${error.remediation}` : ''
+          throw new Error(
+            `Managed provisioning failed (${error.category}): ${error.message}.${remediation}`.trim()
+          )
+        }
+        throw error
       }
-
-      return workspaceRepoPath
     })()
+
+    const existingNames = new Set(Object.values(state.spaces).map((space) => space.name))
+    const override = parsedInput.spaceNameOverride?.trim() || parsedInput.name?.trim()
+    const resolvedName = resolveSpaceName({
+      repoLabel: deriveRepoLabel(parsedInput),
+      branch: resolvedSpace.branch,
+      override,
+      existingNames
+    })
 
     const createdSpace: SpaceRecord = {
       id: spaceId,
-      name: parsedInput.name,
-      repoUrl: parsedInput.repoUrl,
-      rootPath,
-      branch: parsedInput.branch,
+      name: resolvedName,
+      repoUrl: resolvedSpace.repoUrl,
+      rootPath: resolvedSpace.rootPath,
+      branch: resolvedSpace.branch,
       workspaceMode: parsedInput.workspaceMode,
       orchestrationMode: parsedInput.orchestrationMode ?? 'team',
       createdAt: new Date().toISOString(),
