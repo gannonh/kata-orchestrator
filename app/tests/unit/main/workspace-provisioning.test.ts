@@ -122,6 +122,74 @@ describe('provisionManagedWorkspace validation', () => {
       args: ['fetch', '--all', '--prune']
     }))
   })
+
+  it('initializes new managed repo and provisions requested branch worktree', async () => {
+    const runGit = vi.fn().mockResolvedValue(undefined)
+    const fsApi = createMockFsApi()
+
+    const result = await provisionManagedWorkspace({
+      workspaceBaseDir: '/tmp/workspaces',
+      repoCacheBaseDir: '/tmp/repos',
+      input: {
+        workspaceMode: 'managed',
+        provisioningMethod: 'new-repo',
+        newRepoParentDir: '/Users/me/dev',
+        newRepoFolderName: 'new-project',
+        repoUrl: '',
+        branch: 'main'
+      },
+      runGit,
+      fsApi
+    })
+
+    expect(result.rootPath).toMatch(/\/tmp\/workspaces\/.+\/repo$/)
+    expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
+      cwd: '/tmp/repos/new-project',
+      args: ['init']
+    }))
+    expect(fsApi.writeFile).toHaveBeenCalledWith('/tmp/repos/new-project/README.md', expect.any(String))
+    expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
+      cwd: '/tmp/repos/new-project',
+      args: ['add', 'README.md']
+    }))
+    expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
+      cwd: '/tmp/repos/new-project',
+      args: expect.arrayContaining(['commit', '-m', 'Initial commit'])
+    }))
+    expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
+      args: ['worktree', 'add', expect.any(String), 'main']
+    }))
+  })
+
+  it('creates local tracking branch when only remote branch exists', async () => {
+    const runGit = vi.fn(async ({ args }: { cwd: string, args: string[] }) => {
+      if (args[0] === 'show-ref' && args[2] === 'refs/heads/main') {
+        throw new Error('missing local branch')
+      }
+      if (args[0] === 'show-ref' && args[2] === 'refs/remotes/origin/main') {
+        return
+      }
+    })
+
+    await provisionManagedWorkspace({
+      workspaceBaseDir: '/tmp/workspaces',
+      repoCacheBaseDir: '/tmp/repos',
+      input: {
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/org/repo.git',
+        repoUrl: 'https://github.com/org/repo',
+        branch: 'main'
+      },
+      runGit,
+      fsApi: createMockFsApi(['/tmp/repos/repo'])
+    })
+
+    expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
+      cwd: '/tmp/repos/repo',
+      args: ['checkout', '-b', 'main', '--track', 'origin/main']
+    }))
+  })
 })
 
 describe('WorkspaceProvisioningError', () => {
