@@ -310,7 +310,7 @@ describe('HomeSpacesScreen', () => {
     expect(onOpenSpace.mock.calls[0]?.[0]).toBe('space-wave-1')
   })
 
-  it('creates a space via window.kata.spaceCreate when submitting create space', async () => {
+  it('submits copy-local payload with explicit source path', async () => {
     const createdRecord = makeSpaceRecord({
       id: 'space-created-from-ipc',
       name: 'Create via IPC'
@@ -320,6 +320,9 @@ describe('HomeSpacesScreen', () => {
 
     render(<HomeSpacesScreen onOpenSpace={() => {}} />)
 
+    fireEvent.change(screen.getByRole('textbox', { name: 'Local repo path' }), {
+      target: { value: '/Users/gannonh/dev/kata/kata-cloud' }
+    })
     fireEvent.change(screen.getByRole('textbox', { name: 'Space prompt' }), {
       target: { value: 'Create via IPC' }
     })
@@ -329,13 +332,41 @@ describe('HomeSpacesScreen', () => {
       expect(spaceCreate).toHaveBeenCalledTimes(1)
     })
     expect(spaceCreate).toHaveBeenCalledWith({
-      name: 'Create via IPC',
+      prompt: 'Create via IPC',
       repoUrl: 'https://github.com/gannonh/kata-cloud',
       branch: 'main',
       orchestrationMode: 'team',
-      workspaceMode: 'managed'
+      workspaceMode: 'managed',
+      provisioningMethod: 'copy-local',
+      sourceLocalPath: '/Users/gannonh/dev/kata/kata-cloud'
     })
     expect(screen.getByText('Create via IPC')).toBeTruthy()
+  })
+
+  it('prefills space name from repo+branch and honors override', async () => {
+    const createdRecord = makeSpaceRecord({
+      id: 'space-created-override',
+      name: 'My custom space'
+    })
+    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
+    window.kata = { ...window.kata, spaceCreate }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+
+    expect(screen.getByRole('textbox', { name: 'Space name' })).toHaveProperty('value', 'kata-cloud main')
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Space name' }), {
+      target: { value: 'My custom space' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
+
+    await waitFor(() => {
+      expect(spaceCreate).toHaveBeenCalledTimes(1)
+    })
+
+    expect(spaceCreate).toHaveBeenCalledWith(expect.objectContaining({
+      spaceNameOverride: 'My custom space'
+    }))
   })
 
   it('submits developer-managed mode with explicit workspace path', async () => {
@@ -356,18 +387,23 @@ describe('HomeSpacesScreen', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Space prompt' }), {
       target: { value: 'External Path Space' }
     })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Space name' }), {
+      target: { value: 'External Path Space' }
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
 
     await waitFor(() => {
       expect(spaceCreate).toHaveBeenCalledTimes(1)
     })
     expect(spaceCreate).toHaveBeenCalledWith({
-      name: 'External Path Space',
+      prompt: 'External Path Space',
       repoUrl: 'https://github.com/gannonh/kata-cloud',
       rootPath: '/Users/gannonh/dev/custom/worktree',
       branch: 'main',
       workspaceMode: 'external',
-      orchestrationMode: 'team'
+      orchestrationMode: 'team',
+      name: 'External Path Space',
+      spaceNameOverride: 'External Path Space'
     })
   })
 

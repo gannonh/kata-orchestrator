@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import type { CreateSpaceInput, OrchestrationMode, WorkspaceMode } from '@shared/types/space'
+import { deriveDefaultSpaceName } from '@shared/space-name'
 import { mockSpaces, toDisplaySpace, type DisplaySpace } from '../../mock/spaces'
 import { CreateSpacePanel } from './CreateSpacePanel'
 import { SpacesListPanel } from './SpacesListPanel'
@@ -11,6 +12,7 @@ type HomeSpacesScreenProps = {
 }
 
 type Mode = OrchestrationMode
+type ProvisioningMethod = 'copy-local' | 'clone-github' | 'new-repo'
 
 type CreateDisplaySpaceForHomeInput = {
   prompt: string
@@ -64,11 +66,23 @@ export function createDisplaySpaceForHome({
   }
 }
 
+function extractRepoLabel(value: string): string {
+  const normalized = value.trim().replace(/\/+$/, '').replace(/\.git$/i, '')
+  const segments = normalized.split(/[/:]/)
+  return segments[segments.length - 1] || 'repo'
+}
+
 export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: HomeSpacesScreenProps) {
   const [isCreatePanelActive, setIsCreatePanelActive] = useState(false)
   const [spacePrompt, setSpacePrompt] = useState('')
+  const [spaceNameOverride, setSpaceNameOverride] = useState('')
   const [selectedMode, setSelectedMode] = useState<Mode>('team')
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('managed')
+  const [provisioningMethod, setProvisioningMethod] = useState<ProvisioningMethod>('copy-local')
+  const [sourceLocalPath, setSourceLocalPath] = useState('')
+  const [sourceRemoteUrl, setSourceRemoteUrl] = useState('')
+  const [newRepoParentDir, setNewRepoParentDir] = useState('')
+  const [newRepoFolderName, setNewRepoFolderName] = useState('')
   const [workspacePath, setWorkspacePath] = useState('')
   const [rapidFire, setRapidFire] = useState(false)
   const [groupByRepo, setGroupByRepo] = useState(true)
@@ -153,6 +167,29 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
     return spaces.find((space) => space.id === effectiveSelectedSpaceId) ?? null
   }, [effectiveSelectedSpaceId, spaces])
 
+  const defaultRepoLabel = useMemo(() => {
+    if (provisioningMethod === 'new-repo' && newRepoFolderName.trim()) {
+      return newRepoFolderName.trim()
+    }
+    if (provisioningMethod === 'clone-github' && sourceRemoteUrl.trim()) {
+      return extractRepoLabel(sourceRemoteUrl)
+    }
+    if (selectedSpace?.repo) {
+      return extractRepoLabel(selectedSpace.repo)
+    }
+    if (selectedSpace?.repoUrl) {
+      return extractRepoLabel(selectedSpace.repoUrl)
+    }
+    return 'repo'
+  }, [newRepoFolderName, provisioningMethod, selectedSpace, sourceRemoteUrl])
+
+  const defaultBranchName = selectedSpace?.branch || 'main'
+  const derivedSpaceName = useMemo(
+    () => deriveDefaultSpaceName(defaultRepoLabel, defaultBranchName),
+    [defaultBranchName, defaultRepoLabel]
+  )
+  const resolvedSpaceName = spaceNameOverride || derivedSpaceName
+
   useEffect(() => {
     if (workspaceMode === 'external' && !workspacePath && selectedSpace?.rootPath) {
       setWorkspacePath(selectedSpace.rootPath)
@@ -168,16 +205,43 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
       return
     }
 
-    const createInput: CreateSpaceInput = {
-      name: spacePrompt.trim() || 'Untitled space',
+    const hasExplicitSpaceNameOverride = spaceNameOverride.trim().length > 0 && spaceNameOverride.trim() !== derivedSpaceName
+    const baseCreateInput = {
+      prompt: spacePrompt.trim(),
       repoUrl: selectedSpace?.repoUrl ?? '',
-      branch: selectedSpace?.branch ?? '',
-      workspaceMode,
-      ...(workspaceMode === 'external'
-        ? { rootPath: workspacePath.trim() || selectedSpace?.rootPath || '' }
-        : {}),
-      orchestrationMode: selectedMode
+      branch: selectedSpace?.branch ?? 'main',
+      orchestrationMode: selectedMode,
+      ...(hasExplicitSpaceNameOverride ? { spaceNameOverride: spaceNameOverride.trim() } : {})
     }
+
+    const createInput: CreateSpaceInput = workspaceMode === 'external'
+      ? {
+          ...baseCreateInput,
+          name: resolvedSpaceName,
+          workspaceMode: 'external',
+          rootPath: workspacePath.trim() || selectedSpace?.rootPath || ''
+        }
+      : provisioningMethod === 'copy-local'
+        ? {
+            ...baseCreateInput,
+            workspaceMode: 'managed',
+            provisioningMethod: 'copy-local',
+            sourceLocalPath: sourceLocalPath.trim() || selectedSpace?.rootPath || ''
+          }
+        : provisioningMethod === 'clone-github'
+          ? {
+              ...baseCreateInput,
+              workspaceMode: 'managed',
+              provisioningMethod: 'clone-github',
+              sourceRemoteUrl: sourceRemoteUrl.trim() || selectedSpace?.repoUrl || ''
+            }
+          : {
+              ...baseCreateInput,
+              workspaceMode: 'managed',
+              provisioningMethod: 'new-repo',
+              newRepoParentDir: newRepoParentDir.trim() || '',
+              newRepoFolderName: newRepoFolderName.trim() || defaultRepoLabel
+            }
 
     try {
       const createdRecord = await spaceCreate(createInput)
@@ -186,6 +250,7 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
       setSpaces((current) => [nextSpace, ...current.filter((space) => space.id !== nextSpace.id)])
       setSelectedSpaceId(nextSpace.id)
       setSpacePrompt('')
+      setSpaceNameOverride('')
       setIsCreatePanelActive(false)
     } catch (error) {
       console.error('[HomeSpacesScreen] spaceCreate IPC failed:', error)
@@ -214,19 +279,31 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
           <CreateSpacePanel
             isActive={isCreatePanelActive}
             prompt={spacePrompt}
+            spaceName={resolvedSpaceName}
             selectedMode={selectedMode}
             workspaceMode={workspaceMode}
+            provisioningMethod={provisioningMethod}
+            sourceLocalPath={sourceLocalPath}
+            sourceRemoteUrl={sourceRemoteUrl}
+            newRepoParentDir={newRepoParentDir}
+            newRepoFolderName={newRepoFolderName}
             workspacePath={workspacePath}
             rapidFire={rapidFire}
             repoName={selectedSpace?.repo ?? 'gannonh/kata-cloud'}
             branchName={selectedSpace?.branch ?? 'main'}
             createError={createError}
             onPromptChange={setSpacePrompt}
+            onSpaceNameChange={setSpaceNameOverride}
             onPromptFocus={() => {
               setIsCreatePanelActive(true)
             }}
             onSelectMode={setSelectedMode}
             onSelectWorkspaceMode={setWorkspaceMode}
+            onSelectProvisioningMethod={setProvisioningMethod}
+            onSourceLocalPathChange={setSourceLocalPath}
+            onSourceRemoteUrlChange={setSourceRemoteUrl}
+            onNewRepoParentDirChange={setNewRepoParentDir}
+            onNewRepoFolderNameChange={setNewRepoFolderName}
             onWorkspacePathChange={setWorkspacePath}
             onToggleRapidFire={() => {
               setRapidFire((current) => !current)
