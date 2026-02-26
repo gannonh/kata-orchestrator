@@ -213,6 +213,43 @@ export async function provisionManagedWorkspace(
     }
   }
 
+  if (args.input.provisioningMethod === 'clone-github') {
+    if (runGit) {
+      const cacheExists = await pathExists(fsApi, cacheRepoPath)
+      if (!cacheExists) {
+        await fsApi.mkdir(args.repoCacheBaseDir, { recursive: true })
+        await runGitChecked(
+          runGit,
+          { cwd: args.repoCacheBaseDir, args: ['clone', args.input.sourceRemoteUrl, cacheRepoPath] },
+          'Failed to clone remote repository into cache',
+          'Check repository URL and GitHub authentication.'
+        )
+      } else {
+        await runGitChecked(
+          runGit,
+          { cwd: cacheRepoPath, args: ['fetch', '--all', '--prune'] },
+          'Failed to refresh cached clone',
+          'Check network access and repository permissions.'
+        )
+      }
+
+      await fsApi.mkdir(workspaceRootPath, { recursive: true })
+      await runGitChecked(
+        runGit,
+        { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
+        'Failed to create workspace worktree',
+        'Verify branch exists or create it before provisioning.'
+      )
+    }
+
+    return {
+      rootPath: workspaceRepoPath,
+      cacheRepoPath,
+      repoUrl: args.input.repoUrl,
+      branch: args.input.branch
+    }
+  }
+
   return {
     rootPath: workspaceRepoPath,
     cacheRepoPath,

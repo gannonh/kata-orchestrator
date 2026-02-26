@@ -72,6 +72,56 @@ describe('provisionManagedWorkspace validation', () => {
       args: ['worktree', 'add', expect.any(String), 'main']
     }))
   })
+
+  it('clones remote when cache is missing and fetches when cache exists', async () => {
+    const runGit = vi.fn().mockResolvedValue(undefined)
+
+    await provisionManagedWorkspace({
+      workspaceBaseDir: '/tmp/workspaces',
+      repoCacheBaseDir: '/tmp/repos',
+      input: {
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/org/repo.git',
+        repoUrl: 'https://github.com/org/repo',
+        branch: 'main'
+      },
+      runGit,
+      fsApi: createMockFsApi()
+    })
+
+    expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
+      cwd: '/tmp/repos',
+      args: ['clone', 'https://github.com/org/repo.git', '/tmp/repos/repo']
+    }))
+    expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
+      args: ['worktree', 'add', expect.any(String), 'main']
+    }))
+
+    runGit.mockClear()
+
+    await provisionManagedWorkspace({
+      workspaceBaseDir: '/tmp/workspaces',
+      repoCacheBaseDir: '/tmp/repos',
+      input: {
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/org/repo.git',
+        repoUrl: 'https://github.com/org/repo',
+        branch: 'main'
+      },
+      runGit,
+      fsApi: createMockFsApi(['/tmp/repos/repo'])
+    })
+
+    expect(runGit).not.toHaveBeenCalledWith(expect.objectContaining({
+      args: ['clone', 'https://github.com/org/repo.git', '/tmp/repos/repo']
+    }))
+    expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
+      cwd: '/tmp/repos/repo',
+      args: ['fetch', '--all', '--prune']
+    }))
+  })
 })
 
 describe('WorkspaceProvisioningError', () => {
