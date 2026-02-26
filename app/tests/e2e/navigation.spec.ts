@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures/electron'
+import { ensureWorkspaceShell } from './helpers/shell-view'
 import { LEFT_STATUS_SCENARIO_KEY } from '../../src/renderer/mock/project'
 
 test.describe('Desktop app navigation @uat', () => {
@@ -9,6 +10,8 @@ test.describe('Desktop app navigation @uat', () => {
   })
 
   test('switches left panel tabs and renders each view @uat @ci @quality-gate', async ({ appWindow }) => {
+    await ensureWorkspaceShell(appWindow)
+
     const leftTabs = appWindow.getByRole('tablist', { name: /Left panel (tabs|modules)/ })
 
     await expect(leftTabs.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true')
@@ -29,6 +32,8 @@ test.describe('Desktop app navigation @uat', () => {
   test('renders agents coordinator and toggles background agent list @uat @ci @quality-gate', async ({
     appWindow
   }) => {
+    await ensureWorkspaceShell(appWindow)
+
     const leftTabs = appWindow.getByRole('tablist', { name: /Left panel (tabs|modules)/ })
 
     await leftTabs.getByRole('tab', { name: /Agents/ }).click()
@@ -53,6 +58,8 @@ test.describe('Desktop app navigation @uat', () => {
   test('renders context preview states 0-3 with expected task and notes variants @uat @ci @quality-gate', async ({
     appWindow
   }) => {
+    await ensureWorkspaceShell(appWindow)
+
     const leftTabs = appWindow.getByRole('tablist', { name: /Left panel (tabs|modules)/ })
 
     await leftTabs.getByRole('tab', { name: /Context/ }).click()
@@ -93,6 +100,8 @@ test.describe('Desktop app navigation @uat', () => {
   })
 
   test('keeps left status visible while switching tabs @uat @ci @quality-gate', async ({ appWindow }) => {
+    await ensureWorkspaceShell(appWindow)
+
     await expect(appWindow.getByLabel('Left panel status')).toBeVisible()
 
     const leftTabs = appWindow.getByRole('tablist', { name: /Left panel (tabs|modules)/ })
@@ -103,21 +112,27 @@ test.describe('Desktop app navigation @uat', () => {
   })
 
   test('renders simple and overflow progress scenarios via localStorage override @uat @ci', async ({ appWindow }) => {
+    await ensureWorkspaceShell(appWindow)
+
     await appWindow.evaluate((scenarioKey) => {
       window.localStorage.setItem(scenarioKey, 'simple')
     }, LEFT_STATUS_SCENARIO_KEY)
     await appWindow.reload()
+    await ensureWorkspaceShell(appWindow)
     await expect(appWindow.getByText('Tasks ready to go.')).toBeVisible()
 
     await appWindow.evaluate((scenarioKey) => {
       window.localStorage.setItem(scenarioKey, 'overflow')
     }, LEFT_STATUS_SCENARIO_KEY)
     await appWindow.reload()
+    await ensureWorkspaceShell(appWindow)
     await expect(appWindow.getByText('25 done')).toHaveCount(2)
     await expect(appWindow.getByText('50 of 60 complete.')).toBeVisible()
   })
 
   test('clicking status section toggles busy preview @uat @ci', async ({ appWindow }) => {
+    await ensureWorkspaceShell(appWindow)
+
     const cyclePreviewStateButton = appWindow.getByRole('button', { name: 'Cycle status preview state' })
 
     await expect(appWindow.getByText('Tasks ready to go.')).toBeVisible()
@@ -134,6 +149,8 @@ test.describe('Desktop app navigation @uat', () => {
   })
 
   test('switches right panel tabs and preserves notes state @uat @ci @quality-gate', async ({ appWindow }) => {
+    await ensureWorkspaceShell(appWindow)
+
     const rightPanel = appWindow.getByTestId('right-panel')
     const rightTabs = rightPanel.getByRole('tablist', { name: 'Right panel tabs' })
     const noteScaffold = 'Start drafting a specification for what you want to build. Or brainstorm with an agent <-'
