@@ -7,6 +7,9 @@ type LoadMainOptions = {
   rendererUrl?: string
   whenReadyReject?: Error
   userDataPath?: string
+  kataStateFile?: string
+  kataWorkspaceBaseDir?: string
+  kataRepoCacheBaseDir?: string
 }
 
 type WindowInstance = {
@@ -91,10 +94,28 @@ async function loadMainModule(options: LoadMainOptions = {}) {
   }))
 
   const previousRendererUrl = process.env.ELECTRON_RENDERER_URL
+  const previousKataStateFile = process.env.KATA_STATE_FILE
+  const previousKataWorkspaceBaseDir = process.env.KATA_WORKSPACE_BASE_DIR
+  const previousKataRepoCacheBaseDir = process.env.KATA_REPO_CACHE_BASE_DIR
   if (options.rendererUrl) {
     process.env.ELECTRON_RENDERER_URL = options.rendererUrl
   } else {
     delete process.env.ELECTRON_RENDERER_URL
+  }
+  if (options.kataStateFile !== undefined) {
+    process.env.KATA_STATE_FILE = options.kataStateFile
+  } else {
+    delete process.env.KATA_STATE_FILE
+  }
+  if (options.kataWorkspaceBaseDir !== undefined) {
+    process.env.KATA_WORKSPACE_BASE_DIR = options.kataWorkspaceBaseDir
+  } else {
+    delete process.env.KATA_WORKSPACE_BASE_DIR
+  }
+  if (options.kataRepoCacheBaseDir !== undefined) {
+    process.env.KATA_REPO_CACHE_BASE_DIR = options.kataRepoCacheBaseDir
+  } else {
+    delete process.env.KATA_REPO_CACHE_BASE_DIR
   }
 
   const previousPlatform = process.platform
@@ -113,6 +134,21 @@ async function loadMainModule(options: LoadMainOptions = {}) {
       delete process.env.ELECTRON_RENDERER_URL
     } else {
       process.env.ELECTRON_RENDERER_URL = previousRendererUrl
+    }
+    if (previousKataStateFile === undefined) {
+      delete process.env.KATA_STATE_FILE
+    } else {
+      process.env.KATA_STATE_FILE = previousKataStateFile
+    }
+    if (previousKataWorkspaceBaseDir === undefined) {
+      delete process.env.KATA_WORKSPACE_BASE_DIR
+    } else {
+      process.env.KATA_WORKSPACE_BASE_DIR = previousKataWorkspaceBaseDir
+    }
+    if (previousKataRepoCacheBaseDir === undefined) {
+      delete process.env.KATA_REPO_CACHE_BASE_DIR
+    } else {
+      process.env.KATA_REPO_CACHE_BASE_DIR = previousKataRepoCacheBaseDir
     }
     Object.defineProperty(process, 'platform', {
       value: previousPlatform,
@@ -214,6 +250,24 @@ describe('main process startup', () => {
       expect(harness.appMock.getPath).toHaveBeenCalledWith('userData')
       expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/custom-user-data/app-state.json')
       expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore)
+    } finally {
+      harness.restore()
+    }
+  })
+
+  it('prefers KATA_* path overrides when provided', async () => {
+    const harness = await loadMainModule({
+      kataStateFile: '/tmp/custom-state/state.json',
+      kataWorkspaceBaseDir: '/tmp/custom-workspaces',
+      kataRepoCacheBaseDir: '/tmp/custom-repos'
+    })
+
+    try {
+      expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/custom-state/state.json')
+      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
+        workspaceBaseDir: '/tmp/custom-workspaces',
+        repoCacheBaseDir: '/tmp/custom-repos'
+      })
     } finally {
       harness.restore()
     }
