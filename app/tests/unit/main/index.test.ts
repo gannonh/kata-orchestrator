@@ -6,6 +6,8 @@ type LoadMainOptions = {
   platform?: NodeJS.Platform
   rendererUrl?: string
   whenReadyReject?: Error
+  workspaceBaseDir?: string
+  repoCacheBaseDir?: string
 }
 
 type WindowInstance = {
@@ -75,10 +77,22 @@ async function loadMainModule(options: LoadMainOptions = {}) {
   }))
 
   const previousRendererUrl = process.env.ELECTRON_RENDERER_URL
+  const previousWorkspaceBaseDir = process.env.KATA_WORKSPACE_BASE_DIR
+  const previousRepoCacheBaseDir = process.env.KATA_REPO_CACHE_BASE_DIR
   if (options.rendererUrl) {
     process.env.ELECTRON_RENDERER_URL = options.rendererUrl
   } else {
     delete process.env.ELECTRON_RENDERER_URL
+  }
+  if (options.workspaceBaseDir) {
+    process.env.KATA_WORKSPACE_BASE_DIR = options.workspaceBaseDir
+  } else {
+    delete process.env.KATA_WORKSPACE_BASE_DIR
+  }
+  if (options.repoCacheBaseDir) {
+    process.env.KATA_REPO_CACHE_BASE_DIR = options.repoCacheBaseDir
+  } else {
+    delete process.env.KATA_REPO_CACHE_BASE_DIR
   }
 
   const previousPlatform = process.platform
@@ -97,6 +111,16 @@ async function loadMainModule(options: LoadMainOptions = {}) {
       delete process.env.ELECTRON_RENDERER_URL
     } else {
       process.env.ELECTRON_RENDERER_URL = previousRendererUrl
+    }
+    if (previousWorkspaceBaseDir === undefined) {
+      delete process.env.KATA_WORKSPACE_BASE_DIR
+    } else {
+      process.env.KATA_WORKSPACE_BASE_DIR = previousWorkspaceBaseDir
+    }
+    if (previousRepoCacheBaseDir === undefined) {
+      delete process.env.KATA_REPO_CACHE_BASE_DIR
+    } else {
+      process.env.KATA_REPO_CACHE_BASE_DIR = previousRepoCacheBaseDir
     }
     Object.defineProperty(process, 'platform', {
       value: previousPlatform,
@@ -134,6 +158,10 @@ describe('main process startup', () => {
 
     try {
       expect(harness.registerIpcHandlers).toHaveBeenCalledTimes(1)
+      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(undefined, {
+        workspaceBaseDir: undefined,
+        repoCacheBaseDir: undefined
+      })
       expect(harness.instances).toHaveLength(1)
 
       const mainWindow = harness.instances[0]
@@ -177,6 +205,22 @@ describe('main process startup', () => {
       const closeHandler = harness.listeners.get('window-all-closed')
       closeHandler?.()
       expect(harness.appMock.quit).not.toHaveBeenCalled()
+    } finally {
+      harness.restore()
+    }
+  })
+
+  it('passes workspace/repo cache env overrides to IPC registration', async () => {
+    const harness = await loadMainModule({
+      workspaceBaseDir: '/tmp/kata/workspaces',
+      repoCacheBaseDir: '/tmp/kata/repos'
+    })
+
+    try {
+      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(undefined, {
+        workspaceBaseDir: '/tmp/kata/workspaces',
+        repoCacheBaseDir: '/tmp/kata/repos'
+      })
     } finally {
       harness.restore()
     }

@@ -39,7 +39,10 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  registerIpcHandlers()
+  registerIpcHandlers(undefined, {
+    workspaceBaseDir: process.env.KATA_WORKSPACE_BASE_DIR,
+    repoCacheBaseDir: process.env.KATA_REPO_CACHE_BASE_DIR
+  })
   createWindow()
 
   app.on('activate', () => {
