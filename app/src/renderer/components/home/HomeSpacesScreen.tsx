@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import type { CreateSpaceInput, OrchestrationMode, WorkspaceMode } from '@shared/types/space'
-import { deriveDefaultSpaceName } from '@shared/space-name'
+import { deriveDefaultSpaceName } from '../../../shared/space-name'
 import { mockSpaces, toDisplaySpace, type DisplaySpace } from '../../mock/spaces'
 import { CreateSpacePanel } from './CreateSpacePanel'
 import { SpacesListPanel } from './SpacesListPanel'

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
+import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { promisify } from 'node:util'
 
 import type { CreateSpaceInput, ProvisioningMethod } from '../shared/types/space'
 
@@ -44,6 +46,8 @@ export type ProvisionedWorkspace = {
   repoUrl: string
   branch: string
 }
+
+const execFileAsync = promisify(execFile)
 
 function assertAbsolutePath(value: string, fieldName: string): void {
   if (!path.isAbsolute(value)) {
@@ -152,6 +156,34 @@ async function runGitChecked(
   }
 }
 
+async function fetchAllRemotes(runGit: GitRunner, cacheRepoPath: string, required: boolean): Promise<void> {
+  try {
+    await runGit({ cwd: cacheRepoPath, args: ['fetch', '--all', '--prune'] })
+  } catch (error) {
+    const details = error instanceof Error ? error.message : String(error)
+    const noRemotePattern = /No remote repository specified|No such remote|does not appear to be a git repository/i
+    if (!required && noRemotePattern.test(details)) {
+      return
+    }
+
+    throw toWorkspaceProvisioningError(
+      'git',
+      'Failed to refresh cached repository',
+      'Check git availability and repository configuration.',
+      error
+    )
+  }
+}
+
+async function detachCacheHead(runGit: GitRunner, cacheRepoPath: string): Promise<void> {
+  await runGitChecked(
+    runGit,
+    { cwd: cacheRepoPath, args: ['checkout', '--detach'] },
+    'Failed to detach cache repository HEAD',
+    'Check repository branch state before provisioning.'
+  )
+}
+
 async function gitRefExists(runGit: GitRunner, cwd: string, ref: string): Promise<boolean> {
   try {
     await runGit({ cwd, args: ['show-ref', '--verify', ref] })
@@ -193,7 +225,18 @@ export async function provisionManagedWorkspace(
   assertAbsolutePath(args.repoCacheBaseDir, 'repoCacheBaseDir')
   validateManagedInput(args.input)
 
-  const runGit = args.runGit
+  const runGit: GitRunner = args.runGit ?? (async ({ cwd, args: gitArgs }) => {
+    try {
+      await execFileAsync('git', gitArgs, { cwd })
+    } catch (error) {
+      const maybeError = error as NodeJS.ErrnoException & { stderr?: string | Buffer }
+      const stderr = typeof maybeError.stderr === 'string'
+        ? maybeError.stderr
+        : maybeError.stderr?.toString('utf8')
+      const message = stderr?.trim() || maybeError.message || 'git command failed'
+      throw new Error(message)
+    }
+  })
   const fsApi: FsApi = args.fsApi ?? {
     mkdir: fs.promises.mkdir,
     cp: fs.promises.cp,
@@ -222,23 +265,17 @@ export async function provisionManagedWorkspace(
       }
     }
 
-    if (runGit) {
-      await runGitChecked(
-        runGit,
-        { cwd: cacheRepoPath, args: ['fetch', '--all', '--prune'] },
-        'Failed to refresh cached repository',
-        'Check git availability and repository health.'
-      )
-      await ensureBranchInCache(runGit, cacheRepoPath, args.input.branch)
+    await fetchAllRemotes(runGit, cacheRepoPath, false)
+    await ensureBranchInCache(runGit, cacheRepoPath, args.input.branch)
+    await detachCacheHead(runGit, cacheRepoPath)
 
-      await fsApi.mkdir(workspaceRootPath, { recursive: true })
-      await runGitChecked(
-        runGit,
-        { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
-        'Failed to create workspace worktree',
-        'Verify branch exists or create it before provisioning.'
-      )
-    }
+    await fsApi.mkdir(workspaceRootPath, { recursive: true })
+    await runGitChecked(
+      runGit,
+      { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
+      'Failed to create workspace worktree',
+      'Verify branch exists or create it before provisioning.'
+    )
 
     return {
       rootPath: workspaceRepoPath,
@@ -249,34 +286,28 @@ export async function provisionManagedWorkspace(
   }
 
   if (args.input.provisioningMethod === 'clone-github') {
-    if (runGit) {
-      const cacheExists = await pathExists(fsApi, cacheRepoPath)
-      if (!cacheExists) {
-        await fsApi.mkdir(args.repoCacheBaseDir, { recursive: true })
-        await runGitChecked(
-          runGit,
-          { cwd: args.repoCacheBaseDir, args: ['clone', args.input.sourceRemoteUrl, cacheRepoPath] },
-          'Failed to clone remote repository into cache',
-          'Check repository URL and GitHub authentication.'
-        )
-      } else {
-        await runGitChecked(
-          runGit,
-          { cwd: cacheRepoPath, args: ['fetch', '--all', '--prune'] },
-          'Failed to refresh cached clone',
-          'Check network access and repository permissions.'
-        )
-      }
-      await ensureBranchInCache(runGit, cacheRepoPath, args.input.branch)
-
-      await fsApi.mkdir(workspaceRootPath, { recursive: true })
+    const cacheExists = await pathExists(fsApi, cacheRepoPath)
+    if (!cacheExists) {
+      await fsApi.mkdir(args.repoCacheBaseDir, { recursive: true })
       await runGitChecked(
         runGit,
-        { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
-        'Failed to create workspace worktree',
-        'Verify branch exists or create it before provisioning.'
+        { cwd: args.repoCacheBaseDir, args: ['clone', args.input.sourceRemoteUrl, cacheRepoPath] },
+        'Failed to clone remote repository into cache',
+        'Check repository URL and GitHub authentication.'
       )
+    } else {
+      await fetchAllRemotes(runGit, cacheRepoPath, true)
     }
+    await ensureBranchInCache(runGit, cacheRepoPath, args.input.branch)
+    await detachCacheHead(runGit, cacheRepoPath)
+
+    await fsApi.mkdir(workspaceRootPath, { recursive: true })
+    await runGitChecked(
+      runGit,
+      { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
+      'Failed to create workspace worktree',
+      'Verify branch exists or create it before provisioning.'
+    )
 
     return {
       rootPath: workspaceRepoPath,
@@ -287,76 +318,75 @@ export async function provisionManagedWorkspace(
   }
 
   if (args.input.provisioningMethod === 'new-repo') {
-    if (runGit) {
-      const cacheExists = await pathExists(fsApi, cacheRepoPath)
-      if (!cacheExists) {
-        try {
-          await fsApi.mkdir(cacheRepoPath, { recursive: true })
-        } catch (error) {
-          throw toWorkspaceProvisioningError(
-            'filesystem',
-            'Failed to create new repository directory',
-            'Verify write permission to the repository cache directory.',
-            error
-          )
-        }
-
-        await runGitChecked(
-          runGit,
-          { cwd: cacheRepoPath, args: ['init'] },
-          'Failed to initialize new repository',
-          'Check git installation and cache directory permissions.'
-        )
-
-        try {
-          await fsApi.writeFile(
-            path.join(cacheRepoPath, 'README.md'),
-            `# ${args.input.newRepoFolderName.trim() || 'New Repository'}\n`
-          )
-        } catch (error) {
-          throw toWorkspaceProvisioningError(
-            'filesystem',
-            'Failed to write repository bootstrap files',
-            'Verify write permission to the repository cache directory.',
-            error
-          )
-        }
-
-        await runGitChecked(
-          runGit,
-          { cwd: cacheRepoPath, args: ['add', 'README.md'] },
-          'Failed to stage bootstrap files',
-          'Check repository state before provisioning.'
-        )
-        await runGitChecked(
-          runGit,
-          {
-            cwd: cacheRepoPath,
-            args: [
-              '-c',
-              'user.name=Kata',
-              '-c',
-              'user.email=kata@local',
-              'commit',
-              '-m',
-              'Initial commit'
-            ]
-          },
-          'Failed to create bootstrap commit',
-          'Check git commit configuration for managed repositories.'
+    const cacheExists = await pathExists(fsApi, cacheRepoPath)
+    if (!cacheExists) {
+      try {
+        await fsApi.mkdir(cacheRepoPath, { recursive: true })
+      } catch (error) {
+        throw toWorkspaceProvisioningError(
+          'filesystem',
+          'Failed to create new repository directory',
+          'Verify write permission to the repository cache directory.',
+          error
         )
       }
 
-      await ensureBranchInCache(runGit, cacheRepoPath, args.input.branch)
-
-      await fsApi.mkdir(workspaceRootPath, { recursive: true })
       await runGitChecked(
         runGit,
-        { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
-        'Failed to create workspace worktree',
-        'Verify branch exists or create it before provisioning.'
+        { cwd: cacheRepoPath, args: ['init'] },
+        'Failed to initialize new repository',
+        'Check git installation and cache directory permissions.'
+      )
+
+      try {
+        await fsApi.writeFile(
+          path.join(cacheRepoPath, 'README.md'),
+          `# ${args.input.newRepoFolderName.trim() || 'New Repository'}\n`
+        )
+      } catch (error) {
+        throw toWorkspaceProvisioningError(
+          'filesystem',
+          'Failed to write repository bootstrap files',
+          'Verify write permission to the repository cache directory.',
+          error
+        )
+      }
+
+      await runGitChecked(
+        runGit,
+        { cwd: cacheRepoPath, args: ['add', 'README.md'] },
+        'Failed to stage bootstrap files',
+        'Check repository state before provisioning.'
+      )
+      await runGitChecked(
+        runGit,
+        {
+          cwd: cacheRepoPath,
+          args: [
+            '-c',
+            'user.name=Kata',
+            '-c',
+            'user.email=kata@local',
+            'commit',
+            '-m',
+            'Initial commit'
+          ]
+        },
+        'Failed to create bootstrap commit',
+        'Check git commit configuration for managed repositories.'
       )
     }
+
+    await ensureBranchInCache(runGit, cacheRepoPath, args.input.branch)
+    await detachCacheHead(runGit, cacheRepoPath)
+
+    await fsApi.mkdir(workspaceRootPath, { recursive: true })
+    await runGitChecked(
+      runGit,
+      { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
+      'Failed to create workspace worktree',
+      'Verify branch exists or create it before provisioning.'
+    )
 
     return {
       rootPath: workspaceRepoPath,
