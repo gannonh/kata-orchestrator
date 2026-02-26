@@ -6,6 +6,7 @@ import {
   SPACE_STATUSES,
   ORCHESTRATION_MODES,
   WORKSPACE_MODES,
+  PROVISIONING_METHODS,
   createDefaultAppState
 } from '../../../../src/shared/types/space'
 
@@ -32,6 +33,12 @@ describe('ORCHESTRATION_MODES', () => {
 describe('WORKSPACE_MODES', () => {
   it('contains managed and external', () => {
     expect(WORKSPACE_MODES).toEqual(['managed', 'external'])
+  })
+})
+
+describe('PROVISIONING_METHODS', () => {
+  it('contains copy-local, clone-github, and new-repo', () => {
+    expect(PROVISIONING_METHODS).toEqual(['copy-local', 'clone-github', 'new-repo'])
   })
 })
 
@@ -107,23 +114,38 @@ describe('SessionRecord type', () => {
 })
 
 describe('CreateSpaceInput type', () => {
-  it('contains required IPC payload fields without id, createdAt, or status', () => {
-    const input: CreateSpaceInput = {
-      name: 'New Space',
-      repoUrl: 'https://github.com/user/repo',
-      branch: 'main',
-      workspaceMode: 'managed'
+  it('supports managed provisioning payloads for copy-local, clone-github, and new-repo', () => {
+    const copyLocal: CreateSpaceInput = {
+      workspaceMode: 'managed',
+      provisioningMethod: 'copy-local',
+      sourceLocalPath: '/Users/me/dev/repo',
+      repoUrl: 'https://github.com/org/repo',
+      branch: 'main'
+    }
+    const cloneGitHub: CreateSpaceInput = {
+      workspaceMode: 'managed',
+      provisioningMethod: 'clone-github',
+      sourceRemoteUrl: 'https://github.com/org/repo.git',
+      repoUrl: 'https://github.com/org/repo',
+      branch: 'main'
+    }
+    const newRepo: CreateSpaceInput = {
+      workspaceMode: 'managed',
+      provisioningMethod: 'new-repo',
+      newRepoParentDir: '/Users/me/dev',
+      newRepoFolderName: 'new-project',
+      repoUrl: '',
+      branch: 'main'
     }
 
-    expect(input.name).toBe('New Space')
-    expect(input.repoUrl).toBe('https://github.com/user/repo')
-    expect(input.branch).toBe('main')
-    expect(input.workspaceMode).toBe('managed')
+    expect(copyLocal.provisioningMethod).toBe('copy-local')
+    expect(cloneGitHub.provisioningMethod).toBe('clone-github')
+    expect(newRepo.provisioningMethod).toBe('new-repo')
   })
 
-  it('accepts optional orchestrationMode', () => {
+  it('supports external mode payloads without managed provisioning method', () => {
     const input: CreateSpaceInput = {
-      name: 'New Space',
+      name: 'External Space',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/projects/repo',
       branch: 'main',

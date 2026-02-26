@@ -68,7 +68,13 @@ describe('preload bridge', () => {
 
     // spaceCreate
     invoke.mockResolvedValueOnce(mockSpace)
-    const createInput = { name: 'test', repoUrl: 'url', rootPath: '/', branch: 'main' }
+    const createInput = {
+      workspaceMode: 'managed',
+      provisioningMethod: 'copy-local',
+      sourceLocalPath: '/Users/me/dev/repo',
+      repoUrl: 'https://github.com/org/repo',
+      branch: 'main'
+    }
     await expect(api.spaceCreate(createInput)).resolves.toEqual(mockSpace)
     expect(invoke).toHaveBeenCalledWith('space:create', createInput)
 
