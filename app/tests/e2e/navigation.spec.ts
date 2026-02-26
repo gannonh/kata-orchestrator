@@ -150,10 +150,9 @@ test.describe('Desktop app navigation @uat', () => {
     await expect(appWindow.getByText(noteScaffold)).toBeVisible()
   })
 
-  test('opens home screen, hides workspace content, and returns on open space @uat @ci @quality-gate', async ({
+  test('starts on home screen, hides workspace content, and opens workspace on selected space @uat @ci @quality-gate', async ({
     appWindow
   }) => {
-    await appWindow.getByRole('button', { name: 'Open Home spaces view' }).first().click()
     await expect(appWindow.getByRole('heading', { name: 'Home' })).toBeVisible()
     await expect(appWindow.getByRole('tablist', { name: 'Center panel tabs' })).toHaveCount(0)
     await expect(appWindow.getByRole('button', { name: 'Open selected space' })).toBeDisabled()
