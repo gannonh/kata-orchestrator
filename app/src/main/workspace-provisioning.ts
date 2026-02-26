@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import fs from 'node:fs'
 import path from 'node:path'
 
 import type { CreateSpaceInput, ProvisioningMethod } from '../shared/types/space'
@@ -17,6 +18,12 @@ export class WorkspaceProvisioningError extends Error {
 }
 
 export type GitRunner = (input: { cwd: string, args: string[] }) => Promise<unknown>
+export type FsApi = {
+  mkdir: (target: string, options?: { recursive?: boolean }) => Promise<void>
+  cp: (source: string, target: string, options?: { recursive?: boolean }) => Promise<void>
+  access: (target: string) => Promise<void>
+  writeFile: (target: string, data: string) => Promise<void>
+}
 
 type ManagedCreateSpaceInput = Extract<
   CreateSpaceInput,
@@ -28,6 +35,7 @@ export type ProvisionManagedWorkspaceArgs = {
   repoCacheBaseDir: string
   input: ManagedCreateSpaceInput
   runGit?: GitRunner
+  fsApi?: FsApi
 }
 
 export type ProvisionedWorkspace = {
@@ -106,6 +114,44 @@ function validateManagedInput(input: ManagedCreateSpaceInput): void {
   }
 }
 
+function getRepoKey(input: ManagedCreateSpaceInput): string {
+  switch (input.provisioningMethod) {
+    case 'copy-local':
+      return path.basename(input.sourceLocalPath).trim() || 'repo'
+    case 'clone-github': {
+      const normalized = input.sourceRemoteUrl.trim().replace(/\/+$/, '')
+      const lastSegment = normalized.split('/').pop() ?? 'repo'
+      return lastSegment.replace(/\.git$/i, '') || 'repo'
+    }
+    case 'new-repo':
+      return input.newRepoFolderName.trim() || 'repo'
+    default:
+      return 'repo'
+  }
+}
+
+async function pathExists(fsApi: FsApi, target: string): Promise<boolean> {
+  try {
+    await fsApi.access(target)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function runGitChecked(
+  runGit: GitRunner,
+  input: { cwd: string, args: string[] },
+  message: string,
+  remediation: string
+): Promise<void> {
+  try {
+    await runGit(input)
+  } catch (error) {
+    throw toWorkspaceProvisioningError('git', message, remediation, error)
+  }
+}
+
 export async function provisionManagedWorkspace(
   args: ProvisionManagedWorkspaceArgs
 ): Promise<ProvisionedWorkspace> {
@@ -113,28 +159,62 @@ export async function provisionManagedWorkspace(
   assertAbsolutePath(args.repoCacheBaseDir, 'repoCacheBaseDir')
   validateManagedInput(args.input)
 
-  if (args.input.provisioningMethod === 'clone-github' && args.runGit) {
-    try {
-      await args.runGit({
-        cwd: args.repoCacheBaseDir,
-        args: ['ls-remote', '--heads', args.input.sourceRemoteUrl, args.input.branch]
-      })
-    } catch (error) {
-      throw toWorkspaceProvisioningError(
-        'git',
-        'Git operation failed',
-        'Check git availability and repository access credentials.',
-        error
+  const runGit = args.runGit
+  const fsApi: FsApi = args.fsApi ?? {
+    mkdir: fs.promises.mkdir,
+    cp: fs.promises.cp,
+    access: fs.promises.access,
+    writeFile: fs.promises.writeFile
+  }
+
+  const repoKey = getRepoKey(args.input)
+  const cacheRepoPath = path.join(args.repoCacheBaseDir, repoKey)
+  const workspaceRootPath = path.join(args.workspaceBaseDir, `${repoKey}-${randomUUID().slice(0, 8)}`)
+  const workspaceRepoPath = path.join(workspaceRootPath, 'repo')
+
+  if (args.input.provisioningMethod === 'copy-local') {
+    const cacheExists = await pathExists(fsApi, cacheRepoPath)
+    if (!cacheExists) {
+      await fsApi.mkdir(args.repoCacheBaseDir, { recursive: true })
+      try {
+        await fsApi.cp(args.input.sourceLocalPath, cacheRepoPath, { recursive: true })
+      } catch (error) {
+        throw toWorkspaceProvisioningError(
+          'filesystem',
+          'Failed to materialize local repository cache',
+          'Verify the source repository path is accessible.',
+          error
+        )
+      }
+    }
+
+    if (runGit) {
+      await runGitChecked(
+        runGit,
+        { cwd: cacheRepoPath, args: ['fetch', '--all', '--prune'] },
+        'Failed to refresh cached repository',
+        'Check git availability and repository health.'
       )
+
+      await fsApi.mkdir(workspaceRootPath, { recursive: true })
+      await runGitChecked(
+        runGit,
+        { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
+        'Failed to create workspace worktree',
+        'Verify branch exists or create it before provisioning.'
+      )
+    }
+
+    return {
+      rootPath: workspaceRepoPath,
+      cacheRepoPath,
+      repoUrl: args.input.repoUrl,
+      branch: args.input.branch
     }
   }
 
-  const workspaceRootPath = path.join(args.workspaceBaseDir, `workspace-${randomUUID().slice(0, 8)}`)
-  const rootPath = path.join(workspaceRootPath, 'repo')
-  const cacheRepoPath = path.join(args.repoCacheBaseDir, `cache-${randomUUID().slice(0, 8)}`)
-
   return {
-    rootPath,
+    rootPath: workspaceRepoPath,
     cacheRepoPath,
     repoUrl: args.input.repoUrl,
     branch: args.input.branch
