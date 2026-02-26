@@ -82,6 +82,9 @@ describe('registerIpcHandlers', () => {
     const handler = getHandlersByChannel().get('kata:openExternalUrl')
 
     await expect(handler?.({}, 'https://example.com')).resolves.toBe(true)
+    await expect(handler?.({}, 42)).resolves.toBe(false)
+    await expect(handler?.({}, 'http://example.com')).resolves.toBe(true)
+    await expect(handler?.({}, 'not-a-url')).resolves.toBe(false)
     await expect(handler?.({}, 'file:///tmp/unsafe')).resolves.toBe(false)
     expect(mockOpenExternal).toHaveBeenCalledWith('https://example.com')
   })
@@ -192,6 +195,68 @@ describe('registerIpcHandlers', () => {
     expect(store.save).toHaveBeenCalledTimes(1)
   })
 
+  it('space:create accepts copy-local managed payloads and derives repo label from local path', async () => {
+    mockProvisionManagedWorkspace.mockResolvedValue({
+      rootPath: '/tmp/workspaces/local-repo-abcd1234/repo',
+      cacheRepoPath: '/tmp/repos/local-repo',
+      repoUrl: 'https://github.com/org/local-repo',
+      branch: 'main'
+    })
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store, {
+      workspaceBaseDir: '/tmp/workspaces',
+      repoCacheBaseDir: '/tmp/repos'
+    })
+
+    const spaceCreate = getHandlersByChannel().get('space:create')
+    const createdSpace = await spaceCreate?.({}, {
+      repoUrl: 'https://github.com/org/local-repo',
+      branch: 'main',
+      workspaceMode: 'managed',
+      provisioningMethod: 'copy-local',
+      sourceLocalPath: '/Users/me/dev/local-repo'
+    })
+
+    expect(mockProvisionManagedWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      input: expect.objectContaining({
+        provisioningMethod: 'copy-local',
+        sourceLocalPath: '/Users/me/dev/local-repo'
+      })
+    }))
+    expect(createdSpace).toMatchObject({
+      name: 'local-repo main',
+      workspaceMode: 'managed'
+    })
+  })
+
+  it('defaults omitted workspaceMode to managed and honors spaceNameOverride', async () => {
+    mockProvisionManagedWorkspace.mockResolvedValue({
+      rootPath: '/tmp/workspaces/override-abcd1234/repo',
+      cacheRepoPath: '/tmp/repos/override',
+      repoUrl: 'https://github.com/org/override',
+      branch: 'main'
+    })
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store)
+    const spaceCreate = getHandlersByChannel().get('space:create')
+
+    const createdSpace = await spaceCreate?.({}, {
+      repoUrl: 'https://github.com/org/override',
+      branch: 'main',
+      provisioningMethod: 'clone-github',
+      sourceRemoteUrl: 'https://github.com/org/override.git',
+      spaceNameOverride: 'My Override Space'
+    })
+
+    expect(mockProvisionManagedWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      input: expect.objectContaining({
+        workspaceMode: 'managed',
+        spaceNameOverride: 'My Override Space'
+      })
+    }))
+    expect(createdSpace).toMatchObject({ name: 'My Override Space' })
+  })
+
   it('space:create surfaces actionable managed provisioning errors', async () => {
     mockProvisionManagedWorkspace.mockRejectedValue(
       new WorkspaceProvisioningError('git', 'Clone failed', 'Check GitHub auth')
@@ -211,6 +276,23 @@ describe('registerIpcHandlers', () => {
         sourceRemoteUrl: 'https://github.com/org/repo.git'
       })
     ).rejects.toThrow('Check GitHub auth')
+  })
+
+  it('space:create surfaces managed provisioning errors without remediation text when absent', async () => {
+    mockProvisionManagedWorkspace.mockRejectedValue(
+      new WorkspaceProvisioningError('git', 'Clone failed')
+    )
+    registerIpcHandlers(createMockStore())
+    const spaceCreate = getHandlersByChannel().get('space:create')
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: 'https://github.com/org/repo',
+        branch: 'main',
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/org/repo.git'
+      })
+    ).rejects.toThrow('Managed provisioning failed (git): Clone failed.')
   })
 
   it('space:create defaults newRepoParentDir when managed new-repo payload leaves it blank', async () => {
@@ -332,7 +414,163 @@ describe('registerIpcHandlers', () => {
         workspaceMode: 'managed'
       })
     ).rejects.toThrow('Space input has an invalid provisioningMethod')
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: 123,
+        branch: 'main',
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/user/repo.git'
+      })
+    ).rejects.toThrow('Space input is missing required string fields')
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'bad-mode',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/user/repo.git'
+      })
+    ).rejects.toThrow('Space input has an invalid workspaceMode')
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'managed',
+        orchestrationMode: 'bad-mode',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/user/repo.git'
+      })
+    ).rejects.toThrow('Space input has an invalid orchestrationMode')
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/user/repo.git',
+        name: 123
+      })
+    ).rejects.toThrow('Space input name must be a string when provided')
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'managed',
+        provisioningMethod: 'copy-local',
+        sourceLocalPath: ''
+      })
+    ).rejects.toThrow('Space input sourceLocalPath must be a non-empty string')
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: ''
+      })
+    ).rejects.toThrow('Space input sourceRemoteUrl must be a non-empty string')
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'managed',
+        provisioningMethod: 'new-repo',
+        newRepoParentDir: 123,
+        newRepoFolderName: 'repo'
+      })
+    ).rejects.toThrow('Space input newRepoParentDir must be a string')
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: 'https://github.com/user/repo',
+        branch: 'main',
+        workspaceMode: 'managed',
+        provisioningMethod: 'new-repo',
+        newRepoParentDir: '/tmp',
+        newRepoFolderName: ''
+      })
+    ).rejects.toThrow('Space input newRepoFolderName must be a non-empty string')
     await expect(spaceGet?.({}, { id: 123 })).rejects.toThrow('space:get input must be an object with string id')
     await expect(sessionCreate?.({}, null)).rejects.toThrow('Session input must be an object')
+    await expect(sessionCreate?.({}, { spaceId: 1, label: true })).rejects.toThrow(
+      'Session input is missing required string fields'
+    )
+  })
+
+  it('propagates unknown managed provisioning errors and reports save failures with error code', async () => {
+    mockProvisionManagedWorkspace.mockRejectedValueOnce(new Error('unexpected explode'))
+    const failingStore = createMockStore()
+    registerIpcHandlers(failingStore)
+    const spaceCreate = getHandlersByChannel().get('space:create')
+
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: 'https://github.com/org/repo',
+        branch: 'main',
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/org/repo.git'
+      })
+    ).rejects.toThrow('unexpected explode')
+
+    mockProvisionManagedWorkspace.mockResolvedValueOnce({
+      rootPath: '/tmp/workspaces/repo-1234/repo',
+      cacheRepoPath: '/tmp/repos/repo',
+      repoUrl: '',
+      branch: 'main'
+    })
+
+    const saveErrorStore = createMockStore()
+    saveErrorStore.save.mockImplementation(() => {
+      throw Object.assign(new Error('no space'), { code: 'ENOSPC' })
+    })
+    registerIpcHandlers(saveErrorStore)
+    const saveFailingSpaceCreate = getHandlersByChannel().get('space:create')
+
+    await expect(
+      saveFailingSpaceCreate?.({}, {
+        repoUrl: '',
+        branch: 'main',
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/org/repo.git'
+      })
+    ).rejects.toThrow('Space created but failed to save state (ENOSPC)')
+  })
+
+  it('falls back to default repo label and UNKNOWN save error code where needed', async () => {
+    mockProvisionManagedWorkspace.mockResolvedValue({
+      rootPath: '/tmp/workspaces/repo-1234/repo',
+      cacheRepoPath: '/tmp/repos/repo',
+      repoUrl: '',
+      branch: 'main'
+    })
+
+    const unknownCodeStore = createMockStore()
+    unknownCodeStore.save.mockImplementation(() => {
+      throw new Error('save failed')
+    })
+    registerIpcHandlers(unknownCodeStore)
+    const spaceCreate = getHandlersByChannel().get('space:create')
+    await expect(
+      spaceCreate?.({}, {
+        repoUrl: '',
+        branch: 'main',
+        workspaceMode: 'managed',
+        provisioningMethod: 'clone-github',
+        sourceRemoteUrl: 'https://github.com/org/repo.git'
+      })
+    ).rejects.toThrow('Space created but failed to save state (UNKNOWN)')
+
+    const normalStore = createMockStore(createDefaultAppState())
+    registerIpcHandlers(normalStore)
+    const externalCreate = getHandlersByChannel().get('space:create')
+    const created = await externalCreate?.({}, {
+      repoUrl: '',
+      branch: 'main',
+      workspaceMode: 'external',
+      rootPath: '/Users/me/repo'
+    })
+    expect(created).toMatchObject({ name: 'repo main' })
   })
 })

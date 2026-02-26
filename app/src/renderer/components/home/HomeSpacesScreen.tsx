@@ -183,11 +183,7 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
     if (provisioningMethod === 'clone-github') {
       return resolvedSourceRemoteUrl ? null : 'Remote repo URL is required.'
     }
-    if (provisioningMethod === 'new-repo') {
-      return resolvedNewRepoFolderName ? null : 'Source repo folder name is required.'
-    }
-
-    return null
+    return resolvedNewRepoFolderName ? null : 'Source repo folder name is required.'
   }, [
     provisioningMethod,
     resolvedExternalWorkspacePath,
@@ -239,11 +235,6 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
 
   async function handleCreateSpace() {
     setCreateError(null)
-
-    if (!canCreate) {
-      setCreateError(validationError ?? 'Complete required fields before creating a space.')
-      return
-    }
 
     const spaceCreate = window.kata?.spaceCreate
     if (!spaceCreate) {
