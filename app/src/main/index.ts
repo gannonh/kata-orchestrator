@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -51,6 +52,15 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   const stateFilePath = getNonEmptyEnv('KATA_STATE_FILE') ?? path.join(app.getPath('userData'), 'app-state.json')
+
+  // Migrate legacy state from ~/.kata/state.json if the new path doesn't exist yet
+  const legacyStatePath = path.join(app.getPath('home'), '.kata', 'state.json')
+  if (!fs.existsSync(stateFilePath) && fs.existsSync(legacyStatePath)) {
+    const dir = path.dirname(stateFilePath)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(legacyStatePath, stateFilePath)
+  }
+
   const workspaceBaseDir = getNonEmptyEnv('KATA_WORKSPACE_BASE_DIR')
   const repoCacheBaseDir = getNonEmptyEnv('KATA_REPO_CACHE_BASE_DIR')
   const stateStore = createStateStore(stateFilePath)
