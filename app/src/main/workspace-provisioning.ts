@@ -74,14 +74,6 @@ function toWorkspaceProvisioningError(
 }
 
 function validateManagedInput(input: ManagedCreateSpaceInput): void {
-  if (input.workspaceMode === 'external') {
-    throw new WorkspaceProvisioningError(
-      'validation',
-      'workspaceMode must be managed for managed provisioning',
-      'Set workspaceMode to managed and provide a managed provisioning method.'
-    )
-  }
-
   if (!input.branch.trim()) {
     throw new WorkspaceProvisioningError('validation', 'branch must be a non-empty string', 'Provide a branch name.')
   }
@@ -238,14 +230,24 @@ export async function provisionManagedWorkspace(
     }
   })
   const fsApi: FsApi = args.fsApi ?? {
-    mkdir: fs.promises.mkdir,
-    cp: fs.promises.cp,
-    access: fs.promises.access,
-    writeFile: fs.promises.writeFile
+    mkdir: async (target, options) => {
+      await fs.promises.mkdir(target, options)
+    },
+    cp: async (source, target, options) => {
+      await fs.promises.cp(source, target, options)
+    },
+    access: async (target) => {
+      await fs.promises.access(target)
+    },
+    writeFile: async (target, data) => {
+      await fs.promises.writeFile(target, data)
+    }
   }
 
   const repoKey = getRepoKey(args.input)
-  const cacheRepoPath = path.join(args.repoCacheBaseDir, repoKey)
+  const cacheRepoPath = args.input.provisioningMethod === 'new-repo'
+    ? path.join(args.input.newRepoParentDir, args.input.newRepoFolderName.trim())
+    : path.join(args.repoCacheBaseDir, repoKey)
   const workspaceRootPath = path.join(args.workspaceBaseDir, `${repoKey}-${randomUUID().slice(0, 8)}`)
   const workspaceRepoPath = path.join(workspaceRootPath, 'repo')
 
@@ -318,15 +320,15 @@ export async function provisionManagedWorkspace(
   }
 
   if (args.input.provisioningMethod === 'new-repo') {
-    const cacheExists = await pathExists(fsApi, cacheRepoPath)
-    if (!cacheExists) {
+    const repoAlreadyInitialized = await pathExists(fsApi, path.join(cacheRepoPath, '.git'))
+    if (!repoAlreadyInitialized) {
       try {
         await fsApi.mkdir(cacheRepoPath, { recursive: true })
       } catch (error) {
         throw toWorkspaceProvisioningError(
           'filesystem',
           'Failed to create new repository directory',
-          'Verify write permission to the repository cache directory.',
+          'Verify write permission to the requested source repository directory.',
           error
         )
       }
@@ -347,7 +349,7 @@ export async function provisionManagedWorkspace(
         throw toWorkspaceProvisioningError(
           'filesystem',
           'Failed to write repository bootstrap files',
-          'Verify write permission to the repository cache directory.',
+          'Verify write permission to the requested source repository directory.',
           error
         )
       }
@@ -396,10 +398,9 @@ export async function provisionManagedWorkspace(
     }
   }
 
-  return {
-    rootPath: workspaceRepoPath,
-    cacheRepoPath,
-    repoUrl: args.input.repoUrl,
-    branch: args.input.branch
-  }
+  throw new WorkspaceProvisioningError(
+    'validation',
+    'Unsupported provisioning method',
+    'Use one of: copy-local, clone-github, new-repo.'
+  )
 }

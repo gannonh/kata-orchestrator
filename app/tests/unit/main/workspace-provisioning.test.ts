@@ -126,6 +126,7 @@ describe('provisionManagedWorkspace validation', () => {
   it('initializes new managed repo and provisions requested branch worktree', async () => {
     const runGit = vi.fn().mockResolvedValue(undefined)
     const fsApi = createMockFsApi()
+    const sourceRepoPath = '/Users/me/dev/new-project'
 
     const result = await provisionManagedWorkspace({
       workspaceBaseDir: '/tmp/workspaces',
@@ -144,18 +145,19 @@ describe('provisionManagedWorkspace validation', () => {
 
     expect(result.rootPath).toMatch(/\/tmp\/workspaces\/.+\/repo$/)
     expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
-      cwd: '/tmp/repos/new-project',
+      cwd: sourceRepoPath,
       args: ['init']
     }))
-    expect(fsApi.writeFile).toHaveBeenCalledWith('/tmp/repos/new-project/README.md', expect.any(String))
+    expect(fsApi.writeFile).toHaveBeenCalledWith(`${sourceRepoPath}/README.md`, expect.any(String))
     expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
-      cwd: '/tmp/repos/new-project',
+      cwd: sourceRepoPath,
       args: ['add', 'README.md']
     }))
     expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
-      cwd: '/tmp/repos/new-project',
+      cwd: sourceRepoPath,
       args: expect.arrayContaining(['commit', '-m', 'Initial commit'])
     }))
+    expect(result.cacheRepoPath).toBe(sourceRepoPath)
     expect(runGit).toHaveBeenCalledWith(expect.objectContaining({
       args: ['worktree', 'add', expect.any(String), 'main']
     }))

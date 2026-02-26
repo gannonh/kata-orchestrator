@@ -21,6 +21,7 @@ type ElectronFixtures = {
   managedTestRootDir: string
   managedWorkspaceBaseDir: string
   managedRepoCacheBaseDir: string
+  managedStateFilePath: string
 }
 
 export const test = base.extend<ElectronFixtures>({
@@ -39,7 +40,11 @@ export const test = base.extend<ElectronFixtures>({
     await fs.mkdir(repoCacheBaseDir, { recursive: true })
     await use(repoCacheBaseDir)
   },
-  electronApp: async ({ managedWorkspaceBaseDir, managedRepoCacheBaseDir }, use) => {
+  managedStateFilePath: async ({ managedTestRootDir }, use) => {
+    const stateFilePath = path.join(managedTestRootDir, 'state.json')
+    await use(stateFilePath)
+  },
+  electronApp: async ({ managedWorkspaceBaseDir, managedRepoCacheBaseDir, managedStateFilePath }, use) => {
     const launchArgs = process.env.CI
       ? ['--no-sandbox', '--disable-setuid-sandbox', mainEntry]
       : [mainEntry]
@@ -48,7 +53,8 @@ export const test = base.extend<ElectronFixtures>({
       env: {
         ...process.env,
         KATA_WORKSPACE_BASE_DIR: managedWorkspaceBaseDir,
-        KATA_REPO_CACHE_BASE_DIR: managedRepoCacheBaseDir
+        KATA_REPO_CACHE_BASE_DIR: managedRepoCacheBaseDir,
+        KATA_STATE_FILE: managedStateFilePath
       }
     })
 

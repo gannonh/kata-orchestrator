@@ -188,18 +188,19 @@ function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
     case 'new-repo': {
       const newRepoParentDir = input.newRepoParentDir
       const newRepoFolderName = input.newRepoFolderName
-      if (typeof newRepoParentDir !== 'string' || !newRepoParentDir.trim()) {
-        throw new Error('Space input newRepoParentDir must be a non-empty string')
+      if (typeof newRepoParentDir !== 'string') {
+        throw new Error('Space input newRepoParentDir must be a string')
       }
       if (typeof newRepoFolderName !== 'string' || !newRepoFolderName.trim()) {
         throw new Error('Space input newRepoFolderName must be a non-empty string')
       }
+      const normalizedParentDir = newRepoParentDir.trim() || path.join(os.homedir(), 'dev')
       return {
         ...baseInput,
         ...optionalTexts,
         workspaceMode: 'managed',
         provisioningMethod: 'new-repo',
-        newRepoParentDir: newRepoParentDir.trim(),
+        newRepoParentDir: normalizedParentDir,
         newRepoFolderName: newRepoFolderName.trim()
       }
     }

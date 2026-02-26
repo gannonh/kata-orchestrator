@@ -2,7 +2,9 @@ import fs from 'node:fs'
 import fsPromises from 'node:fs/promises'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
+import { _electron as electron, type ElectronApplication } from '@playwright/test'
 import { expect, test } from './fixtures/electron'
 
 type SpaceListEntry = {
@@ -12,6 +14,10 @@ type SpaceListEntry = {
   branch: string
   workspaceMode?: string
 }
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const mainEntry = path.resolve(__dirname, '../../dist/main/index.js')
 
 function runGit(cwd: string, args: string[]): string {
   return execFileSync('git', args, {
@@ -40,6 +46,14 @@ async function createSeedRepo(repoDir: string): Promise<void> {
   runGit(repoDir, ['add', 'README.md'])
   runGit(repoDir, ['commit', '-m', 'Initial commit'])
   ensureMainBranch(repoDir)
+}
+
+async function createBranchCommit(repoDir: string, branch: string): Promise<void> {
+  runGit(repoDir, ['checkout', '-b', branch])
+  await fsPromises.writeFile(path.join(repoDir, `${branch.replace(/[\\/]/g, '-')}.txt`), `${branch}\n`, 'utf8')
+  runGit(repoDir, ['add', '.'])
+  runGit(repoDir, ['commit', '-m', `Add ${branch} fixture`])
+  runGit(repoDir, ['checkout', 'main'])
 }
 
 async function openHomeView(appWindow: import('@playwright/test').Page): Promise<void> {
@@ -90,6 +104,7 @@ test.describe('managed provisioning @uat @ci', () => {
   }) => {
     const upstreamRepoPath = path.join(managedTestRootDir, 'fixtures', 'clone-source')
     await createSeedRepo(upstreamRepoPath)
+    await createBranchCommit(upstreamRepoPath, 'feature/e2e-clone')
 
     const bareRemotePath = path.join(managedTestRootDir, 'fixtures', 'clone-remote.git')
     await fsPromises.mkdir(path.dirname(bareRemotePath), { recursive: true })
@@ -100,6 +115,7 @@ test.describe('managed provisioning @uat @ci', () => {
     await appWindow.getByRole('button', { name: 'Use clone github provisioning' }).click()
     await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed Clone Space')
     await appWindow.getByRole('textbox', { name: 'Remote repo URL' }).fill(bareRemotePath)
+    await appWindow.getByRole('textbox', { name: 'Branch' }).fill('feature/e2e-clone')
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
     await expect(appWindow.getByRole('button', { name: 'Select space Managed Clone Space' })).toBeVisible()
@@ -107,7 +123,7 @@ test.describe('managed provisioning @uat @ci', () => {
     const createdSpace = await getSpaceByName(appWindow, 'Managed Clone Space')
     expect(createdSpace.workspaceMode).toBe('managed')
     expect(fs.existsSync(createdSpace.rootPath)).toBe(true)
-    expect(runGit(createdSpace.rootPath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('main')
+    expect(runGit(createdSpace.rootPath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('feature/e2e-clone')
   })
 
   test('creates managed space via new-repo flow', async ({ appWindow, managedTestRootDir }) => {
@@ -118,8 +134,8 @@ test.describe('managed provisioning @uat @ci', () => {
 
     await appWindow.getByRole('button', { name: 'Use new repo provisioning' }).click()
     await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed New Repo Space')
-    await appWindow.getByRole('textbox', { name: 'New repo parent directory' }).fill(newRepoParentDir)
-    await appWindow.getByRole('textbox', { name: 'New repo folder name' }).fill('managed-new-project')
+    await appWindow.getByRole('textbox', { name: 'Source repo parent directory' }).fill(newRepoParentDir)
+    await appWindow.getByRole('textbox', { name: 'Source repo folder name' }).fill('managed-new-project')
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
     await expect(appWindow.getByRole('button', { name: 'Select space Managed New Repo Space' })).toBeVisible()
@@ -129,5 +145,71 @@ test.describe('managed provisioning @uat @ci', () => {
     expect(fs.existsSync(createdSpace.rootPath)).toBe(true)
     expect(fs.existsSync(path.join(createdSpace.rootPath, 'README.md'))).toBe(true)
     expect(runGit(createdSpace.rootPath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('main')
+    expect(fs.existsSync(path.join(newRepoParentDir, 'managed-new-project'))).toBe(true)
+    expect(fs.existsSync(path.join(newRepoParentDir, 'managed-new-project', '.git'))).toBe(true)
+  })
+
+  test('creates managed space via new-repo when parent directory input is blank', async ({ appWindow }) => {
+    const sourceFolderName = `managed-new-project-blank-parent-${Date.now()}`
+
+    await openHomeView(appWindow)
+
+    await appWindow.getByRole('button', { name: 'Use new repo provisioning' }).click()
+    await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed New Repo Blank Parent')
+    await appWindow.getByRole('textbox', { name: 'Source repo folder name' }).fill(sourceFolderName)
+    await appWindow.getByRole('button', { name: 'Create space' }).click()
+
+    await expect(appWindow.getByRole('button', { name: 'Select space Managed New Repo Blank Parent' })).toBeVisible()
+
+    const createdSpace = await getSpaceByName(appWindow, 'Managed New Repo Blank Parent')
+    expect(createdSpace.workspaceMode).toBe('managed')
+    expect(fs.existsSync(createdSpace.rootPath)).toBe(true)
+    expect(runGit(createdSpace.rootPath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('main')
+  })
+
+  test('persists spaces across app restart', async ({
+    appWindow,
+    electronApp,
+    managedTestRootDir,
+    managedWorkspaceBaseDir,
+    managedRepoCacheBaseDir,
+    managedStateFilePath
+  }) => {
+    const localSourcePath = path.join(managedTestRootDir, 'fixtures', 'persist-source')
+    await createSeedRepo(localSourcePath)
+
+    await openHomeView(appWindow)
+
+    await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Persisted Space')
+    await appWindow.getByRole('textbox', { name: 'Local repo path' }).fill(localSourcePath)
+    await appWindow.getByRole('button', { name: 'Create space' }).click()
+    await expect(appWindow.getByRole('button', { name: 'Select space Persisted Space' })).toBeVisible()
+
+    await electronApp.close()
+
+    const launchArgs = process.env.CI
+      ? ['--no-sandbox', '--disable-setuid-sandbox', mainEntry]
+      : [mainEntry]
+
+    const relaunched: ElectronApplication = await electron.launch({
+      args: launchArgs,
+      env: {
+        ...process.env,
+        KATA_WORKSPACE_BASE_DIR: managedWorkspaceBaseDir,
+        KATA_REPO_CACHE_BASE_DIR: managedRepoCacheBaseDir,
+        KATA_STATE_FILE: managedStateFilePath
+      }
+    })
+
+    try {
+      const relaunchedWindow = await relaunched.firstWindow()
+      await relaunchedWindow.waitForLoadState('load')
+      await relaunchedWindow.getByRole('button', { name: 'Open Home spaces view' }).click()
+      await expect(relaunchedWindow.getByRole('button', { name: 'Select space Persisted Space' })).toBeVisible()
+    } finally {
+      await relaunched.close().catch(() => {
+        // Relaunched app may already be closed due to earlier failure.
+      })
+    }
   })
 })

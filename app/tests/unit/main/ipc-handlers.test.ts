@@ -1,5 +1,7 @@
 // @vitest-environment node
 
+import os from 'node:os'
+import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createDefaultAppState } from '../../../src/shared/types/space'
@@ -209,6 +211,39 @@ describe('registerIpcHandlers', () => {
         sourceRemoteUrl: 'https://github.com/org/repo.git'
       })
     ).rejects.toThrow('Check GitHub auth')
+  })
+
+  it('space:create defaults newRepoParentDir when managed new-repo payload leaves it blank', async () => {
+    mockProvisionManagedWorkspace.mockResolvedValue({
+      rootPath: '/tmp/workspaces/managed-new/repo',
+      cacheRepoPath: '/tmp/repos/managed-new',
+      repoUrl: '',
+      branch: 'main'
+    })
+    registerIpcHandlers(createMockStore(), {
+      workspaceBaseDir: '/tmp/workspaces',
+      repoCacheBaseDir: '/tmp/repos'
+    })
+
+    const spaceCreate = getHandlersByChannel().get('space:create')
+    await spaceCreate?.({}, {
+      repoUrl: '',
+      branch: 'main',
+      workspaceMode: 'managed',
+      provisioningMethod: 'new-repo',
+      newRepoParentDir: '',
+      newRepoFolderName: 'managed-new'
+    })
+
+    expect(mockProvisionManagedWorkspace).toHaveBeenCalledWith({
+      workspaceBaseDir: '/tmp/workspaces',
+      repoCacheBaseDir: '/tmp/repos',
+      input: expect.objectContaining({
+        provisioningMethod: 'new-repo',
+        newRepoFolderName: 'managed-new',
+        newRepoParentDir: path.join(os.homedir(), 'dev')
+      })
+    })
   })
 
   it('space:list and space:get read from store state', async () => {

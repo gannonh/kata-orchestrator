@@ -158,6 +158,8 @@ test.describe('Desktop app navigation @uat', () => {
     await expect(appWindow.getByRole('tablist', { name: 'Center panel tabs' })).toHaveCount(0)
     await expect(appWindow.getByRole('button', { name: 'Open selected space' })).toBeDisabled()
 
+    await appWindow.getByRole('button', { name: 'Use my existing folder/worktree (developer-managed)' }).click()
+    await appWindow.getByRole('textbox', { name: 'Workspace path' }).fill('/tmp')
     await appWindow.getByRole('button', { name: 'Create space' }).click()
     await expect(appWindow.getByRole('button', { name: 'Open selected space' })).toBeEnabled()
     await appWindow.getByRole('button', { name: 'Open selected space' }).click()

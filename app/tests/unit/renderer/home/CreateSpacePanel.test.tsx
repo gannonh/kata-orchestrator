@@ -1,37 +1,32 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 
 import { CreateSpacePanel } from '../../../../src/renderer/components/home/CreateSpacePanel'
 
 function createBaseProps() {
   return {
-    isActive: true,
-    prompt: '',
-    spaceName: 'kata-cloud main',
-    selectedMode: 'team' as const,
+    spaceName: 'kata-cloud',
     workspaceMode: 'managed' as const,
     provisioningMethod: 'copy-local' as const,
     sourceLocalPath: '/Users/me/dev/kata-cloud',
     sourceRemoteUrl: '',
-    newRepoParentDir: '',
+    sourceBranch: 'main',
+    newRepoParentDir: '/Users/me/dev',
     newRepoFolderName: '',
     workspacePath: '',
-    rapidFire: false,
-    repoName: 'gannonh/kata-cloud',
-    branchName: 'main',
     createError: null,
-    onPromptChange: vi.fn(),
+    canCreate: true,
+    isCreating: false,
+    summaryLines: ['Editable files: /Users/me/.kata/workspaces/<id>/repo'],
     onSpaceNameChange: vi.fn(),
-    onPromptFocus: vi.fn(),
-    onSelectMode: vi.fn(),
     onSelectWorkspaceMode: vi.fn(),
     onSelectProvisioningMethod: vi.fn(),
     onSourceLocalPathChange: vi.fn(),
     onSourceRemoteUrlChange: vi.fn(),
+    onSourceBranchChange: vi.fn(),
     onNewRepoParentDirChange: vi.fn(),
     onNewRepoFolderNameChange: vi.fn(),
     onWorkspacePathChange: vi.fn(),
-    onToggleRapidFire: vi.fn(),
     onCreateSpace: vi.fn()
   }
 }
@@ -41,46 +36,62 @@ describe('CreateSpacePanel', () => {
     cleanup()
   })
 
-  it('shows copy-local input by default and allows selecting other methods', () => {
-    const props = createBaseProps()
-    render(<CreateSpacePanel {...props} />)
+  it('renders guided steps and removes legacy prompt-heavy controls', () => {
+    render(<CreateSpacePanel {...createBaseProps()} />)
 
-    expect(screen.getByRole('textbox', { name: 'Local repo path' })).toBeTruthy()
+    expect(screen.getByText('Step 1 · Where work happens')).toBeTruthy()
+    expect(screen.getByText('Step 2 · Source setup')).toBeTruthy()
+    expect(screen.getByText('Step 3 · Space name')).toBeTruthy()
+    expect(screen.getByText('Step 4 · Review and create')).toBeTruthy()
+    expect(screen.queryByText('Step 3 · Execution mode')).toBeNull()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
-    expect(props.onSelectProvisioningMethod).toHaveBeenCalledWith('clone-github')
+    expect(screen.queryByText("Let's get building!")).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Space prompt' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Toggle rapid fire mode' })).toBeNull()
   })
 
-  it('shows clone-github remote URL input when selected', () => {
-    const props = {
-      ...createBaseProps(),
-      provisioningMethod: 'clone-github' as const,
-      sourceRemoteUrl: 'https://github.com/org/repo.git'
-    }
-    render(<CreateSpacePanel {...props} />)
+  it('shows managed source options and summary lines in review step', () => {
+    render(<CreateSpacePanel {...createBaseProps()} />)
 
-    expect(screen.getByRole('textbox', { name: 'Remote repo URL' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use copy local provisioning' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use clone github provisioning' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Use new repo provisioning' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Branch' })).toBeTruthy()
+    expect(screen.getByText('Editable files: /Users/me/.kata/workspaces/<id>/repo')).toBeTruthy()
   })
 
-  it('shows new-repo parent and folder fields when selected', () => {
-    const props = {
-      ...createBaseProps(),
-      provisioningMethod: 'new-repo' as const
-    }
-    render(<CreateSpacePanel {...props} />)
+  it('switches to external mode fields when workspace mode is external', () => {
+    render(
+      <CreateSpacePanel
+        {...createBaseProps()}
+        workspaceMode="external"
+      />
+    )
 
-    expect(screen.getByRole('textbox', { name: 'New repo parent directory' })).toBeTruthy()
-    expect(screen.getByRole('textbox', { name: 'New repo folder name' })).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Workspace path' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Use copy local provisioning' })).toBeNull()
   })
 
-  it('updates space name through callback', () => {
-    const props = createBaseProps()
-    render(<CreateSpacePanel {...props} />)
+  it('disables create action until required fields are satisfied', () => {
+    render(
+      <CreateSpacePanel
+        {...createBaseProps()}
+        canCreate={false}
+      />
+    )
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Space name' }), {
-      target: { value: 'My custom space' }
-    })
+    expect(screen.getByRole('button', { name: 'Create space' })).toHaveProperty('disabled', true)
+  })
 
-    expect(props.onSpaceNameChange).toHaveBeenCalledWith('My custom space')
+  it('shows create progress indicator while creation is running', () => {
+    render(
+      <CreateSpacePanel
+        {...createBaseProps()}
+        isCreating={true}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Create space' })).toHaveProperty('disabled', true)
+    expect(screen.getByText('Creating space...')).toBeTruthy()
   })
 })

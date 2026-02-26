@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { ORCHESTRATION_MODES, SPACE_STATUSES, WORKSPACE_MODES, createDefaultAppState } from '@shared/types/space'
-import type { AppState } from '@shared/types/space'
+import { ORCHESTRATION_MODES, SPACE_STATUSES, WORKSPACE_MODES, createDefaultAppState } from '../shared/types/space'
+import type { AppState } from '../shared/types/space'
 
 export type StateStore = {
   load(): AppState
