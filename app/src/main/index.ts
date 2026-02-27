@@ -1,6 +1,6 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import os from 'node:os'
 
 import { app, BrowserWindow } from 'electron'
 
@@ -9,6 +9,16 @@ import { createStateStore } from './state-store'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+function getNonEmptyEnv(name: string): string | undefined {
+  const value = process.env[name]
+  if (!value) {
+    return undefined
+  }
+
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -41,13 +51,28 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  const stateFilePath = process.env.KATA_STATE_FILE ?? path.join(os.homedir(), '.kata', 'state.json')
+  const stateFilePath = getNonEmptyEnv('KATA_STATE_FILE') ?? path.join(app.getPath('userData'), 'app-state.json')
+
+  // Migrate legacy state from ~/.kata/state.json if the new path doesn't exist yet
+  const legacyStatePath = path.join(app.getPath('home'), '.kata', 'state.json')
+  if (!fs.existsSync(stateFilePath) && fs.existsSync(legacyStatePath)) {
+    const dir = path.dirname(stateFilePath)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(legacyStatePath, stateFilePath)
+  }
+
+  const workspaceBaseDir = getNonEmptyEnv('KATA_WORKSPACE_BASE_DIR')
+  const repoCacheBaseDir = getNonEmptyEnv('KATA_REPO_CACHE_BASE_DIR')
   const stateStore = createStateStore(stateFilePath)
 
-  registerIpcHandlers(stateStore, {
-    workspaceBaseDir: process.env.KATA_WORKSPACE_BASE_DIR,
-    repoCacheBaseDir: process.env.KATA_REPO_CACHE_BASE_DIR
-  })
+  if (workspaceBaseDir || repoCacheBaseDir) {
+    registerIpcHandlers(stateStore, {
+      ...(workspaceBaseDir ? { workspaceBaseDir } : {}),
+      ...(repoCacheBaseDir ? { repoCacheBaseDir } : {})
+    })
+  } else {
+    registerIpcHandlers(stateStore)
+  }
   createWindow()
 
   app.on('activate', () => {

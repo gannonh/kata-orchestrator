@@ -6,9 +6,13 @@ type LoadMainOptions = {
   platform?: NodeJS.Platform
   rendererUrl?: string
   whenReadyReject?: Error
-  workspaceBaseDir?: string
-  repoCacheBaseDir?: string
-  stateFilePath?: string
+  userDataPath?: string
+  homePath?: string
+  kataStateFile?: string
+  kataWorkspaceBaseDir?: string
+  kataRepoCacheBaseDir?: string
+  legacyStateExists?: boolean
+  newStateExists?: boolean
 }
 
 type WindowInstance = {
@@ -56,10 +60,24 @@ async function loadMainModule(options: LoadMainOptions = {}) {
     }
   }
 
+  const userDataPath = options.userDataPath ?? '/tmp/kata-user-data'
+  const homePath = options.homePath ?? '/tmp/kata-home'
+
   const appMock = {
     whenReady: vi.fn(() =>
       options.whenReadyReject ? Promise.reject(options.whenReadyReject) : Promise.resolve()
     ),
+    getPath: vi.fn((name: string) => {
+      if (name === 'userData') {
+        return userDataPath
+      }
+
+      if (name === 'home') {
+        return homePath
+      }
+
+      throw new Error(`Unexpected app path key: ${name}`)
+    }),
     on: vi.fn((event: string, callback: () => void) => {
       listeners.set(event, callback)
       return appMock
@@ -74,6 +92,26 @@ async function loadMainModule(options: LoadMainOptions = {}) {
   }
   const createStateStore = vi.fn(() => mockStateStore)
 
+  const newStatePath = options.kataStateFile ?? `${userDataPath}/app-state.json`
+  const legacyStatePath = `${homePath}/.kata/state.json`
+
+  const existsSyncMock = vi.fn((p: string) => {
+    if (p === newStatePath) {
+      return options.newStateExists ?? false
+    }
+
+    if (p === legacyStatePath) {
+      return options.legacyStateExists ?? false
+    }
+
+    return false
+  })
+  const mkdirSyncMock = vi.fn()
+  const copyFileSyncMock = vi.fn()
+
+  vi.doMock('node:fs', () => ({
+    default: { existsSync: existsSyncMock, mkdirSync: mkdirSyncMock, copyFileSync: copyFileSyncMock }
+  }))
   vi.doMock('electron', () => ({
     app: appMock,
     BrowserWindow: MockBrowserWindow
@@ -86,28 +124,28 @@ async function loadMainModule(options: LoadMainOptions = {}) {
   }))
 
   const previousRendererUrl = process.env.ELECTRON_RENDERER_URL
-  const previousWorkspaceBaseDir = process.env.KATA_WORKSPACE_BASE_DIR
-  const previousRepoCacheBaseDir = process.env.KATA_REPO_CACHE_BASE_DIR
-  const previousStateFilePath = process.env.KATA_STATE_FILE
+  const previousKataStateFile = process.env.KATA_STATE_FILE
+  const previousKataWorkspaceBaseDir = process.env.KATA_WORKSPACE_BASE_DIR
+  const previousKataRepoCacheBaseDir = process.env.KATA_REPO_CACHE_BASE_DIR
   if (options.rendererUrl) {
     process.env.ELECTRON_RENDERER_URL = options.rendererUrl
   } else {
     delete process.env.ELECTRON_RENDERER_URL
   }
-  if (options.workspaceBaseDir) {
-    process.env.KATA_WORKSPACE_BASE_DIR = options.workspaceBaseDir
+  if (options.kataStateFile !== undefined) {
+    process.env.KATA_STATE_FILE = options.kataStateFile
+  } else {
+    delete process.env.KATA_STATE_FILE
+  }
+  if (options.kataWorkspaceBaseDir !== undefined) {
+    process.env.KATA_WORKSPACE_BASE_DIR = options.kataWorkspaceBaseDir
   } else {
     delete process.env.KATA_WORKSPACE_BASE_DIR
   }
-  if (options.repoCacheBaseDir) {
-    process.env.KATA_REPO_CACHE_BASE_DIR = options.repoCacheBaseDir
+  if (options.kataRepoCacheBaseDir !== undefined) {
+    process.env.KATA_REPO_CACHE_BASE_DIR = options.kataRepoCacheBaseDir
   } else {
     delete process.env.KATA_REPO_CACHE_BASE_DIR
-  }
-  if (options.stateFilePath) {
-    process.env.KATA_STATE_FILE = options.stateFilePath
-  } else {
-    delete process.env.KATA_STATE_FILE
   }
 
   const previousPlatform = process.platform
@@ -127,26 +165,27 @@ async function loadMainModule(options: LoadMainOptions = {}) {
     } else {
       process.env.ELECTRON_RENDERER_URL = previousRendererUrl
     }
-    if (previousWorkspaceBaseDir === undefined) {
-      delete process.env.KATA_WORKSPACE_BASE_DIR
-    } else {
-      process.env.KATA_WORKSPACE_BASE_DIR = previousWorkspaceBaseDir
-    }
-    if (previousRepoCacheBaseDir === undefined) {
-      delete process.env.KATA_REPO_CACHE_BASE_DIR
-    } else {
-      process.env.KATA_REPO_CACHE_BASE_DIR = previousRepoCacheBaseDir
-    }
-    if (previousStateFilePath === undefined) {
+    if (previousKataStateFile === undefined) {
       delete process.env.KATA_STATE_FILE
     } else {
-      process.env.KATA_STATE_FILE = previousStateFilePath
+      process.env.KATA_STATE_FILE = previousKataStateFile
+    }
+    if (previousKataWorkspaceBaseDir === undefined) {
+      delete process.env.KATA_WORKSPACE_BASE_DIR
+    } else {
+      process.env.KATA_WORKSPACE_BASE_DIR = previousKataWorkspaceBaseDir
+    }
+    if (previousKataRepoCacheBaseDir === undefined) {
+      delete process.env.KATA_REPO_CACHE_BASE_DIR
+    } else {
+      process.env.KATA_REPO_CACHE_BASE_DIR = previousKataRepoCacheBaseDir
     }
     Object.defineProperty(process, 'platform', {
       value: previousPlatform,
       configurable: true
     })
     consoleErrorSpy.mockRestore()
+    vi.unmock('node:fs')
     vi.unmock('electron')
     vi.unmock('../../../src/main/ipc-handlers')
     vi.unmock('../../../src/main/state-store')
@@ -162,6 +201,9 @@ async function loadMainModule(options: LoadMainOptions = {}) {
     setVisibleWindows(next: WindowInstance[]) {
       visibleWindows = next
     },
+    existsSyncMock,
+    mkdirSyncMock,
+    copyFileSyncMock,
     consoleErrorSpy,
     restore
   }
@@ -181,12 +223,10 @@ describe('main process startup', () => {
 
     try {
       expect(harness.createStateStore).toHaveBeenCalledTimes(1)
-      expect(harness.createStateStore).toHaveBeenCalledWith(expect.stringMatching(/\.kata[\\/]state\.json$/))
+      expect(harness.appMock.getPath).toHaveBeenCalledWith('userData')
+      expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/kata-user-data/app-state.json')
       expect(harness.registerIpcHandlers).toHaveBeenCalledTimes(1)
-      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
-        workspaceBaseDir: undefined,
-        repoCacheBaseDir: undefined
-      })
+      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore)
       expect(harness.instances).toHaveLength(1)
 
       const mainWindow = harness.instances[0]
@@ -235,33 +275,77 @@ describe('main process startup', () => {
     }
   })
 
-  it('passes workspace/repo cache env overrides to IPC registration', async () => {
+  it('uses userData/app-state.json for state store path', async () => {
     const harness = await loadMainModule({
-      workspaceBaseDir: '/tmp/kata/workspaces',
-      repoCacheBaseDir: '/tmp/kata/repos'
+      userDataPath: '/tmp/custom-user-data'
     })
 
     try {
+      expect(harness.appMock.getPath).toHaveBeenCalledWith('userData')
+      expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/custom-user-data/app-state.json')
+      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore)
+    } finally {
+      harness.restore()
+    }
+  })
+
+  it('prefers KATA_* path overrides when provided', async () => {
+    const harness = await loadMainModule({
+      kataStateFile: '/tmp/custom-state/state.json',
+      kataWorkspaceBaseDir: '/tmp/custom-workspaces',
+      kataRepoCacheBaseDir: '/tmp/custom-repos'
+    })
+
+    try {
+      expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/custom-state/state.json')
       expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
-        workspaceBaseDir: '/tmp/kata/workspaces',
-        repoCacheBaseDir: '/tmp/kata/repos'
+        workspaceBaseDir: '/tmp/custom-workspaces',
+        repoCacheBaseDir: '/tmp/custom-repos'
       })
     } finally {
       harness.restore()
     }
   })
 
-  it('passes custom state file env override to state store factory', async () => {
+  it('passes only provided KATA_* base dir overrides', async () => {
     const harness = await loadMainModule({
-      stateFilePath: '/tmp/kata/custom-state.json'
+      kataWorkspaceBaseDir: '/tmp/custom-workspaces'
     })
 
     try {
-      expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/kata/custom-state.json')
       expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
-        workspaceBaseDir: undefined,
-        repoCacheBaseDir: undefined
+        workspaceBaseDir: '/tmp/custom-workspaces'
       })
+    } finally {
+      harness.restore()
+    }
+  })
+
+  it('migrates legacy ~/.kata/state.json when new state file does not exist', async () => {
+    const harness = await loadMainModule({
+      legacyStateExists: true,
+      newStateExists: false
+    })
+
+    try {
+      expect(harness.mkdirSyncMock).toHaveBeenCalledWith('/tmp/kata-user-data', { recursive: true })
+      expect(harness.copyFileSyncMock).toHaveBeenCalledWith(
+        '/tmp/kata-home/.kata/state.json',
+        '/tmp/kata-user-data/app-state.json'
+      )
+    } finally {
+      harness.restore()
+    }
+  })
+
+  it('skips migration when new state file already exists', async () => {
+    const harness = await loadMainModule({
+      legacyStateExists: true,
+      newStateExists: true
+    })
+
+    try {
+      expect(harness.copyFileSyncMock).not.toHaveBeenCalled()
     } finally {
       harness.restore()
     }
