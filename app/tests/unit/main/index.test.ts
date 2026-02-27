@@ -13,6 +13,7 @@ type LoadMainOptions = {
   kataRepoCacheBaseDir?: string
   legacyStateExists?: boolean
   newStateExists?: boolean
+  copyFileSyncError?: Error
 }
 
 type WindowInstance = {
@@ -92,7 +93,8 @@ async function loadMainModule(options: LoadMainOptions = {}) {
   }
   const createStateStore = vi.fn(() => mockStateStore)
 
-  const newStatePath = options.kataStateFile ?? `${userDataPath}/app-state.json`
+  const effectiveStateFile = options.kataStateFile?.trim() || undefined
+  const newStatePath = effectiveStateFile ?? `${userDataPath}/app-state.json`
   const legacyStatePath = `${homePath}/.kata/state.json`
 
   const existsSyncMock = vi.fn((p: string) => {
@@ -107,7 +109,11 @@ async function loadMainModule(options: LoadMainOptions = {}) {
     return false
   })
   const mkdirSyncMock = vi.fn()
-  const copyFileSyncMock = vi.fn()
+  const copyFileSyncMock = vi.fn(() => {
+    if (options.copyFileSyncError) {
+      throw options.copyFileSyncError
+    }
+  })
 
   vi.doMock('node:fs', () => ({
     default: { existsSync: existsSyncMock, mkdirSync: mkdirSyncMock, copyFileSync: copyFileSyncMock }
@@ -123,29 +129,21 @@ async function loadMainModule(options: LoadMainOptions = {}) {
     createStateStore
   }))
 
-  const previousRendererUrl = process.env.ELECTRON_RENDERER_URL
-  const previousKataStateFile = process.env.KATA_STATE_FILE
-  const previousKataWorkspaceBaseDir = process.env.KATA_WORKSPACE_BASE_DIR
-  const previousKataRepoCacheBaseDir = process.env.KATA_REPO_CACHE_BASE_DIR
-  if (options.rendererUrl) {
-    process.env.ELECTRON_RENDERER_URL = options.rendererUrl
-  } else {
-    delete process.env.ELECTRON_RENDERER_URL
-  }
-  if (options.kataStateFile !== undefined) {
-    process.env.KATA_STATE_FILE = options.kataStateFile
-  } else {
-    delete process.env.KATA_STATE_FILE
-  }
-  if (options.kataWorkspaceBaseDir !== undefined) {
-    process.env.KATA_WORKSPACE_BASE_DIR = options.kataWorkspaceBaseDir
-  } else {
-    delete process.env.KATA_WORKSPACE_BASE_DIR
-  }
-  if (options.kataRepoCacheBaseDir !== undefined) {
-    process.env.KATA_REPO_CACHE_BASE_DIR = options.kataRepoCacheBaseDir
-  } else {
-    delete process.env.KATA_REPO_CACHE_BASE_DIR
+  const envVars: [string, string | undefined][] = [
+    ['ELECTRON_RENDERER_URL', options.rendererUrl],
+    ['KATA_STATE_FILE', options.kataStateFile],
+    ['KATA_WORKSPACE_BASE_DIR', options.kataWorkspaceBaseDir],
+    ['KATA_REPO_CACHE_BASE_DIR', options.kataRepoCacheBaseDir]
+  ]
+
+  const savedEnv = new Map<string, string | undefined>()
+  for (const [key, value] of envVars) {
+    savedEnv.set(key, process.env[key])
+    if (value !== undefined) {
+      process.env[key] = value
+    } else {
+      delete process.env[key]
+    }
   }
 
   const previousPlatform = process.platform
@@ -160,25 +158,13 @@ async function loadMainModule(options: LoadMainOptions = {}) {
   await new Promise((resolve) => setTimeout(resolve, 0))
 
   const restore = () => {
-    if (previousRendererUrl === undefined) {
-      delete process.env.ELECTRON_RENDERER_URL
-    } else {
-      process.env.ELECTRON_RENDERER_URL = previousRendererUrl
-    }
-    if (previousKataStateFile === undefined) {
-      delete process.env.KATA_STATE_FILE
-    } else {
-      process.env.KATA_STATE_FILE = previousKataStateFile
-    }
-    if (previousKataWorkspaceBaseDir === undefined) {
-      delete process.env.KATA_WORKSPACE_BASE_DIR
-    } else {
-      process.env.KATA_WORKSPACE_BASE_DIR = previousKataWorkspaceBaseDir
-    }
-    if (previousKataRepoCacheBaseDir === undefined) {
-      delete process.env.KATA_REPO_CACHE_BASE_DIR
-    } else {
-      process.env.KATA_REPO_CACHE_BASE_DIR = previousKataRepoCacheBaseDir
+    for (const [key] of envVars) {
+      const previous = savedEnv.get(key)
+      if (previous === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = previous
+      }
     }
     Object.defineProperty(process, 'platform', {
       value: previousPlatform,
@@ -226,7 +212,10 @@ describe('main process startup', () => {
       expect(harness.appMock.getPath).toHaveBeenCalledWith('userData')
       expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/kata-user-data/app-state.json')
       expect(harness.registerIpcHandlers).toHaveBeenCalledTimes(1)
-      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore)
+      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
+        workspaceBaseDir: undefined,
+        repoCacheBaseDir: undefined
+      })
       expect(harness.instances).toHaveLength(1)
 
       const mainWindow = harness.instances[0]
@@ -283,7 +272,10 @@ describe('main process startup', () => {
     try {
       expect(harness.appMock.getPath).toHaveBeenCalledWith('userData')
       expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/custom-user-data/app-state.json')
-      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore)
+      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
+        workspaceBaseDir: undefined,
+        repoCacheBaseDir: undefined
+      })
     } finally {
       harness.restore()
     }
@@ -314,7 +306,8 @@ describe('main process startup', () => {
 
     try {
       expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
-        workspaceBaseDir: '/tmp/custom-workspaces'
+        workspaceBaseDir: '/tmp/custom-workspaces',
+        repoCacheBaseDir: undefined
       })
     } finally {
       harness.restore()
@@ -338,6 +331,20 @@ describe('main process startup', () => {
     }
   })
 
+  it('skips migration when legacy state file does not exist', async () => {
+    const harness = await loadMainModule({
+      legacyStateExists: false,
+      newStateExists: false
+    })
+
+    try {
+      expect(harness.mkdirSyncMock).not.toHaveBeenCalled()
+      expect(harness.copyFileSyncMock).not.toHaveBeenCalled()
+    } finally {
+      harness.restore()
+    }
+  })
+
   it('skips migration when new state file already exists', async () => {
     const harness = await loadMainModule({
       legacyStateExists: true,
@@ -346,6 +353,69 @@ describe('main process startup', () => {
 
     try {
       expect(harness.copyFileSyncMock).not.toHaveBeenCalled()
+    } finally {
+      harness.restore()
+    }
+  })
+
+  it('logs migration failure and continues startup', async () => {
+    const migrationError = new Error('EACCES: permission denied')
+    const harness = await loadMainModule({
+      legacyStateExists: true,
+      newStateExists: false,
+      copyFileSyncError: migrationError
+    })
+
+    try {
+      expect(harness.copyFileSyncMock).toHaveBeenCalled()
+      expect(harness.consoleErrorSpy).toHaveBeenCalledWith(
+        'Failed to migrate legacy state file; starting with default state.',
+        migrationError
+      )
+      expect(harness.instances).toHaveLength(1)
+      expect(harness.appMock.quit).not.toHaveBeenCalled()
+    } finally {
+      harness.restore()
+    }
+  })
+
+  it('treats empty-string KATA_STATE_FILE as absent and falls back to userData path', async () => {
+    const harness = await loadMainModule({
+      kataStateFile: ''
+    })
+
+    try {
+      expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/kata-user-data/app-state.json')
+    } finally {
+      harness.restore()
+    }
+  })
+
+  it('treats whitespace-only KATA_WORKSPACE_BASE_DIR as absent', async () => {
+    const harness = await loadMainModule({
+      kataWorkspaceBaseDir: '   '
+    })
+
+    try {
+      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
+        workspaceBaseDir: undefined,
+        repoCacheBaseDir: undefined
+      })
+    } finally {
+      harness.restore()
+    }
+  })
+
+  it('passes only repoCacheBaseDir when workspaceBaseDir is absent', async () => {
+    const harness = await loadMainModule({
+      kataRepoCacheBaseDir: '/tmp/custom-repos'
+    })
+
+    try {
+      expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
+        workspaceBaseDir: undefined,
+        repoCacheBaseDir: '/tmp/custom-repos'
+      })
     } finally {
       harness.restore()
     }

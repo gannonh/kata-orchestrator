@@ -16,8 +16,7 @@ function getNonEmptyEnv(name: string): string | undefined {
     return undefined
   }
 
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : undefined
+  return value.trim() || undefined
 }
 
 function createWindow(): void {
@@ -53,26 +52,23 @@ function createWindow(): void {
 app.whenReady().then(() => {
   const stateFilePath = getNonEmptyEnv('KATA_STATE_FILE') ?? path.join(app.getPath('userData'), 'app-state.json')
 
-  // Migrate legacy state from ~/.kata/state.json if the new path doesn't exist yet
+  // Migrate legacy state from ~/.kata/state.json (copy, legacy file preserved)
   const legacyStatePath = path.join(app.getPath('home'), '.kata', 'state.json')
   if (!fs.existsSync(stateFilePath) && fs.existsSync(legacyStatePath)) {
-    const dir = path.dirname(stateFilePath)
-    fs.mkdirSync(dir, { recursive: true })
-    fs.copyFileSync(legacyStatePath, stateFilePath)
+    try {
+      const dir = path.dirname(stateFilePath)
+      fs.mkdirSync(dir, { recursive: true })
+      fs.copyFileSync(legacyStatePath, stateFilePath)
+    } catch (migrationError) {
+      console.error('Failed to migrate legacy state file; starting with default state.', migrationError)
+    }
   }
 
   const workspaceBaseDir = getNonEmptyEnv('KATA_WORKSPACE_BASE_DIR')
   const repoCacheBaseDir = getNonEmptyEnv('KATA_REPO_CACHE_BASE_DIR')
   const stateStore = createStateStore(stateFilePath)
 
-  if (workspaceBaseDir || repoCacheBaseDir) {
-    registerIpcHandlers(stateStore, {
-      ...(workspaceBaseDir ? { workspaceBaseDir } : {}),
-      ...(repoCacheBaseDir ? { repoCacheBaseDir } : {})
-    })
-  } else {
-    registerIpcHandlers(stateStore)
-  }
+  registerIpcHandlers(stateStore, { workspaceBaseDir, repoCacheBaseDir })
   createWindow()
 
   app.on('activate', () => {
