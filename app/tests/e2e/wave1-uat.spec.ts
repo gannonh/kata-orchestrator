@@ -1,4 +1,5 @@
 import { expect, test } from './fixtures/electron'
+import { ensureWorkspaceShell } from './helpers/shell-view'
 
 function assertDefined<T>(value: T | null | undefined): asserts value is T {
   expect(value).toBeDefined()
@@ -8,6 +9,8 @@ test.describe('Wave 1 desktop shell UAT @uat', () => {
   test('launches Electron and renders three visible columns @ci @quality-gate', async ({
     appWindow
   }) => {
+    await ensureWorkspaceShell(appWindow)
+
     await expect(appWindow).toHaveTitle('Kata Orchestrator')
 
     await expect(appWindow.getByTestId('left-panel')).toBeVisible()
@@ -44,6 +47,8 @@ test.describe('Wave 1 desktop shell UAT @uat', () => {
   })
 
   test('supports left sizing and center-right divider resizing @uat', async ({ appWindow }) => {
+    await ensureWorkspaceShell(appWindow)
+
     const leftPanel = appWindow.getByTestId('left-panel')
     const centerPanel = appWindow.getByTestId('center-panel')
     const rightPanel = appWindow.getByTestId('right-panel')
@@ -84,6 +89,8 @@ test.describe('Wave 1 desktop shell UAT @uat', () => {
     electronApp,
     appWindow
   }) => {
+    await ensureWorkspaceShell(appWindow)
+
     await electronApp.evaluate(({ BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0]
       window.setSize(1040, 900)
@@ -100,6 +107,8 @@ test.describe('Wave 1 desktop shell UAT @uat', () => {
   test('double-clicking center divider resets center and right to equal widths @quality-gate', async ({
     appWindow
   }) => {
+    await ensureWorkspaceShell(appWindow)
+
     const centerPanel = appWindow.getByTestId('center-panel')
     const rightPanel = appWindow.getByTestId('right-panel')
     const rightResizer = appWindow.getByTestId('right-resizer')

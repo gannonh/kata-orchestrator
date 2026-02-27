@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { _electron as electron, type ElectronApplication } from '@playwright/test'
 import { expect, test } from './fixtures/electron'
+import { ensureHomeSpacesView } from './helpers/shell-view'
 
 type SpaceListEntry = {
   id: string
@@ -57,8 +58,7 @@ async function createBranchCommit(repoDir: string, branch: string): Promise<void
 }
 
 async function openHomeView(appWindow: import('@playwright/test').Page): Promise<void> {
-  await appWindow.getByRole('button', { name: 'Open Home spaces view' }).click()
-  await expect(appWindow.getByTestId('create-space-panel')).toBeVisible()
+  await ensureHomeSpacesView(appWindow)
 }
 
 async function getSpaceByName(appWindow: import('@playwright/test').Page, name: string): Promise<SpaceListEntry> {
@@ -204,7 +204,7 @@ test.describe('managed provisioning @uat @ci', () => {
     try {
       const relaunchedWindow = await relaunched.firstWindow()
       await relaunchedWindow.waitForLoadState('load')
-      await relaunchedWindow.getByRole('button', { name: 'Open Home spaces view' }).click()
+      await ensureHomeSpacesView(relaunchedWindow)
       await expect(relaunchedWindow.getByRole('button', { name: 'Select space Persisted Space' })).toBeVisible()
     } finally {
       await relaunched.close().catch(() => {

@@ -8,22 +8,16 @@ describe('App', () => {
     cleanup()
   })
 
-  it('renders the wave 1 app shell', () => {
+  it('renders home view by default on startup', () => {
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Agents' })).toBeTruthy()
-    expect(screen.getByRole('tablist', { name: 'Center panel tabs' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: /Coordinator/ })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Spec' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Home' })).toBeTruthy()
+    expect(screen.queryByRole('tablist', { name: 'Center panel tabs' })).toBeNull()
   })
 
-  it('switches from workspace shell to home view and back, wiring activeSpaceId into the shell', () => {
+  it('switches from home view to workspace shell and back, wiring activeSpaceId into the shell', () => {
     render(<App />)
 
-    expect(screen.getByRole('tablist', { name: 'Center panel tabs' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: /Coordinator/ })).toBeTruthy()
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
     expect(screen.getByRole('heading', { name: 'Home' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
@@ -34,5 +28,8 @@ describe('App', () => {
     const shell = screen.getByTestId('app-shell-root')
     expect(shell.getAttribute('data-active-space-id')).toBeTruthy()
     expect(shell.getAttribute('data-active-space-id')).not.toBe('')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
+    expect(screen.getByRole('heading', { name: 'Home' })).toBeTruthy()
   })
 })

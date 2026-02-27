@@ -5,7 +5,7 @@ import { AppShell } from './components/layout/AppShell'
 import { ErrorBoundary } from './components/shared/ErrorBoundary'
 
 export function App() {
-  const [appView, setAppView] = useState<'workspace' | 'home'>('workspace')
+  const [appView, setAppView] = useState<'workspace' | 'home'>('home')
   // TODO(KAT-65): activeSpaceId will be used to load space data via IPC. Currently stub-only.
   // When wiring: add loading state and error handling if the space cannot be found.
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null)

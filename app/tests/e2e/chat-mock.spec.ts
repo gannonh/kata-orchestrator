@@ -1,7 +1,10 @@
 import { expect, test } from './fixtures/electron'
+import { ensureWorkspaceShell } from './helpers/shell-view'
 
 test.describe('Desktop mock chat @uat', () => {
   test('sends a message and receives a streamed assistant reply @uat @ci @quality-gate', async ({ appWindow }) => {
+    await ensureWorkspaceShell(appWindow)
+
     const prompt = 'Please summarize merged wave status.'
 
     await appWindow.getByLabel('Message input').fill(prompt)
