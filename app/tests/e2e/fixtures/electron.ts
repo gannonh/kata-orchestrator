@@ -60,8 +60,8 @@ export const test = base.extend<ElectronFixtures>({
 
     await use(electronApp)
 
-    await electronApp.close().catch(() => {
-      // Electron may have already exited from a crash during the test.
+    await electronApp.close().catch((error) => {
+      console.warn('[fixture teardown] electronApp.close() failed:', error)
     })
   },
   appWindow: async ({ electronApp }, use) => {

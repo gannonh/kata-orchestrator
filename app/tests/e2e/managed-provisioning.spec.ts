@@ -57,10 +57,6 @@ async function createBranchCommit(repoDir: string, branch: string): Promise<void
   runGit(repoDir, ['checkout', 'main'])
 }
 
-async function openHomeView(appWindow: import('@playwright/test').Page): Promise<void> {
-  await ensureHomeSpacesView(appWindow)
-}
-
 async function getSpaceByName(appWindow: import('@playwright/test').Page, name: string): Promise<SpaceListEntry> {
   const allSpaces = await appWindow.evaluate(async () => {
     const api = (window as { kata?: { spaceList?: () => Promise<unknown> } }).kata
@@ -80,7 +76,7 @@ test.describe('managed provisioning @uat @ci', () => {
     const localSourcePath = path.join(managedTestRootDir, 'fixtures', 'copy-local-source')
     await createSeedRepo(localSourcePath)
 
-    await openHomeView(appWindow)
+    await ensureHomeSpacesView(appWindow)
 
     await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed Copy Local Space')
     await appWindow.getByRole('textbox', { name: 'Local repo path' }).fill(localSourcePath)
@@ -110,7 +106,7 @@ test.describe('managed provisioning @uat @ci', () => {
     await fsPromises.mkdir(path.dirname(bareRemotePath), { recursive: true })
     runGit(path.dirname(bareRemotePath), ['clone', '--bare', upstreamRepoPath, bareRemotePath])
 
-    await openHomeView(appWindow)
+    await ensureHomeSpacesView(appWindow)
 
     await appWindow.getByRole('button', { name: 'Use clone github provisioning' }).click()
     await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed Clone Space')
@@ -130,7 +126,7 @@ test.describe('managed provisioning @uat @ci', () => {
     const newRepoParentDir = path.join(managedTestRootDir, 'fixtures', 'new-repo-parent')
     await fsPromises.mkdir(newRepoParentDir, { recursive: true })
 
-    await openHomeView(appWindow)
+    await ensureHomeSpacesView(appWindow)
 
     await appWindow.getByRole('button', { name: 'Use new repo provisioning' }).click()
     await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed New Repo Space')
@@ -152,7 +148,7 @@ test.describe('managed provisioning @uat @ci', () => {
   test('creates managed space via new-repo when parent directory input is blank', async ({ appWindow }) => {
     const sourceFolderName = `managed-new-project-blank-parent-${Date.now()}`
 
-    await openHomeView(appWindow)
+    await ensureHomeSpacesView(appWindow)
 
     await appWindow.getByRole('button', { name: 'Use new repo provisioning' }).click()
     await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed New Repo Blank Parent')
@@ -178,7 +174,7 @@ test.describe('managed provisioning @uat @ci', () => {
     const localSourcePath = path.join(managedTestRootDir, 'fixtures', 'persist-source')
     await createSeedRepo(localSourcePath)
 
-    await openHomeView(appWindow)
+    await ensureHomeSpacesView(appWindow)
 
     await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Persisted Space')
     await appWindow.getByRole('textbox', { name: 'Local repo path' }).fill(localSourcePath)
@@ -207,8 +203,8 @@ test.describe('managed provisioning @uat @ci', () => {
       await ensureHomeSpacesView(relaunchedWindow)
       await expect(relaunchedWindow.getByRole('button', { name: 'Select space Persisted Space' })).toBeVisible()
     } finally {
-      await relaunched.close().catch(() => {
-        // Relaunched app may already be closed due to earlier failure.
+      await relaunched.close().catch((error) => {
+        console.warn('[fixture teardown] relaunched.close() failed:', error)
       })
     }
   })
