@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { _electron as electron, type ElectronApplication } from '@playwright/test'
 import { expect, test } from './fixtures/electron'
+import { writeKat101Evidence } from './helpers/evidence'
 import { ensureHomeSpacesView } from './helpers/shell-view'
 
 type SpaceListEntry = {
@@ -14,6 +15,19 @@ type SpaceListEntry = {
   rootPath: string
   branch: string
   workspaceMode?: string
+}
+
+type PersistedState = {
+  spaces: Record<
+    string,
+    {
+      id: string
+      name: string
+      rootPath: string
+      branch: string
+      workspaceMode?: string
+    }
+  >
 }
 
 const __filename = fileURLToPath(import.meta.url)
@@ -66,6 +80,20 @@ async function getSpaceByName(appWindow: import('@playwright/test').Page, name: 
   const matched = ((allSpaces as SpaceListEntry[] | undefined) ?? []).find((space) => space.name === name)
   expect(matched).toBeDefined()
   return matched as SpaceListEntry
+}
+
+async function listSpaces(appWindow: import('@playwright/test').Page): Promise<SpaceListEntry[]> {
+  const allSpaces = await appWindow.evaluate(async () => {
+    const api = (window as { kata?: { spaceList?: () => Promise<unknown> } }).kata
+    return await api?.spaceList?.()
+  })
+
+  return (allSpaces as SpaceListEntry[] | undefined) ?? []
+}
+
+async function readPersistedState(stateFilePath: string): Promise<PersistedState> {
+  const raw = await fsPromises.readFile(stateFilePath, 'utf8')
+  return JSON.parse(raw) as PersistedState
 }
 
 test.describe('managed provisioning @uat @ci', () => {
@@ -163,7 +191,7 @@ test.describe('managed provisioning @uat @ci', () => {
     expect(runGit(createdSpace.rootPath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('main')
   })
 
-  test('persists spaces across app restart', async ({
+  test('persists spaces across app restart @quality-gate', async ({
     appWindow,
     electronApp,
     managedTestRootDir,
@@ -172,14 +200,24 @@ test.describe('managed provisioning @uat @ci', () => {
     managedStateFilePath
   }) => {
     const localSourcePath = path.join(managedTestRootDir, 'fixtures', 'persist-source')
+    const persistedSpaceName = `Persisted Space ${Date.now()}`
     await createSeedRepo(localSourcePath)
 
     await ensureHomeSpacesView(appWindow)
 
-    await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Persisted Space')
+    await appWindow.getByRole('textbox', { name: 'Space name' }).fill(persistedSpaceName)
     await appWindow.getByRole('textbox', { name: 'Local repo path' }).fill(localSourcePath)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
-    await expect(appWindow.getByRole('button', { name: 'Select space Persisted Space' })).toBeVisible()
+    await expect(appWindow.getByRole('button', { name: `Select space ${persistedSpaceName}` })).toBeVisible()
+
+    const preRelaunchSpaces = await listSpaces(appWindow)
+    await expect.poll(() => fs.existsSync(managedStateFilePath)).toBe(true)
+    const persistedState = await readPersistedState(managedStateFilePath)
+    const persistedSpace = Object.values(persistedState.spaces).find((space) => space.name === persistedSpaceName)
+    expect(persistedSpace).toBeDefined()
+    expect(persistedSpace?.workspaceMode).toBe('managed')
+    expect(persistedSpace?.branch).toBe('main')
+    expect(persistedSpace?.rootPath.endsWith('/repo')).toBe(true)
 
     await electronApp.close()
 
@@ -201,11 +239,124 @@ test.describe('managed provisioning @uat @ci', () => {
       const relaunchedWindow = await relaunched.firstWindow()
       await relaunchedWindow.waitForLoadState('load')
       await ensureHomeSpacesView(relaunchedWindow)
-      await expect(relaunchedWindow.getByRole('button', { name: 'Select space Persisted Space' })).toBeVisible()
+      await expect(
+        relaunchedWindow.getByRole('button', { name: `Select space ${persistedSpaceName}` })
+      ).toBeVisible()
+      const postRelaunchSpaces = await listSpaces(relaunchedWindow)
+      await writeKat101Evidence({
+        testName: 'persists-spaces-across-app-restart',
+        stateFilePath: managedStateFilePath,
+        spaceName: persistedSpaceName,
+        preRelaunchCount: preRelaunchSpaces.length,
+        postRelaunchCount: postRelaunchSpaces.length,
+        persistedSpace
+      })
     } finally {
       await relaunched.close().catch((error) => {
         console.warn('[fixture teardown] relaunched.close() failed:', error)
       })
+    }
+  })
+
+  test('writes state to default userData/app-state.json when KATA_STATE_FILE is absent @quality-gate @ci', async ({
+    managedTestRootDir,
+    managedWorkspaceBaseDir,
+    managedRepoCacheBaseDir
+  }) => {
+    const localSourcePath = path.join(managedTestRootDir, 'fixtures', 'default-state-path-source')
+    const defaultPathSpaceName = `Default State Path Space ${Date.now()}`
+    await createSeedRepo(localSourcePath)
+
+    const launchArgs = process.env.CI
+      ? ['--no-sandbox', '--disable-setuid-sandbox', mainEntry]
+      : [mainEntry]
+
+    const appWithoutStateOverride: ElectronApplication = await electron.launch({
+      args: launchArgs,
+      env: {
+        ...process.env,
+        HOME: managedTestRootDir,
+        KATA_STATE_FILE: '',
+        KATA_WORKSPACE_BASE_DIR: managedWorkspaceBaseDir,
+        KATA_REPO_CACHE_BASE_DIR: managedRepoCacheBaseDir
+      }
+    })
+
+    let appWithoutStateOverrideClosed = false
+    let defaultStatePath = ''
+    let preRelaunchCount = 0
+    let persistedSpace:
+      | {
+          id: string
+          name: string
+          rootPath: string
+          branch: string
+          workspaceMode?: string
+        }
+      | undefined
+
+    try {
+      const appWindow = await appWithoutStateOverride.firstWindow()
+      await appWindow.waitForLoadState('load')
+      await ensureHomeSpacesView(appWindow)
+
+      await appWindow.getByRole('textbox', { name: 'Space name' }).fill(defaultPathSpaceName)
+      await appWindow.getByRole('textbox', { name: 'Local repo path' }).fill(localSourcePath)
+      await appWindow.getByRole('button', { name: 'Create space' }).click()
+      await expect(appWindow.getByRole('button', { name: `Select space ${defaultPathSpaceName}` })).toBeVisible()
+
+      const userDataPath = await appWithoutStateOverride.evaluate(async ({ app }) => app.getPath('userData'))
+      defaultStatePath = path.join(userDataPath, 'app-state.json')
+      preRelaunchCount = (await listSpaces(appWindow)).length
+      await appWithoutStateOverride.close()
+      appWithoutStateOverrideClosed = true
+
+      await expect.poll(() => fs.existsSync(defaultStatePath)).toBe(true)
+      const persistedState = await readPersistedState(defaultStatePath)
+      persistedSpace = Object.values(persistedState.spaces).find((space) => space.name === defaultPathSpaceName)
+      expect(persistedSpace).toBeDefined()
+      expect(persistedSpace?.workspaceMode).toBe('managed')
+      expect(persistedSpace?.branch).toBe('main')
+      expect(persistedSpace?.rootPath.endsWith('/repo')).toBe(true)
+
+      const relaunched: ElectronApplication = await electron.launch({
+        args: launchArgs,
+        env: {
+          ...process.env,
+          HOME: managedTestRootDir,
+          KATA_STATE_FILE: '',
+          KATA_WORKSPACE_BASE_DIR: managedWorkspaceBaseDir,
+          KATA_REPO_CACHE_BASE_DIR: managedRepoCacheBaseDir
+        }
+      })
+
+      try {
+        const relaunchedWindow = await relaunched.firstWindow()
+        await relaunchedWindow.waitForLoadState('load')
+        await ensureHomeSpacesView(relaunchedWindow)
+        await expect(
+          relaunchedWindow.getByRole('button', { name: `Select space ${defaultPathSpaceName}` })
+        ).toBeVisible()
+        const postRelaunchSpaces = await listSpaces(relaunchedWindow)
+        await writeKat101Evidence({
+          testName: 'writes-default-userdata-state-path',
+          stateFilePath: defaultStatePath,
+          spaceName: defaultPathSpaceName,
+          preRelaunchCount,
+          postRelaunchCount: postRelaunchSpaces.length,
+          persistedSpace
+        })
+      } finally {
+        await relaunched.close().catch((error) => {
+          console.warn('[fixture teardown] relaunched.close() failed:', error)
+        })
+      }
+    } finally {
+      if (!appWithoutStateOverrideClosed) {
+        await appWithoutStateOverride.close().catch((error) => {
+          console.warn('[fixture teardown] appWithoutStateOverride.close() failed:', error)
+        })
+      }
     }
   })
 })
