@@ -42,9 +42,26 @@ export const test = base.extend<ElectronFixtures>({
   },
   managedStateFilePath: async ({ managedTestRootDir }, use) => {
     const stateFilePath = path.join(managedTestRootDir, 'state.json')
+    await fs.writeFile(
+      stateFilePath,
+      JSON.stringify(
+        {
+          spaces: {},
+          sessions: {},
+          activeSpaceId: null,
+          activeSessionId: null
+        },
+        null,
+        2
+      ),
+      'utf8'
+    )
     await use(stateFilePath)
   },
-  electronApp: async ({ managedWorkspaceBaseDir, managedRepoCacheBaseDir, managedStateFilePath }, use) => {
+  electronApp: async (
+    { managedTestRootDir, managedWorkspaceBaseDir, managedRepoCacheBaseDir, managedStateFilePath },
+    use
+  ) => {
     const launchArgs = process.env.CI
       ? ['--no-sandbox', '--disable-setuid-sandbox', mainEntry]
       : [mainEntry]
@@ -52,6 +69,7 @@ export const test = base.extend<ElectronFixtures>({
       args: launchArgs,
       env: {
         ...process.env,
+        HOME: managedTestRootDir,
         KATA_WORKSPACE_BASE_DIR: managedWorkspaceBaseDir,
         KATA_REPO_CACHE_BASE_DIR: managedRepoCacheBaseDir,
         KATA_STATE_FILE: managedStateFilePath
