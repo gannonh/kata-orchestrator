@@ -19,3 +19,4 @@ __pycache__/
 app/.env*
 !app/.env.example
 .env
+test-results/.last-run.json
