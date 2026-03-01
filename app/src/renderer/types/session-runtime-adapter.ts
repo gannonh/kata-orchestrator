@@ -13,10 +13,8 @@ export type MessageAppendedEvent = {
 
 export type SessionRuntimeEvent = RunStateChangedEvent | MessageAppendedEvent
 
-type SessionRuntimeAdapter = {
+export type SessionRuntimeAdapter = {
   subscribe: (onEvent: (event: SessionRuntimeEvent) => void) => () => void
   submitPrompt: (prompt: string) => Promise<void> | void
   retry: () => Promise<void> | void
 }
-
-export default SessionRuntimeAdapter
