@@ -18,22 +18,38 @@ export function sessionConversationReducer(
 ): SessionConversationState {
   switch (event.type) {
     case 'SUBMIT_PROMPT':
+      if (state.runState !== 'empty' && state.runState !== 'idle') {
+        return state
+      }
+
       return {
         runState: 'pending',
         messages: [...state.messages, createMessage(state, 'user', event.prompt)]
       }
     case 'RUN_SUCCEEDED':
+      if (state.runState !== 'pending') {
+        return state
+      }
+
       return {
         runState: 'idle',
         messages: [...state.messages, createMessage(state, 'agent', event.response)]
       }
     case 'RUN_FAILED':
+      if (state.runState !== 'pending') {
+        return state
+      }
+
       return {
         ...state,
         runState: 'error',
         errorMessage: event.error
       }
     case 'RETRY_FROM_ERROR':
+      if (state.runState !== 'error') {
+        return state
+      }
+
       return {
         ...state,
         runState: 'pending',
