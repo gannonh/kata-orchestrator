@@ -159,19 +159,14 @@ describe('HomeSpacesScreen', () => {
   })
 
   it('submits external mode payload without name', async () => {
-    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
-    const gitListBranches = vi.fn().mockResolvedValue(['main'])
     const createdRecord = makeSpaceRecord({ id: 'space-external' })
     const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
-    window.kata = { ...window.kata, spaceCreate, dialogOpenDirectory, gitListBranches }
+    window.kata = { ...window.kata, spaceCreate }
 
     render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Use my existing folder/worktree (developer-managed)' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
-    await waitFor(() => {
-      expect(dialogOpenDirectory).toHaveBeenCalledTimes(1)
-    })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Workspace path' }), { target: { value: '/Users/me/dev/repo' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
     await waitFor(() => {
@@ -182,6 +177,7 @@ describe('HomeSpacesScreen', () => {
     expect(payload).not.toHaveProperty('name')
     expect(payload).not.toHaveProperty('spaceNameOverride')
     expect(payload.workspaceMode).toBe('external')
+    expect(payload.rootPath).toBe('/Users/me/dev/repo')
   })
 
   it('shows create failure alert when IPC create rejects', async () => {
