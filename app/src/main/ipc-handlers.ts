@@ -21,6 +21,12 @@ import {
   WorkspaceProvisioningError,
   provisionManagedWorkspace
 } from './workspace-provisioning'
+import { createRun, updateRunStatus, appendRunMessage, getRunsForSession } from './orchestrator'
+import { createAgentRunner } from './agent-runner'
+import type { AgentRunner } from './agent-runner'
+import type { AuthStorage } from './auth-storage'
+import type { CredentialResolver } from './credential-resolver'
+import type { SessionRuntimeEvent } from '../renderer/types/session-runtime-adapter'
 
 import type {
   AppState,
@@ -42,6 +48,21 @@ const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
 const GIT_LIST_BRANCHES_CHANNEL = 'git:listBranches'
 const GITHUB_LIST_REPOS_CHANNEL = 'github:listRepos'
 const GITHUB_LIST_BRANCHES_CHANNEL = 'github:listBranches'
+const RUN_SUBMIT_CHANNEL = 'run:submit'
+const RUN_ABORT_CHANNEL = 'run:abort'
+const RUN_LIST_CHANNEL = 'run:list'
+const RUN_EVENT_CHANNEL = 'run:event'
+const AUTH_STATUS_CHANNEL = 'auth:status'
+const AUTH_LOGIN_CHANNEL = 'auth:login'
+const AUTH_LOGOUT_CHANNEL = 'auth:logout'
+const MODEL_LIST_CHANNEL = 'model:list'
+
+const SUPPORTED_MODELS = [
+  { provider: 'anthropic', modelId: 'claude-sonnet-4-6-20250514', name: 'Claude Sonnet 4.6' },
+  { provider: 'anthropic', modelId: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
+  { provider: 'openai', modelId: 'gpt-4.1-2025-04-14', name: 'GPT-4.1' },
+  { provider: 'openai', modelId: 'gpt-4.1-mini-2025-04-14', name: 'GPT-4.1 Mini' }
+]
 
 let inMemoryState = createDefaultAppState()
 
@@ -238,6 +259,8 @@ function deriveRepoLabel(input: ParsedCreateSpaceInput): string {
 export type RegisterIpcOptions = {
   workspaceBaseDir?: string
   repoCacheBaseDir?: string
+  authStorage?: AuthStorage
+  credentialResolver?: CredentialResolver
 }
 
 export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOptions): void {
@@ -417,5 +440,141 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
     } catch {
       return { error: 'Could not fetch branches from GitHub.' }
     }
+  })
+
+  // Run/Auth/Model handlers
+
+  const activeRunners = new Map<string, AgentRunner>()
+
+  ipcMain.removeHandler(RUN_SUBMIT_CHANNEL)
+  ipcMain.handle(RUN_SUBMIT_CHANNEL, async (event, input: unknown) => {
+    if (!isObjectRecord(input)) throw new Error('run:submit input must be an object')
+    const { sessionId, prompt, model, provider } = input
+    if (
+      typeof sessionId !== 'string' ||
+      typeof prompt !== 'string' ||
+      typeof model !== 'string' ||
+      typeof provider !== 'string'
+    ) {
+      throw new Error('run:submit requires sessionId, prompt, model, provider strings')
+    }
+
+    const credResolver = options?.credentialResolver
+    if (!credResolver) throw new Error('No credential resolver configured')
+
+    const apiKey = await credResolver.getApiKey(provider)
+    if (!apiKey) throw new Error(`No credentials available for provider: ${provider}`)
+
+    const run = createRun(stateStore, { sessionId, prompt, model, provider })
+
+    const runner = createAgentRunner({
+      model,
+      provider,
+      apiKey,
+      systemPrompt: 'You are a helpful AI assistant.',
+      onEvent: (runtimeEvent: SessionRuntimeEvent) => {
+        try {
+          event.sender.send(RUN_EVENT_CHANNEL, runtimeEvent)
+        } catch {
+          /* sender may be destroyed */
+        }
+
+        if (runtimeEvent.type === 'message_appended') {
+          const msg = runtimeEvent.message
+          appendRunMessage(stateStore, run.id, {
+            id: msg.id,
+            role: msg.role as 'user' | 'agent',
+            content: msg.content,
+            createdAt: msg.createdAt
+          })
+        }
+        if (runtimeEvent.type === 'run_state_changed') {
+          if (runtimeEvent.runState === 'pending') {
+            updateRunStatus(stateStore, run.id, 'running')
+          } else if (runtimeEvent.runState === 'idle') {
+            updateRunStatus(stateStore, run.id, 'completed')
+            activeRunners.delete(run.id)
+          } else if (runtimeEvent.runState === 'error') {
+            updateRunStatus(stateStore, run.id, 'failed', runtimeEvent.errorMessage)
+            activeRunners.delete(run.id)
+          }
+        }
+      }
+    })
+
+    activeRunners.set(run.id, runner)
+    runner.execute(prompt).catch(() => {
+      activeRunners.delete(run.id)
+    })
+
+    return { runId: run.id }
+  })
+
+  ipcMain.removeHandler(RUN_ABORT_CHANNEL)
+  ipcMain.handle(RUN_ABORT_CHANNEL, async (_event, input: unknown) => {
+    if (!isObjectRecord(input) || typeof input.runId !== 'string') {
+      throw new Error('run:abort requires a string runId')
+    }
+    const runner = activeRunners.get(input.runId)
+    if (runner) {
+      runner.abort()
+      activeRunners.delete(input.runId)
+      return true
+    }
+    return false
+  })
+
+  ipcMain.removeHandler(RUN_LIST_CHANNEL)
+  ipcMain.handle(RUN_LIST_CHANNEL, async (_event, input: unknown) => {
+    if (!isObjectRecord(input) || typeof input.sessionId !== 'string') {
+      throw new Error('run:list requires a string sessionId')
+    }
+    return getRunsForSession(stateStore, input.sessionId)
+  })
+
+  ipcMain.removeHandler(AUTH_STATUS_CHANNEL)
+  ipcMain.handle(AUTH_STATUS_CHANNEL, async (_event, input: unknown) => {
+    if (!isObjectRecord(input) || typeof input.provider !== 'string') {
+      throw new Error('auth:status requires a string provider')
+    }
+    const credResolver = options?.credentialResolver
+    if (!credResolver) return 'none'
+    return credResolver.getAuthStatus(input.provider)
+  })
+
+  ipcMain.removeHandler(AUTH_LOGIN_CHANNEL)
+  ipcMain.handle(AUTH_LOGIN_CHANNEL, async (_event, input: unknown) => {
+    if (!isObjectRecord(input) || typeof input.provider !== 'string') {
+      throw new Error('auth:login requires a string provider')
+    }
+    // OAuth flow will be implemented in a later task
+    return false
+  })
+
+  ipcMain.removeHandler(AUTH_LOGOUT_CHANNEL)
+  ipcMain.handle(AUTH_LOGOUT_CHANNEL, async (_event, input: unknown) => {
+    if (!isObjectRecord(input) || typeof input.provider !== 'string') {
+      throw new Error('auth:logout requires a string provider')
+    }
+    const authStore = options?.authStorage
+    if (!authStore) return false
+    await authStore.remove(input.provider)
+    return true
+  })
+
+  ipcMain.removeHandler(MODEL_LIST_CHANNEL)
+  ipcMain.handle(MODEL_LIST_CHANNEL, async () => {
+    const credResolver = options?.credentialResolver
+    if (!credResolver) {
+      return SUPPORTED_MODELS.map((m) => ({ ...m, authStatus: 'none' as const }))
+    }
+
+    const results = await Promise.all(
+      SUPPORTED_MODELS.map(async (m) => ({
+        ...m,
+        authStatus: await credResolver.getAuthStatus(m.provider)
+      }))
+    )
+    return results
   })
 }

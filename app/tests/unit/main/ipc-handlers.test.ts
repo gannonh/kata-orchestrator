@@ -66,6 +66,24 @@ vi.mock('../../../src/main/workspace-provisioning', async () => {
   }
 })
 
+const mockCreateRun = vi.fn()
+const mockUpdateRunStatus = vi.fn()
+const mockAppendRunMessage = vi.fn()
+const mockGetRunsForSession = vi.fn()
+
+vi.mock('../../../src/main/orchestrator', () => ({
+  createRun: (...args: unknown[]) => mockCreateRun(...args),
+  updateRunStatus: (...args: unknown[]) => mockUpdateRunStatus(...args),
+  appendRunMessage: (...args: unknown[]) => mockAppendRunMessage(...args),
+  getRunsForSession: (...args: unknown[]) => mockGetRunsForSession(...args)
+}))
+
+const mockCreateAgentRunner = vi.fn()
+
+vi.mock('../../../src/main/agent-runner', () => ({
+  createAgentRunner: (...args: unknown[]) => mockCreateAgentRunner(...args)
+}))
+
 import { WorkspaceProvisioningError } from '../../../src/main/workspace-provisioning'
 import { registerIpcHandlers } from '../../../src/main/ipc-handlers'
 
@@ -710,6 +728,261 @@ describe('registerIpcHandlers', () => {
       const handler = getHandlersByChannel().get('github:listBranches')!
       await expect(handler(null, { owner: 'org' })).resolves.toEqual({ error: 'input must have string owner and repo fields' })
       await expect(handler(null, null)).resolves.toEqual({ error: 'input must have string owner and repo fields' })
+    })
+  })
+
+  describe('run:submit', () => {
+    const mockCredentialResolver = {
+      getApiKey: vi.fn(),
+      getAuthStatus: vi.fn()
+    }
+    const mockAuthStorage = {
+      get: vi.fn(),
+      set: vi.fn(),
+      remove: vi.fn()
+    }
+
+    beforeEach(() => {
+      mockCreateRun.mockReset()
+      mockCreateAgentRunner.mockReset()
+      mockCredentialResolver.getApiKey.mockReset()
+      mockCredentialResolver.getAuthStatus.mockReset()
+    })
+
+    it('creates a run and starts an agent runner', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({ id: 'run-1', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'claude-sonnet-4-6-20250514', provider: 'anthropic', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore()
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      const mockEvent = { sender: { send: vi.fn() } }
+      const result = await handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'claude-sonnet-4-6-20250514', provider: 'anthropic' })
+
+      expect(result).toEqual({ runId: 'run-1' })
+      expect(mockCreateRun).toHaveBeenCalledWith(store, { sessionId: 'sess-1', prompt: 'hello', model: 'claude-sonnet-4-6-20250514', provider: 'anthropic' })
+      expect(mockCreateAgentRunner).toHaveBeenCalledWith(expect.objectContaining({
+        model: 'claude-sonnet-4-6-20250514',
+        provider: 'anthropic',
+        apiKey: 'sk-test',
+        systemPrompt: expect.any(String)
+      }))
+      expect(mockRunner.execute).toHaveBeenCalledWith('hello')
+    })
+
+    it('returns error when no credentials available', async () => {
+      mockCredentialResolver.getApiKey.mockResolvedValue(undefined)
+
+      registerIpcHandlers(createMockStore(), { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+      const mockEvent = { sender: { send: vi.fn() } }
+
+      await expect(handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'gpt-4.1-2025-04-14', provider: 'openai' }))
+        .rejects.toThrow('No credentials available for provider: openai')
+    })
+
+    it('rejects when no credential resolver is configured', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('run:submit')!
+      const mockEvent = { sender: { send: vi.fn() } }
+
+      await expect(handler(mockEvent, { sessionId: 'sess-1', prompt: 'hi', model: 'm', provider: 'p' }))
+        .rejects.toThrow('No credential resolver configured')
+    })
+
+    it('rejects malformed input', async () => {
+      registerIpcHandlers(createMockStore(), { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+      const mockEvent = { sender: { send: vi.fn() } }
+
+      await expect(handler(mockEvent, null)).rejects.toThrow('run:submit input must be an object')
+      await expect(handler(mockEvent, { sessionId: 123 })).rejects.toThrow('run:submit requires sessionId, prompt, model, provider strings')
+    })
+  })
+
+  describe('run:list', () => {
+    beforeEach(() => {
+      mockGetRunsForSession.mockReset()
+    })
+
+    it('returns runs for a session', async () => {
+      const runs = [
+        { id: 'run-1', sessionId: 'sess-1', prompt: 'hi', status: 'completed', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] }
+      ]
+      mockGetRunsForSession.mockReturnValue(runs)
+
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('run:list')!
+      const result = await handler(null, { sessionId: 'sess-1' })
+
+      expect(result).toEqual(runs)
+      expect(mockGetRunsForSession).toHaveBeenCalledWith(expect.anything(), 'sess-1')
+    })
+
+    it('rejects malformed input', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('run:list')!
+      await expect(handler(null, null)).rejects.toThrow('run:list requires a string sessionId')
+      await expect(handler(null, { sessionId: 123 })).rejects.toThrow('run:list requires a string sessionId')
+    })
+  })
+
+  describe('run:abort', () => {
+    const mockCredentialResolver = {
+      getApiKey: vi.fn(),
+      getAuthStatus: vi.fn()
+    }
+
+    beforeEach(() => {
+      mockCreateRun.mockReset()
+      mockCreateAgentRunner.mockReset()
+      mockCredentialResolver.getApiKey.mockReset()
+    })
+
+    it('aborts an active runner', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({ id: 'run-abort-1', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore()
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handlers = getHandlersByChannel()
+
+      // Submit a run first to register the runner
+      const submitHandler = handlers.get('run:submit')!
+      const mockEvent = { sender: { send: vi.fn() } }
+      await submitHandler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      // Now abort it
+      const abortHandler = handlers.get('run:abort')!
+      const result = await abortHandler(null, { runId: 'run-abort-1' })
+
+      expect(result).toBe(true)
+      expect(mockRunner.abort).toHaveBeenCalled()
+    })
+
+    it('returns false for unknown runId', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('run:abort')!
+      const result = await handler(null, { runId: 'nonexistent' })
+      expect(result).toBe(false)
+    })
+
+    it('rejects malformed input', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('run:abort')!
+      await expect(handler(null, null)).rejects.toThrow('run:abort requires a string runId')
+    })
+  })
+
+  describe('auth:status', () => {
+    const mockCredentialResolver = {
+      getApiKey: vi.fn(),
+      getAuthStatus: vi.fn()
+    }
+
+    beforeEach(() => {
+      mockCredentialResolver.getAuthStatus.mockReset()
+    })
+
+    it('returns credential status for a provider', async () => {
+      mockCredentialResolver.getAuthStatus.mockResolvedValue('api_key')
+
+      registerIpcHandlers(createMockStore(), { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('auth:status')!
+      const result = await handler(null, { provider: 'anthropic' })
+
+      expect(result).toBe('api_key')
+      expect(mockCredentialResolver.getAuthStatus).toHaveBeenCalledWith('anthropic')
+    })
+
+    it('returns none when no credential resolver configured', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('auth:status')!
+      const result = await handler(null, { provider: 'anthropic' })
+      expect(result).toBe('none')
+    })
+
+    it('rejects malformed input', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('auth:status')!
+      await expect(handler(null, null)).rejects.toThrow('auth:status requires a string provider')
+    })
+  })
+
+  describe('auth:logout', () => {
+    const mockAuthStorage = {
+      get: vi.fn(),
+      set: vi.fn(),
+      remove: vi.fn()
+    }
+
+    beforeEach(() => {
+      mockAuthStorage.remove.mockReset()
+    })
+
+    it('removes credentials for a provider', async () => {
+      mockAuthStorage.remove.mockResolvedValue(undefined)
+
+      registerIpcHandlers(createMockStore(), { authStorage: mockAuthStorage })
+      const handler = getHandlersByChannel().get('auth:logout')!
+      const result = await handler(null, { provider: 'anthropic' })
+
+      expect(result).toBe(true)
+      expect(mockAuthStorage.remove).toHaveBeenCalledWith('anthropic')
+    })
+
+    it('returns false when no auth storage configured', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('auth:logout')!
+      const result = await handler(null, { provider: 'anthropic' })
+      expect(result).toBe(false)
+    })
+
+    it('rejects malformed input', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('auth:logout')!
+      await expect(handler(null, null)).rejects.toThrow('auth:logout requires a string provider')
+    })
+  })
+
+  describe('model:list', () => {
+    const mockCredentialResolver = {
+      getApiKey: vi.fn(),
+      getAuthStatus: vi.fn()
+    }
+
+    beforeEach(() => {
+      mockCredentialResolver.getAuthStatus.mockReset()
+    })
+
+    it('returns supported models with auth status', async () => {
+      mockCredentialResolver.getAuthStatus
+        .mockResolvedValueOnce('api_key')  // anthropic (first model)
+        .mockResolvedValueOnce('api_key')  // anthropic (second model)
+        .mockResolvedValueOnce('none')     // openai (first model)
+        .mockResolvedValueOnce('none')     // openai (second model)
+
+      registerIpcHandlers(createMockStore(), { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('model:list')!
+      const result = await handler(null) as Array<{ provider: string; modelId: string; name: string; authStatus: string }>
+
+      expect(result).toHaveLength(4)
+      expect(result[0]).toMatchObject({ provider: 'anthropic', authStatus: 'api_key' })
+      expect(result[2]).toMatchObject({ provider: 'openai', authStatus: 'none' })
+    })
+
+    it('returns all models with none status when no credential resolver', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('model:list')!
+      const result = await handler(null) as Array<{ authStatus: string }>
+
+      expect(result.length).toBeGreaterThan(0)
+      expect(result.every(m => m.authStatus === 'none')).toBe(true)
     })
   })
 })
