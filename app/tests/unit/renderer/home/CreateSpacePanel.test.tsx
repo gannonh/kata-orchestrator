@@ -9,6 +9,7 @@ function createBaseProps() {
     provisioningMethod: 'copy-local' as const,
     // RepoPathPicker props (for copy-local and external)
     repoPath: '/Users/me/dev/kata-cloud',
+    onRepoPathChange: vi.fn(),
     branches: ['main', 'develop'] as string[],
     selectedBranch: 'main',
     onBrowse: vi.fn(),

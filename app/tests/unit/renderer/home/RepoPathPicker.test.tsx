@@ -6,6 +6,7 @@ import { RepoPathPicker } from '../../../../src/renderer/components/home/RepoPat
 function baseProps() {
   return {
     path: '',
+    onPathChange: vi.fn(),
     onBrowse: vi.fn(),
     branches: [] as string[],
     selectedBranch: '',
@@ -21,12 +22,19 @@ describe('RepoPathPicker', () => {
   it('renders browse button and empty path placeholder', () => {
     render(<RepoPathPicker {...baseProps()} />)
     expect(screen.getByRole('button', { name: 'Browse' })).toBeTruthy()
-    expect(screen.getByText(/select a directory/i)).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Local repo path' })).toBeTruthy()
   })
 
-  it('shows selected path as read-only text', () => {
+  it('shows selected path in text input', () => {
     render(<RepoPathPicker {...baseProps()} path="/Users/me/dev/repo" />)
-    expect(screen.getByText('/Users/me/dev/repo')).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Local repo path' })).toHaveProperty('value', '/Users/me/dev/repo')
+  })
+
+  it('calls onPathChange when text input value changes', () => {
+    const props = baseProps()
+    render(<RepoPathPicker {...props} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Local repo path' }), { target: { value: '/new/path' } })
+    expect(props.onPathChange).toHaveBeenCalledWith('/new/path')
   })
 
   it('calls onBrowse when browse button is clicked', () => {

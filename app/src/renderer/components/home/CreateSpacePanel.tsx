@@ -11,6 +11,7 @@ type CreateSpacePanelProps = {
   provisioningMethod: ProvisioningMethod
   // RepoPathPicker props (for copy-local and external)
   repoPath: string
+  onRepoPathChange: (value: string) => void
   branches: string[]
   selectedBranch: string
   onBrowse: () => void
@@ -54,6 +55,7 @@ export function CreateSpacePanel({
   workspaceMode,
   provisioningMethod,
   repoPath,
+  onRepoPathChange,
   branches,
   selectedBranch,
   onBrowse,
@@ -162,6 +164,7 @@ export function CreateSpacePanel({
             {provisioningMethod === 'copy-local' && (
               <RepoPathPicker
                 path={repoPath}
+                onPathChange={onRepoPathChange}
                 onBrowse={onBrowse}
                 branches={branches}
                 selectedBranch={selectedBranch}
@@ -226,6 +229,7 @@ export function CreateSpacePanel({
           <>
             <RepoPathPicker
               path={repoPath}
+              onPathChange={onRepoPathChange}
               onBrowse={onBrowse}
               branches={branches}
               selectedBranch={selectedBranch}

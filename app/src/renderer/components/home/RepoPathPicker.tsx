@@ -1,5 +1,6 @@
 type RepoPathPickerProps = {
   path: string
+  onPathChange: (value: string) => void
   onBrowse: () => void
   branches: string[]
   selectedBranch: string
@@ -10,6 +11,7 @@ type RepoPathPickerProps = {
 
 export function RepoPathPicker({
   path,
+  onPathChange,
   onBrowse,
   branches,
   selectedBranch,
@@ -20,9 +22,14 @@ export function RepoPathPicker({
   return (
     <div className="mt-3 space-y-2">
       <div className="flex items-center gap-2">
-        <div className="flex-1 truncate rounded-md border border-border bg-background/70 px-2 py-1.5 text-xs text-muted-foreground">
-          {path || 'Select a directory...'}
-        </div>
+        <input
+          type="text"
+          aria-label="Local repo path"
+          value={path}
+          onChange={(e) => onPathChange(e.target.value)}
+          placeholder="Select a directory..."
+          className="h-8 flex-1 rounded-md border border-border bg-background/70 px-2 text-xs outline-none focus:border-ring"
+        />
         <button
           type="button"
           aria-label="Browse"

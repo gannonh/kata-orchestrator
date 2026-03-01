@@ -383,6 +383,7 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
             workspaceMode={workspaceMode}
             provisioningMethod={provisioningMethod}
             repoPath={repoPath}
+            onRepoPathChange={setRepoPath}
             branches={branches}
             selectedBranch={selectedBranch}
             onBrowse={handleBrowse}
