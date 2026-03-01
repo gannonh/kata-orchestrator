@@ -36,6 +36,19 @@ export function useSessionConversation() {
     }
   }, [clearPendingTimer])
 
+  const scheduleSuccess = useCallback(() => {
+    clearPendingTimer()
+
+    timeoutRef.current = window.setTimeout(() => {
+      timeoutRef.current = null
+      runStateRef.current = 'idle'
+      dispatch({
+        type: 'RUN_SUCCEEDED',
+        response: RUN_SUCCESS_RESPONSE
+      })
+    }, RUN_SUCCESS_DELAY_MS)
+  }, [clearPendingTimer])
+
   const submitPrompt = useCallback(
     (prompt: string) => {
       const canStartRun =
@@ -51,7 +64,6 @@ export function useSessionConversation() {
       }
 
       runStateRef.current = 'pending'
-      clearPendingTimer()
 
       if (prompt.trim().startsWith('/error')) {
         runStateRef.current = 'error'
@@ -62,27 +74,24 @@ export function useSessionConversation() {
         return
       }
 
-      timeoutRef.current = window.setTimeout(() => {
-        timeoutRef.current = null
-        runStateRef.current = 'idle'
-        dispatch({
-          type: 'RUN_SUCCEEDED',
-          response: RUN_SUCCESS_RESPONSE
-        })
-      }, RUN_SUCCESS_DELAY_MS)
+      scheduleSuccess()
     },
-    [clearPendingTimer]
+    [scheduleSuccess]
   )
 
   const retry = useCallback(() => {
-    if (runStateRef.current === 'error') {
-      runStateRef.current = 'pending'
+    if (runStateRef.current !== 'error') {
+      return
     }
+
+    runStateRef.current = 'pending'
 
     dispatch({
       type: 'RETRY_FROM_ERROR'
     })
-  }, [])
+
+    scheduleSuccess()
+  }, [scheduleSuccess])
 
   return {
     state,
