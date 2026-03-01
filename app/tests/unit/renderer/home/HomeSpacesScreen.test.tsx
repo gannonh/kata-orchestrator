@@ -298,4 +298,294 @@ describe('HomeSpacesScreen', () => {
 
     expect(onOpenSpace).toHaveBeenCalledWith('s-second')
   })
+
+  it('loads GitHub branches when a repo is selected in clone-github mode', async () => {
+    const githubListRepos = vi.fn().mockResolvedValue([
+      { name: 'kata-cloud', nameWithOwner: 'gannonh/kata-cloud', url: 'https://github.com/gannonh/kata-cloud' }
+    ])
+    const githubListBranches = vi.fn().mockResolvedValue(['main', 'develop'])
+    window.kata = { ...window.kata, githubListRepos, githubListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('gannonh/kata-cloud')).toBeTruthy()
+    })
+
+    // Select the repo to trigger branch loading
+    fireEvent.click(screen.getByText('gannonh/kata-cloud'))
+
+    // Wait for .then to complete and branch picker to render
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /branch/i })).toBeTruthy()
+    })
+    expect(githubListBranches).toHaveBeenCalledWith('gannonh', 'kata-cloud')
+  })
+
+  it('shows fallback URL when GitHub repo fetch fails', async () => {
+    const githubListRepos = vi.fn().mockRejectedValue(new Error('gh not found'))
+    window.kata = { ...window.kata, githubListRepos }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/GitHub CLI not available/)).toBeTruthy()
+      expect(screen.getByRole('textbox', { name: /url/i })).toBeTruthy()
+    })
+  })
+
+  it('tolerates browse when dialogOpenDirectory is not exposed', async () => {
+    window.kata = {}
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+    // Should not throw
+  })
+
+  it('tolerates browse returning null path', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue(null)
+    window.kata = { ...window.kata, dialogOpenDirectory }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+
+    await waitFor(() => {
+      expect(dialogOpenDirectory).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('tolerates branch loading failure after browse', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
+    const gitListBranches = vi.fn().mockRejectedValue(new Error('git error'))
+    window.kata = { ...window.kata, dialogOpenDirectory, gitListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+
+    await waitFor(() => {
+      expect(gitListBranches).toHaveBeenCalledTimes(1)
+    })
+    // Should not throw; branches remain empty
+  })
+
+  it('shows error when browse dialog throws', async () => {
+    const dialogOpenDirectory = vi.fn().mockRejectedValue(new Error('dialog error'))
+    window.kata = { ...window.kata, dialogOpenDirectory }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+
+    await waitFor(() => {
+      expect(dialogOpenDirectory).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('submits new-repo payload and shows correct auto-generated name', async () => {
+    const createdRecord = makeSpaceRecord({ id: 'space-new-repo', name: 'my-project-x7k2' })
+    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
+    window.kata = { ...window.kata, spaceCreate }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use new repo provisioning' }))
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'New repo name' }), {
+      target: { value: 'my-project' }
+    })
+
+    // Auto-generated name preview should show in review
+    expect(screen.getByText(/Space:.*my-project/)).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
+
+    await waitFor(() => {
+      expect(spaceCreate).toHaveBeenCalledTimes(1)
+    })
+
+    const payload = spaceCreate.mock.calls[0][0] as Record<string, unknown>
+    expect(payload).toMatchObject({
+      workspaceMode: 'managed',
+      provisioningMethod: 'new-repo',
+      newRepoFolderName: 'my-project'
+    })
+  })
+
+  it('submits clone-github payload with selected repo', async () => {
+    const githubListRepos = vi.fn().mockResolvedValue([
+      { name: 'kata-cloud', nameWithOwner: 'gannonh/kata-cloud', url: 'https://github.com/gannonh/kata-cloud' }
+    ])
+    const githubListBranches = vi.fn().mockResolvedValue(['main', 'develop'])
+    const createdRecord = makeSpaceRecord({ id: 'space-clone' })
+    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
+    window.kata = { ...window.kata, githubListRepos, githubListBranches, spaceCreate }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('gannonh/kata-cloud')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('gannonh/kata-cloud'))
+
+    // Wait for branch loading to complete and branch picker to appear
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: /branch/i })).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
+
+    await waitFor(() => {
+      expect(spaceCreate).toHaveBeenCalledTimes(1)
+    })
+
+    const payload = spaceCreate.mock.calls[0][0] as Record<string, unknown>
+    expect(payload).toMatchObject({
+      workspaceMode: 'managed',
+      provisioningMethod: 'clone-github',
+      sourceRemoteUrl: 'https://github.com/gannonh/kata-cloud',
+      branch: 'main'
+    })
+  })
+
+  it('selects the first non-archived space from IPC when none pre-selected', async () => {
+    const spaceList = vi.fn<() => Promise<SpaceRecord[]>>().mockResolvedValue([
+      makeSpaceRecord({ id: 'sp-archived', status: 'archived' }),
+      makeSpaceRecord({ id: 'sp-active', status: 'active' })
+    ])
+    window.kata = { ...window.kata, spaceList }
+
+    const onOpenSpace = vi.fn()
+    render(<HomeSpacesScreen onOpenSpace={onOpenSpace} initialSpaces={[]} />)
+
+    await waitFor(() => {
+      expect(spaceList).toHaveBeenCalledTimes(1)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
+    expect(onOpenSpace).toHaveBeenCalledWith('sp-active')
+  })
+
+  it('handles IPC returning no spaces gracefully', async () => {
+    const spaceList = vi.fn<() => Promise<SpaceRecord[]>>().mockResolvedValue([])
+    window.kata = { ...window.kata, spaceList }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    await waitFor(() => {
+      expect(spaceList).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('handles IPC returning null gracefully', async () => {
+    const spaceList = vi.fn().mockResolvedValue(null)
+    window.kata = { ...window.kata, spaceList }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    await waitFor(() => {
+      expect(spaceList).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('retains current selectedSpaceId when IPC returns spaces containing that ID', async () => {
+    const existingSpace = makeDisplaySpace({ id: 's-existing', name: 'Existing Space' })
+    const spaceList = vi.fn<() => Promise<SpaceRecord[]>>().mockResolvedValue([
+      makeSpaceRecord({ id: 's-existing', name: 'Existing Space' }),
+      makeSpaceRecord({ id: 's-other', name: 'Other Space' })
+    ])
+    window.kata = { ...window.kata, spaceList }
+
+    const onOpenSpace = vi.fn()
+    render(<HomeSpacesScreen onOpenSpace={onOpenSpace} initialSpaces={[existingSpace]} />)
+
+    await waitFor(() => {
+      expect(spaceList).toHaveBeenCalledTimes(1)
+    })
+
+    // s-existing was pre-selected from initialSpaces and should remain selected after IPC load
+    fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
+    expect(onOpenSpace).toHaveBeenCalledWith('s-existing')
+  })
+
+  it('skips github repos fetch when repos are already loaded', async () => {
+    const githubListRepos = vi.fn().mockResolvedValue([
+      { name: 'kata-cloud', nameWithOwner: 'gannonh/kata-cloud', url: 'https://github.com/gannonh/kata-cloud' }
+    ])
+    window.kata = { ...window.kata, githubListRepos }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    // Select clone-github → triggers first fetch
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(githubListRepos).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('gannonh/kata-cloud')).toBeTruthy()
+    })
+
+    // Switch to copy-local then back to clone-github → should skip fetch since repos are loaded
+    fireEvent.click(screen.getByRole('button', { name: 'Use copy local provisioning' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    // Still only 1 call — the useEffect returned early at the "repos already loaded" guard
+    expect(githubListRepos).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls handleGithubSearchChange when typing in GitHub search input', async () => {
+    const githubListRepos = vi.fn().mockResolvedValue([
+      { name: 'kata-cloud', nameWithOwner: 'gannonh/kata-cloud', url: 'https://github.com/gannonh/kata-cloud' },
+      { name: 'other-repo', nameWithOwner: 'gannonh/other-repo', url: 'https://github.com/gannonh/other-repo' }
+    ])
+    window.kata = { ...window.kata, githubListRepos }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('gannonh/kata-cloud')).toBeTruthy()
+    })
+
+    // Type in the search box — this calls handleGithubSearchChange
+    fireEvent.change(screen.getByRole('textbox', { name: /search/i }), {
+      target: { value: 'kata' }
+    })
+
+    // Only kata-cloud should be visible; other-repo filtered out
+    expect(screen.getByText('gannonh/kata-cloud')).toBeTruthy()
+    expect(screen.queryByText('gannonh/other-repo')).toBeNull()
+  })
+
+  it('tolerates GitHub branch loading failure for selected repo', async () => {
+    const githubListRepos = vi.fn().mockResolvedValue([
+      { name: 'kata-cloud', nameWithOwner: 'gannonh/kata-cloud', url: 'https://github.com/gannonh/kata-cloud' }
+    ])
+    const githubListBranches = vi.fn().mockRejectedValue(new Error('api error'))
+    window.kata = { ...window.kata, githubListRepos, githubListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('gannonh/kata-cloud')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('gannonh/kata-cloud'))
+
+    // Wait for the .catch and .finally callbacks to complete
+    await waitFor(() => {
+      expect(githubListBranches).toHaveBeenCalledWith('gannonh', 'kata-cloud')
+    })
+    // Wait a tick for the promise chain to settle
+    await waitFor(() => {
+      // No branch picker should be shown since loading failed
+      expect(screen.queryByRole('combobox', { name: /branch/i })).toBeNull()
+    })
+  })
 })

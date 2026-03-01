@@ -7,13 +7,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultAppState } from '../../../src/shared/types/space'
 import type { AppState } from '../../../src/shared/types/space'
 
-const { mockRemoveHandler, mockHandle, mockOpenExternal, mockShowOpenDialog, mockProvisionManagedWorkspace, mockFsAccess } = vi.hoisted(() => ({
+const { mockRemoveHandler, mockHandle, mockOpenExternal, mockShowOpenDialog, mockProvisionManagedWorkspace, mockFsAccess, mockExecFile } = vi.hoisted(() => ({
   mockRemoveHandler: vi.fn(),
   mockHandle: vi.fn(),
   mockOpenExternal: vi.fn(),
   mockShowOpenDialog: vi.fn(),
   mockProvisionManagedWorkspace: vi.fn(),
-  mockFsAccess: vi.fn()
+  mockFsAccess: vi.fn(),
+  mockExecFile: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -44,6 +45,14 @@ vi.mock('node:fs', async () => {
       ...actual.promises,
       access: mockFsAccess
     }
+  }
+})
+
+vi.mock('node:child_process', async () => {
+  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+  return {
+    ...actual,
+    execFile: mockExecFile
   }
 })
 
@@ -603,29 +612,94 @@ describe('registerIpcHandlers', () => {
       const result = await handler(null)
       expect(result).toBeNull()
     })
+
+    it('returns error when selected directory is not a git repository', async () => {
+      mockShowOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/Users/me/dev/not-a-repo'] })
+      mockFsAccess.mockRejectedValue(new Error('ENOENT'))
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('dialog:openDirectory')!
+      const result = await handler(null)
+      expect(result).toEqual({ error: 'Selected directory is not a git repository.', path: '/Users/me/dev/not-a-repo' })
+    })
   })
 
   describe('git:listBranches', () => {
-    it('is registered as a handler', () => {
+    it('returns branch list on success', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: (err: Error | null, result: { stdout: string }) => void) => {
+        cb(null, { stdout: 'main\ndevelop\nfeature/test\n' })
+      })
       registerIpcHandlers(createMockStore())
-      const handlers = getHandlersByChannel()
-      expect(handlers.get('git:listBranches')).toBeDefined()
+      const handler = getHandlersByChannel().get('git:listBranches')!
+      const result = await handler(null, '/Users/me/dev/repo')
+      expect(result).toEqual(['main', 'develop', 'feature/test'])
+    })
+
+    it('returns error object when git fails', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: (err: Error | null) => void) => {
+        cb(new Error('git failed'))
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('git:listBranches')!
+      const result = await handler(null, '/bad/path')
+      expect(result).toEqual({ error: 'Could not read branches.' })
+    })
+
+    it('throws when repoPath is not a string', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('git:listBranches')!
+      await expect(handler(null, 123)).rejects.toThrow('repoPath must be a string')
     })
   })
 
   describe('github:listRepos', () => {
-    it('is registered as a handler', () => {
+    it('returns parsed repo list on success', async () => {
+      const repos = [{ name: 'repo', nameWithOwner: 'org/repo', url: 'https://github.com/org/repo' }]
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: (err: Error | null, result: { stdout: string }) => void) => {
+        cb(null, { stdout: JSON.stringify(repos) })
+      })
       registerIpcHandlers(createMockStore())
-      const handlers = getHandlersByChannel()
-      expect(handlers.get('github:listRepos')).toBeDefined()
+      const handler = getHandlersByChannel().get('github:listRepos')!
+      const result = await handler(null)
+      expect(result).toEqual(repos)
+    })
+
+    it('returns error object when gh CLI fails', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: (err: Error | null) => void) => {
+        cb(new Error('gh not found'))
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('github:listRepos')!
+      const result = await handler(null)
+      expect(result).toEqual({ error: 'GitHub CLI not available. Install and authenticate with `gh auth login`.' })
     })
   })
 
   describe('github:listBranches', () => {
-    it('is registered as a handler', () => {
+    it('returns branch list on success', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: (err: Error | null, result: { stdout: string }) => void) => {
+        cb(null, { stdout: 'main\ndevelop\n' })
+      })
       registerIpcHandlers(createMockStore())
-      const handlers = getHandlersByChannel()
-      expect(handlers.get('github:listBranches')).toBeDefined()
+      const handler = getHandlersByChannel().get('github:listBranches')!
+      const result = await handler(null, { owner: 'org', repo: 'repo' })
+      expect(result).toEqual(['main', 'develop'])
+    })
+
+    it('returns error object when gh CLI fails', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: (err: Error | null) => void) => {
+        cb(new Error('gh api failed'))
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('github:listBranches')!
+      const result = await handler(null, { owner: 'org', repo: 'repo' })
+      expect(result).toEqual({ error: 'Could not fetch branches from GitHub.' })
+    })
+
+    it('throws when input is missing owner or repo', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('github:listBranches')!
+      await expect(handler(null, { owner: 'org' })).rejects.toThrow('input must have string owner and repo fields')
+      await expect(handler(null, null)).rejects.toThrow('input must have string owner and repo fields')
     })
   })
 })
