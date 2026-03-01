@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 import { app, BrowserWindow } from 'electron'
 
+import { createAuthStorage } from './auth-storage'
+import { createCredentialResolver } from './credential-resolver'
 import { registerIpcHandlers } from './ipc-handlers'
 import { createStateStore } from './state-store'
 
@@ -67,8 +69,10 @@ app.whenReady().then(() => {
   const workspaceBaseDir = getNonEmptyEnv('KATA_WORKSPACE_BASE_DIR')
   const repoCacheBaseDir = getNonEmptyEnv('KATA_REPO_CACHE_BASE_DIR')
   const stateStore = createStateStore(stateFilePath)
+  const authStorage = createAuthStorage(path.join(app.getPath('home'), '.kata', 'auth.json'))
+  const credentialResolver = createCredentialResolver(authStorage)
 
-  registerIpcHandlers(stateStore, { workspaceBaseDir, repoCacheBaseDir })
+  registerIpcHandlers(stateStore, { workspaceBaseDir, repoCacheBaseDir, authStorage, credentialResolver })
   createWindow()
 
   app.on('activate', () => {
