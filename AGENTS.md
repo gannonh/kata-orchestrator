@@ -67,6 +67,9 @@ npm run test:artifacts
 # Full test suite including smoke tests
 npm run test:all
 
+# Run full CI pipeline locally (core + desktop quality gate)
+npm run test:ci:local
+
 # Only tests affected by current branch changes
 npm run test:affected
 
