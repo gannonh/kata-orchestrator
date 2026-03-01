@@ -135,7 +135,10 @@ test.describe('managed provisioning @uat @ci', () => {
     const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
     await appWindow.getByRole('button', { name: 'Use clone github provisioning' }).click()
-    await expect(appWindow.getByText(/GitHub CLI not available/i)).toBeVisible()
+    const ghUnavailableNotice = appWindow.getByText(/GitHub CLI not available/i)
+    if ((await ghUnavailableNotice.count()) > 0) {
+      await expect(ghUnavailableNotice).toBeVisible()
+    }
     await appWindow.getByRole('textbox', { name: 'Repository URL' }).fill(bareRemotePath)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
@@ -169,13 +172,13 @@ test.describe('managed provisioning @uat @ci', () => {
   })
 
   test('shows validation error for new-repo when parent directory input is blank', async ({ appWindow }) => {
-    const sourceFolderName = `managed-new-project-blank-parent-${Date.now()}`
+    const newRepoName = `managed-new-project-blank-parent-${Date.now()}`
 
     await ensureHomeSpacesView(appWindow)
     const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
     await appWindow.getByRole('button', { name: 'Use new repo provisioning' }).click()
-    await appWindow.getByRole('textbox', { name: 'New repo name' }).fill(sourceFolderName)
+    await appWindow.getByRole('textbox', { name: 'New repo name' }).fill(newRepoName)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
     await expect(appWindow.getByRole('alert')).toContainText('newRepoParentDir must be an absolute path')

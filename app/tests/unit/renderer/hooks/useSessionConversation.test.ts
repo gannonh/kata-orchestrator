@@ -91,6 +91,7 @@ describe('useSessionConversation', () => {
     })
 
     expect(result.current.state.runState).toBe('idle')
+    expect(result.current.state.errorMessage).toBeUndefined()
     expect(result.current.state.messages).toEqual([
       {
         id: 'user-1',
