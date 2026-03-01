@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { ORCHESTRATION_MODES, SPACE_STATUSES, WORKSPACE_MODES, createDefaultAppState } from '../shared/types/space'
 import type { AppState } from '../shared/types/space'
+import { RUN_STATUSES } from '../shared/types/run'
 
 export type StateStore = {
   load(): AppState
@@ -49,6 +50,21 @@ function isSessionRecord(value: unknown): boolean {
   )
 }
 
+function isRunRecord(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.id === 'string' &&
+    typeof value.sessionId === 'string' &&
+    typeof value.prompt === 'string' &&
+    typeof value.status === 'string' &&
+    RUN_STATUSES.includes(value.status as (typeof RUN_STATUSES)[number]) &&
+    typeof value.model === 'string' &&
+    typeof value.provider === 'string' &&
+    typeof value.createdAt === 'string' &&
+    Array.isArray(value.messages)
+  )
+}
+
 function isStringOrNull(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
 }
@@ -58,7 +74,7 @@ function isAppState(value: unknown): value is AppState {
     return false
   }
 
-  if (!isRecord(value.spaces) || !isRecord(value.sessions)) {
+  if (!isRecord(value.spaces) || !isRecord(value.sessions) || !isRecord(value.runs)) {
     return false
   }
 
@@ -68,7 +84,8 @@ function isAppState(value: unknown): value is AppState {
 
   return (
     Object.values(value.spaces).every(isSpaceRecord) &&
-    Object.values(value.sessions).every(isSessionRecord)
+    Object.values(value.sessions).every(isSessionRecord) &&
+    Object.values(value.runs).every(isRunRecord)
   )
 }
 

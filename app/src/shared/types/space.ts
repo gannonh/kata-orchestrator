@@ -1,3 +1,5 @@
+import type { RunRecord } from './run'
+
 export const SPACE_STATUSES = ['active', 'idle', 'archived'] as const
 export type SpaceStatus = (typeof SPACE_STATUSES)[number]
 
@@ -27,6 +29,7 @@ export type SessionRecord = {
   spaceId: string
   label: string
   createdAt: string
+  activeModelId?: string
 }
 
 export type CreateSpaceInput = {
@@ -66,6 +69,7 @@ export type CreateSessionInput = {
 export type AppState = {
   spaces: Record<string, SpaceRecord>
   sessions: Record<string, SessionRecord>
+  runs: Record<string, RunRecord>
   activeSpaceId: string | null
   activeSessionId: string | null
 }
@@ -74,6 +78,7 @@ export function createDefaultAppState(): AppState {
   return {
     spaces: {},
     sessions: {},
+    runs: {},
     activeSpaceId: null,
     activeSessionId: null
   }

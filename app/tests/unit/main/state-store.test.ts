@@ -41,6 +41,7 @@ describe('createStateStore', () => {
         }
       },
       sessions: {},
+      runs: {},
       activeSpaceId: 's1',
       activeSessionId: null
     }
@@ -150,6 +151,7 @@ describe('createStateStore', () => {
           createdAt: '2026-02-25T00:00:00Z'
         }
       },
+      runs: {},
       activeSpaceId: null,
       activeSessionId: 'sess1'
     }
