@@ -1,28 +1,30 @@
-export function deriveDefaultSpaceName(repoLabel: string, branch: string): string {
-  const safeRepo = repoLabel.trim() || 'repo'
-  const safeBranch = branch.trim() || 'main'
-  return `${safeRepo} ${safeBranch}`
-}
+import { randomBytes } from 'node:crypto'
 
-export function ensureUniqueSpaceName(base: string, existingNames: Set<string>): string {
-  if (!existingNames.has(base)) {
-    return base
+const ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
+
+export function generateShortId(length = 4): string {
+  const bytes = randomBytes(length)
+  let result = ''
+  for (let i = 0; i < length; i++) {
+    result += ALPHABET[bytes[i] % ALPHABET.length]
   }
-
-  let index = 2
-  while (existingNames.has(`${base} (${index})`)) {
-    index += 1
-  }
-
-  return `${base} (${index})`
+  return result
 }
 
 export function resolveSpaceName(input: {
   repoLabel: string
-  branch: string
-  override?: string
   existingNames: Set<string>
 }): string {
-  const raw = input.override?.trim() || deriveDefaultSpaceName(input.repoLabel, input.branch)
-  return ensureUniqueSpaceName(raw, input.existingNames)
+  const safeRepo = input.repoLabel.trim() || 'repo'
+  const maxAttempts = 10
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const candidate = `${safeRepo}-${generateShortId(4)}`
+    if (!input.existingNames.has(candidate)) {
+      return candidate
+    }
+  }
+
+  // Fallback: 6-char id on repeated collisions
+  return `${safeRepo}-${generateShortId(6)}`
 }

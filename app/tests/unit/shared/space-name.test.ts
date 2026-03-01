@@ -2,42 +2,33 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { deriveDefaultSpaceName, ensureUniqueSpaceName, resolveSpaceName } from '../../../src/shared/space-name'
+import { generateShortId, resolveSpaceName } from '../../../src/shared/space-name'
 
-describe('deriveDefaultSpaceName', () => {
-  it('uses repo and branch values', () => {
-    expect(deriveDefaultSpaceName('kata-cloud', 'main')).toBe('kata-cloud main')
+describe('generateShortId', () => {
+  it('returns a 4-character lowercase alphanumeric string', () => {
+    const id = generateShortId()
+    expect(id).toMatch(/^[a-z0-9]{4}$/)
   })
 
-  it('falls back to safe defaults for blank values', () => {
-    expect(deriveDefaultSpaceName(' ', '')).toBe('repo main')
-  })
-})
-
-describe('ensureUniqueSpaceName', () => {
-  it('returns base name when not taken', () => {
-    expect(ensureUniqueSpaceName('kata-cloud main', new Set())).toBe('kata-cloud main')
-  })
-
-  it('adds numeric suffix when base name is taken', () => {
-    const taken = new Set(['kata-cloud main', 'kata-cloud main (2)'])
-    expect(ensureUniqueSpaceName('kata-cloud main', taken)).toBe('kata-cloud main (3)')
+  it('produces different values on successive calls', () => {
+    const ids = new Set(Array.from({ length: 20 }, () => generateShortId()))
+    expect(ids.size).toBeGreaterThan(1)
   })
 })
 
-describe('resolveSpaceName', () => {
-  it('derives default name from repo + branch and applies numeric collision suffixes', () => {
-    const taken = new Set(['kata-cloud main', 'kata-cloud main (2)'])
-    expect(resolveSpaceName({ repoLabel: 'kata-cloud', branch: 'main', override: '', existingNames: taken }))
-      .toBe('kata-cloud main (3)')
+describe('resolveSpaceName (nanoid)', () => {
+  it('generates repoLabel-shortId format', () => {
+    const name = resolveSpaceName({ repoLabel: 'kata-cloud', existingNames: new Set() })
+    expect(name).toMatch(/^kata-cloud-[a-z0-9]{4}$/)
   })
 
-  it('prefers explicit override when present', () => {
-    expect(resolveSpaceName({
-      repoLabel: 'kata-cloud',
-      branch: 'main',
-      override: 'My custom space',
-      existingNames: new Set()
-    })).toBe('My custom space')
+  it('retries on collision', () => {
+    const name = resolveSpaceName({ repoLabel: 'repo', existingNames: new Set() })
+    expect(name).toMatch(/^repo-[a-z0-9]{4}$/)
+  })
+
+  it('uses safe repo label for blank input', () => {
+    const name = resolveSpaceName({ repoLabel: '  ', existingNames: new Set() })
+    expect(name).toMatch(/^repo-[a-z0-9]{4}$/)
   })
 })
