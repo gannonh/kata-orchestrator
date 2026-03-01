@@ -87,6 +87,26 @@ describe('ChatInput', () => {
     expect(sendButton.disabled).toBe(true)
   })
 
+  it('does not submit on Enter or form submit while pending', () => {
+    const onSend = vi.fn()
+
+    render(
+      <ChatInput
+        onSend={onSend}
+        runState="pending"
+      />
+    )
+
+    const textarea = screen.getByLabelText('Message input')
+    const form = textarea.closest('form') as HTMLFormElement
+
+    fireEvent.change(textarea, { target: { value: 'still running' } })
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    fireEvent.submit(form)
+
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
   it('shows retry affordance when in error state', () => {
     const onRetry = vi.fn()
 
@@ -101,6 +121,27 @@ describe('ChatInput', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
     expect(onRetry).toHaveBeenCalled()
+  })
+
+  it('does not submit on Enter or form submit while error', () => {
+    const onSend = vi.fn()
+
+    render(
+      <ChatInput
+        onSend={onSend}
+        runState="error"
+        onRetry={vi.fn()}
+      />
+    )
+
+    const textarea = screen.getByLabelText('Message input')
+    const form = textarea.closest('form') as HTMLFormElement
+
+    fireEvent.change(textarea, { target: { value: 'retry me' } })
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    fireEvent.submit(form)
+
+    expect(onSend).not.toHaveBeenCalled()
   })
 
   it('renders model affordance and context-first placeholder copy', () => {

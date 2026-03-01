@@ -21,11 +21,11 @@ export function ChatInput({
   const [value, setValue] = useState('')
   const isPending = runState === 'pending'
   const isError = runState === 'error'
-  const canSend = !disabled && !isPending && value.trim().length > 0
+  const canSend = !disabled && !isPending && !isError && value.trim().length > 0
 
   const submit = (): void => {
     const trimmed = value.trim()
-    if (!trimmed || disabled || isPending) {
+    if (!trimmed || !canSend) {
       return
     }
 
