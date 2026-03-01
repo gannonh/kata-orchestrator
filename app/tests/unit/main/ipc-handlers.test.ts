@@ -7,11 +7,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultAppState } from '../../../src/shared/types/space'
 import type { AppState } from '../../../src/shared/types/space'
 
-const { mockRemoveHandler, mockHandle, mockOpenExternal, mockProvisionManagedWorkspace } = vi.hoisted(() => ({
+const { mockRemoveHandler, mockHandle, mockOpenExternal, mockShowOpenDialog, mockProvisionManagedWorkspace, mockFsAccess } = vi.hoisted(() => ({
   mockRemoveHandler: vi.fn(),
   mockHandle: vi.fn(),
   mockOpenExternal: vi.fn(),
-  mockProvisionManagedWorkspace: vi.fn()
+  mockShowOpenDialog: vi.fn(),
+  mockProvisionManagedWorkspace: vi.fn(),
+  mockFsAccess: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -21,8 +23,29 @@ vi.mock('electron', () => ({
   },
   shell: {
     openExternal: mockOpenExternal
+  },
+  dialog: {
+    showOpenDialog: mockShowOpenDialog
   }
 }))
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      promises: {
+        ...actual.promises,
+        access: mockFsAccess
+      }
+    },
+    promises: {
+      ...actual.promises,
+      access: mockFsAccess
+    }
+  }
+})
 
 vi.mock('../../../src/main/workspace-provisioning', async () => {
   const actual = await vi.importActual<typeof import('../../../src/main/workspace-provisioning')>(
@@ -559,5 +582,50 @@ describe('registerIpcHandlers', () => {
     })
     const createdRecord = created as { name: string }
     expect(createdRecord.name).toMatch(/^repo-[a-z0-9]{4}$/)
+  })
+
+  describe('dialog:openDirectory', () => {
+    it('returns selected directory path when .git exists', async () => {
+      mockShowOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/Users/me/dev/repo'] })
+      mockFsAccess.mockResolvedValue(undefined)
+      registerIpcHandlers(createMockStore())
+      const handlers = getHandlersByChannel()
+      const handler = handlers.get('dialog:openDirectory')!
+      const result = await handler(null)
+      expect(result).toEqual({ path: '/Users/me/dev/repo' })
+    })
+
+    it('returns null when dialog is canceled', async () => {
+      mockShowOpenDialog.mockResolvedValue({ canceled: true, filePaths: [] })
+      registerIpcHandlers(createMockStore())
+      const handlers = getHandlersByChannel()
+      const handler = handlers.get('dialog:openDirectory')!
+      const result = await handler(null)
+      expect(result).toBeNull()
+    })
+  })
+
+  describe('git:listBranches', () => {
+    it('is registered as a handler', () => {
+      registerIpcHandlers(createMockStore())
+      const handlers = getHandlersByChannel()
+      expect(handlers.get('git:listBranches')).toBeDefined()
+    })
+  })
+
+  describe('github:listRepos', () => {
+    it('is registered as a handler', () => {
+      registerIpcHandlers(createMockStore())
+      const handlers = getHandlersByChannel()
+      expect(handlers.get('github:listRepos')).toBeDefined()
+    })
+  })
+
+  describe('github:listBranches', () => {
+    it('is registered as a handler', () => {
+      registerIpcHandlers(createMockStore())
+      const handlers = getHandlersByChannel()
+      expect(handlers.get('github:listBranches')).toBeDefined()
+    })
   })
 })

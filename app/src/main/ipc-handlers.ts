@@ -1,8 +1,13 @@
+import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { promisify } from 'node:util'
 
-import { ipcMain, shell } from 'electron'
+import { dialog, ipcMain, shell } from 'electron'
+
+const execFileAsync = promisify(execFile)
 
 import {
   ORCHESTRATION_MODES,
@@ -33,6 +38,10 @@ const SPACE_CREATE_CHANNEL = 'space:create'
 const SPACE_LIST_CHANNEL = 'space:list'
 const SPACE_GET_CHANNEL = 'space:get'
 const SESSION_CREATE_CHANNEL = 'session:create'
+const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
+const GIT_LIST_BRANCHES_CHANNEL = 'git:listBranches'
+const GITHUB_LIST_REPOS_CHANNEL = 'github:listRepos'
+const GITHUB_LIST_BRANCHES_CHANNEL = 'github:listBranches'
 
 let inMemoryState = createDefaultAppState()
 
@@ -348,5 +357,61 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
     })
 
     return createdSession
+  })
+
+  ipcMain.removeHandler(DIALOG_OPEN_DIR_CHANNEL)
+  ipcMain.removeHandler(GIT_LIST_BRANCHES_CHANNEL)
+  ipcMain.removeHandler(GITHUB_LIST_REPOS_CHANNEL)
+  ipcMain.removeHandler(GITHUB_LIST_BRANCHES_CHANNEL)
+
+  ipcMain.handle(DIALOG_OPEN_DIR_CHANNEL, async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    if (result.canceled || result.filePaths.length === 0) {
+      return null
+    }
+    const selectedPath = result.filePaths[0]
+    try {
+      await fs.promises.access(path.join(selectedPath, '.git'))
+    } catch {
+      return { error: 'Selected directory is not a git repository.', path: selectedPath }
+    }
+    return { path: selectedPath }
+  })
+
+  ipcMain.handle(GIT_LIST_BRANCHES_CHANNEL, async (_event, repoPath: unknown) => {
+    if (typeof repoPath !== 'string') {
+      throw new Error('repoPath must be a string')
+    }
+    try {
+      const { stdout } = await execFileAsync('git', ['branch', '--list', '--format=%(refname:short)'], { cwd: repoPath })
+      return stdout.trim().split('\n').filter(Boolean)
+    } catch {
+      return { error: 'Could not read branches.' }
+    }
+  })
+
+  ipcMain.handle(GITHUB_LIST_REPOS_CHANNEL, async () => {
+    try {
+      const { stdout } = await execFileAsync('gh', [
+        'repo', 'list', '--json', 'name,nameWithOwner,url', '--limit', '100'
+      ])
+      return JSON.parse(stdout)
+    } catch {
+      return { error: 'GitHub CLI not available. Install and authenticate with `gh auth login`.' }
+    }
+  })
+
+  ipcMain.handle(GITHUB_LIST_BRANCHES_CHANNEL, async (_event, input: unknown) => {
+    if (!isObjectRecord(input) || typeof input.owner !== 'string' || typeof input.repo !== 'string') {
+      throw new Error('input must have string owner and repo fields')
+    }
+    try {
+      const { stdout } = await execFileAsync('gh', [
+        'api', `repos/${input.owner}/${input.repo}/branches`, '--jq', '.[].name'
+      ])
+      return stdout.trim().split('\n').filter(Boolean)
+    } catch {
+      return { error: 'Could not fetch branches from GitHub.' }
+    }
   })
 }
