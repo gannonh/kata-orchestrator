@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { HomeSpacesScreen } from '../../../../src/renderer/components/home/HomeSpacesScreen'
+import type { DisplaySpace } from '../../../../src/renderer/mock/spaces'
 import type { SpaceRecord } from '../../../../src/shared/types/space'
 
 function makeSpaceRecord(overrides: Partial<SpaceRecord> = {}): SpaceRecord {
@@ -14,6 +15,23 @@ function makeSpaceRecord(overrides: Partial<SpaceRecord> = {}): SpaceRecord {
     orchestrationMode: 'team',
     createdAt: '2026-02-25T00:00:00.000Z',
     status: 'active',
+    ...overrides
+  }
+}
+
+function makeDisplaySpace(overrides: Partial<DisplaySpace> = {}): DisplaySpace {
+  return {
+    id: 'space-1',
+    name: 'Test Space',
+    repoUrl: 'https://github.com/gannonh/kata-cloud',
+    rootPath: '/Users/gannonh/dev/kata/kata-cloud',
+    repo: 'gannonh/kata-cloud',
+    branch: 'main',
+    orchestrationMode: 'team',
+    createdAt: '2026-02-25T00:00:00.000Z',
+    status: 'active',
+    elapsed: '',
+    archived: false,
     ...overrides
   }
 }
@@ -202,11 +220,15 @@ describe('HomeSpacesScreen', () => {
   })
 
   it('supports search and list toggles (grouping + archived)', async () => {
-    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+    const spaces = [
+      makeDisplaySpace({ id: 's-active', name: 'Active Space', status: 'active', archived: false }),
+      makeDisplaySpace({ id: 's-archived', name: 'Old Notes', status: 'archived', archived: true })
+    ]
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={spaces} />)
 
-    expect(screen.queryByText('Archived migration notes')).toBeNull()
+    expect(screen.queryByText('Old Notes')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Show archived spaces' }))
-    expect(screen.getByText('Archived migration notes')).toBeTruthy()
+    expect(screen.getByText('Old Notes')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Group spaces by repository' }))
     expect(screen.getByText('All spaces')).toBeTruthy()
@@ -251,21 +273,29 @@ describe('HomeSpacesScreen', () => {
   })
 
   it('opens the currently selected space with the correct space ID', () => {
+    const spaces = [
+      makeDisplaySpace({ id: 's-first', name: 'First Space' }),
+      makeDisplaySpace({ id: 's-second', name: 'Second Space' })
+    ]
     const onOpenSpace = vi.fn()
-    render(<HomeSpacesScreen onOpenSpace={onOpenSpace} />)
+    render(<HomeSpacesScreen onOpenSpace={onOpenSpace} initialSpaces={spaces} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
     expect(onOpenSpace).toHaveBeenCalledTimes(1)
-    expect(onOpenSpace.mock.calls[0]?.[0]).toBe('space-wave-1')
+    expect(onOpenSpace.mock.calls[0]?.[0]).toBe('s-first')
   })
 
   it('selects another space from the list before opening it', () => {
+    const spaces = [
+      makeDisplaySpace({ id: 's-first', name: 'First Space' }),
+      makeDisplaySpace({ id: 's-second', name: 'Second Space' })
+    ]
     const onOpenSpace = vi.fn()
-    render(<HomeSpacesScreen onOpenSpace={onOpenSpace} />)
+    render(<HomeSpacesScreen onOpenSpace={onOpenSpace} initialSpaces={spaces} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Select space Left panel parity follow-ups' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select space Second Space' }))
     fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
 
-    expect(onOpenSpace).toHaveBeenCalledWith('space-left-panel')
+    expect(onOpenSpace).toHaveBeenCalledWith('s-second')
   })
 })

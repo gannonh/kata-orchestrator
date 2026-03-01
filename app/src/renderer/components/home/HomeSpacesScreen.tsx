@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import type { CreateSpaceInput, WorkspaceMode } from '@shared/types/space'
-import { mockSpaces, toDisplaySpace, type DisplaySpace } from '../../mock/spaces'
+import { toDisplaySpace, type DisplaySpace } from '../../mock/spaces'
 import { CreateSpacePanel } from './CreateSpacePanel'
 import { SpacesListPanel } from './SpacesListPanel'
 
@@ -38,7 +38,7 @@ function extractRepoLabel(value: string): string {
   return segments[segments.length - 1] || 'repo'
 }
 
-export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: HomeSpacesScreenProps) {
+export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpacesScreenProps) {
   // Workspace / provisioning selection
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('managed')
   const [provisioningMethod, setProvisioningMethod] = useState<ProvisioningMethod>('copy-local')
