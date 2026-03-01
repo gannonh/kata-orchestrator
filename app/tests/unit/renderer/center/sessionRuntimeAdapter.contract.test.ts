@@ -12,59 +12,55 @@ describe('SessionRuntimeAdapter contract', () => {
 
   it('enforces runtime execution checks for subscribe, submitPrompt, and retry', () => {
     let unsubscribed = false
+    let submittedPrompt = ''
+    let retryCount = 0
     const receivedEvents: SessionRuntimeEvent[] = []
 
-    const subscribe: SessionRuntimeAdapter['subscribe'] = (
-      onEvent: (event: SessionRuntimeEvent) => void
-    ) => {
-      onEvent({
-        type: 'run_state_changed',
-        runState: 'pending'
-      })
-      onEvent({
-        type: 'run_state_changed',
-        runState: 'error',
-        errorMessage: 'Network timeout'
-      })
-      onEvent({
-        type: 'message_appended',
-        message: {
-          id: 'agent-1',
-          role: 'agent',
-          content: 'hello',
-          createdAt: '1970-01-01T00:00:01.000Z'
-        }
-      })
-
-      return () => {
-        unsubscribed = true
-      }
-    }
-
-    const submitPrompt: SessionRuntimeAdapter['submitPrompt'] = (prompt: string) => {
-      expect(typeof prompt).toBe('string')
-    }
-
-    const retry: SessionRuntimeAdapter['retry'] = () => Promise.resolve()
-
     const adapter: SessionRuntimeAdapter = {
-      subscribe,
-      submitPrompt,
-      retry
+      subscribe(onEvent) {
+        onEvent({
+          type: 'run_state_changed',
+          runState: 'pending'
+        })
+        onEvent({
+          type: 'run_state_changed',
+          runState: 'error',
+          errorMessage: 'Network timeout'
+        })
+        onEvent({
+          type: 'message_appended',
+          message: {
+            id: 'agent-1',
+            role: 'agent',
+            content: 'hello',
+            createdAt: '1970-01-01T00:00:01.000Z'
+          }
+        })
+
+        return () => {
+          unsubscribed = true
+        }
+      },
+      submitPrompt(prompt: string) {
+        submittedPrompt = prompt
+      },
+      retry() {
+        retryCount += 1
+      }
     }
 
     expect(adapter.subscribe.length).toBe(1)
     expect(adapter.submitPrompt.length).toBe(1)
     expect(adapter.retry.length).toBe(0)
 
-    const submitResult: Promise<void> | void = adapter.submitPrompt('Plan phase 2')
-    const retryResult: Promise<void> | void = adapter.retry()
+    adapter.submitPrompt('Plan phase 2')
+    adapter.retry()
     const unsubscribe: () => void = adapter.subscribe((event: SessionRuntimeEvent) => {
       receivedEvents.push(event)
     })
 
-    expect(submitResult === undefined || submitResult instanceof Promise).toBe(true)
-    expect(retryResult === undefined || retryResult instanceof Promise).toBe(true)
+    expect(submittedPrompt).toBe('Plan phase 2')
+    expect(retryCount).toBe(1)
     expect(typeof unsubscribe).toBe('function')
 
     expect(receivedEvents.map((event) => event.type)).toEqual([

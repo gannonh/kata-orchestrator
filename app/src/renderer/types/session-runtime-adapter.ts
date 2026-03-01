@@ -28,3 +28,21 @@ export type SessionRuntimeAdapter = {
   submitPrompt: (prompt: string) => Promise<void> | void
   retry: () => Promise<void> | void
 }
+
+type ExpectedSessionRuntimeAdapterShape = {
+  subscribe: (onEvent: (event: SessionRuntimeEvent) => void) => () => void
+  submitPrompt: (prompt: string) => Promise<void> | void
+  retry: () => Promise<void> | void
+}
+
+type AssertTrue<T extends true> = T
+
+type AreMutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
+
+type SessionRuntimeAdapterMatchesExpectedShape = AssertTrue<
+  AreMutuallyAssignable<SessionRuntimeAdapter, ExpectedSessionRuntimeAdapterShape>
+>
+
+type ExpectedShapeMatchesSessionRuntimeAdapter = AssertTrue<
+  AreMutuallyAssignable<ExpectedSessionRuntimeAdapterShape, SessionRuntimeAdapter>
+>
