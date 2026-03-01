@@ -120,13 +120,12 @@ test.describe('managed provisioning @uat @ci', () => {
     await expect(appWindow.getByTestId('app-shell-root')).toBeVisible()
   })
 
-  test('creates managed space via clone-github with local bare remote fixture', async ({
+  test('creates managed space via clone-github fallback URL with local bare remote fixture', async ({
     appWindow,
     managedTestRootDir
   }) => {
     const upstreamRepoPath = path.join(managedTestRootDir, 'fixtures', 'clone-source')
     await createSeedRepo(upstreamRepoPath)
-    await createBranchCommit(upstreamRepoPath, 'feature/e2e-clone')
 
     const bareRemotePath = path.join(managedTestRootDir, 'fixtures', 'clone-remote.git')
     await fsPromises.mkdir(path.dirname(bareRemotePath), { recursive: true })
@@ -136,15 +135,15 @@ test.describe('managed provisioning @uat @ci', () => {
     const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
     await appWindow.getByRole('button', { name: 'Use clone github provisioning' }).click()
-    await appWindow.getByRole('textbox', { name: 'Remote repo URL' }).fill(bareRemotePath)
-    await appWindow.getByRole('textbox', { name: 'Branch' }).fill('feature/e2e-clone')
+    await expect(appWindow.getByText(/GitHub CLI not available/i)).toBeVisible()
+    await appWindow.getByRole('textbox', { name: 'Repository URL' }).fill(bareRemotePath)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
     await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
     const createdSpace = await findNewSpace(appWindow, beforeIds)
     expect(createdSpace.workspaceMode).toBe('managed')
     expect(fs.existsSync(createdSpace.rootPath)).toBe(true)
-    expect(runGit(createdSpace.rootPath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('feature/e2e-clone')
+    expect(runGit(createdSpace.rootPath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('main')
   })
 
   test('creates managed space via new-repo flow', async ({ appWindow, managedTestRootDir }) => {
@@ -155,8 +154,8 @@ test.describe('managed provisioning @uat @ci', () => {
     const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
     await appWindow.getByRole('button', { name: 'Use new repo provisioning' }).click()
-    await appWindow.getByRole('textbox', { name: 'Source repo parent directory' }).fill(newRepoParentDir)
-    await appWindow.getByRole('textbox', { name: 'Source repo folder name' }).fill('managed-new-project')
+    await appWindow.getByRole('textbox', { name: 'New repo parent directory' }).fill(newRepoParentDir)
+    await appWindow.getByRole('textbox', { name: 'New repo name' }).fill('managed-new-project')
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
     await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
@@ -169,21 +168,18 @@ test.describe('managed provisioning @uat @ci', () => {
     expect(fs.existsSync(path.join(newRepoParentDir, 'managed-new-project', '.git'))).toBe(true)
   })
 
-  test('creates managed space via new-repo when parent directory input is blank', async ({ appWindow }) => {
+  test('shows validation error for new-repo when parent directory input is blank', async ({ appWindow }) => {
     const sourceFolderName = `managed-new-project-blank-parent-${Date.now()}`
 
     await ensureHomeSpacesView(appWindow)
     const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
     await appWindow.getByRole('button', { name: 'Use new repo provisioning' }).click()
-    await appWindow.getByRole('textbox', { name: 'Source repo folder name' }).fill(sourceFolderName)
+    await appWindow.getByRole('textbox', { name: 'New repo name' }).fill(sourceFolderName)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
-    await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
-    const createdSpace = await findNewSpace(appWindow, beforeIds)
-    expect(createdSpace.workspaceMode).toBe('managed')
-    expect(fs.existsSync(createdSpace.rootPath)).toBe(true)
-    expect(runGit(createdSpace.rootPath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('main')
+    await expect(appWindow.getByRole('alert')).toContainText('newRepoParentDir must be an absolute path')
+    await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBe(beforeIds.size)
   })
 
   test('persists spaces across app restart @quality-gate', async ({

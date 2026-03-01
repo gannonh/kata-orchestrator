@@ -180,4 +180,14 @@ describe('sessionConversationReducer', () => {
 
     expect(nextState).toBe(errorState)
   })
+
+  it('returns current state for unknown events', () => {
+    const initialState = createInitialSessionConversationState()
+
+    const nextState = sessionConversationReducer(initialState, {
+      type: 'UNKNOWN_EVENT'
+    } as unknown as Parameters<typeof sessionConversationReducer>[1])
+
+    expect(nextState).toBe(initialState)
+  })
 })

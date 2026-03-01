@@ -103,4 +103,20 @@ describe('deriveMockChatPresentation', () => {
 
     expect(result.viewState).toBe('analyzing')
   })
+
+  it('emits toolCall blocks for messages that include tool calls', () => {
+    const result = deriveMockChatPresentation({
+      messages: [
+        {
+          id: 'a-tools',
+          role: 'assistant',
+          content: 'Collected context.',
+          toolCalls: [{ id: 'tool-1', name: 'read_file', args: { path: 'foo' }, output: 'ok' }]
+        }
+      ],
+      isStreaming: false
+    })
+
+    expect(result.blocks.some((block) => block.type === 'toolCall' && block.toolCall.id === 'tool-1')).toBe(true)
+  })
 })

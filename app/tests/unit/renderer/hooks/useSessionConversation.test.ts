@@ -168,4 +168,20 @@ describe('useSessionConversation', () => {
 
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('does nothing when retry is called outside error state', () => {
+    vi.useFakeTimers()
+
+    const { result } = renderHook(() => useSessionConversation())
+
+    expect(result.current.state.runState).toBe('empty')
+
+    act(() => {
+      result.current.retry()
+    })
+
+    expect(result.current.state.runState).toBe('empty')
+    expect(result.current.state.messages).toEqual([])
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })
