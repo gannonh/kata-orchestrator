@@ -369,6 +369,20 @@ describe('HomeSpacesScreen', () => {
     })
   })
 
+  it('ignores browse responses with empty path values', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '' })
+    const gitListBranches = vi.fn()
+    window.kata = { ...window.kata, dialogOpenDirectory, gitListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+
+    await waitFor(() => {
+      expect(dialogOpenDirectory).toHaveBeenCalledTimes(1)
+    })
+    expect(gitListBranches).not.toHaveBeenCalled()
+  })
+
   it('shows repository error when browse returns an error payload', async () => {
     const dialogOpenDirectory = vi.fn().mockResolvedValue({
       path: '/Users/me/dev/not-a-repo',
@@ -414,6 +428,20 @@ describe('HomeSpacesScreen', () => {
       expect(screen.getByText('Could not read branches.')).toBeTruthy()
     })
     expect(screen.queryByRole('combobox', { name: /branch/i })).toBeNull()
+  })
+
+  it('shows fallback branch text when selected repo has no branches', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
+    const gitListBranches = vi.fn().mockResolvedValue([])
+    window.kata = { ...window.kata, dialogOpenDirectory, gitListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+
+    await waitFor(() => {
+      expect(gitListBranches).toHaveBeenCalledTimes(1)
+      expect(screen.getByText(/no branches found\. defaulting to main\./i)).toBeTruthy()
+    })
   })
 
   it('shows error when browse dialog throws', async () => {

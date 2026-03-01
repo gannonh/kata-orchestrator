@@ -38,4 +38,19 @@ describe('resolveSpaceName collision fallback', () => {
 
     expect(name).toBe('repo-cccccc')
   })
+
+  it('throws when all fallback attempts collide', () => {
+    // 4-byte attempts => repo-aaaa; 6-byte attempts => repo-bbbbbb.
+    mockRandomBytes.mockImplementation((length: number) => {
+      if (length === 4) {
+        return Buffer.from([0, 0, 0, 0])
+      }
+      return Buffer.from([1, 1, 1, 1, 1, 1])
+    })
+
+    const existingNames = new Set(['repo-aaaa', 'repo-bbbbbb'])
+    expect(() => resolveSpaceName({ repoLabel: 'repo', existingNames })).toThrow(
+      'Unable to generate a unique space name'
+    )
+  })
 })
