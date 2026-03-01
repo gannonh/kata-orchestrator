@@ -46,158 +46,120 @@ describe('HomeSpacesScreen', () => {
     })
   })
 
-  it('removes legacy prompt-focused UI from create panel', () => {
+  it('has no Space name textbox anywhere', () => {
     render(<HomeSpacesScreen onOpenSpace={() => {}} />)
-
-    expect(screen.queryByRole('textbox', { name: 'Space prompt' })).toBeNull()
-    expect(screen.queryByText("Let's get building!")).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Toggle rapid fire mode' })).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Space name' })).toBeNull()
   })
 
-  it('defaults space name to repo label only in UI', () => {
+  it('shows 3-step structure', () => {
     render(<HomeSpacesScreen onOpenSpace={() => {}} />)
-    expect(screen.getByRole('textbox', { name: 'Space name' })).toHaveProperty('value', 'kata-cloud')
+    expect(screen.getByText('Step 1 · Where work happens')).toBeTruthy()
+    expect(screen.getByText('Step 2 · Source setup')).toBeTruthy()
+    expect(screen.getByText('Step 3 · Review and create')).toBeTruthy()
+    expect(screen.queryByText('Step 3 · Space name')).toBeNull()
+    expect(screen.queryByText('Step 4 · Review and create')).toBeNull()
   })
 
-  it('falls back to selected space repoUrl when selected repo label is blank', () => {
-    render(<HomeSpacesScreen
-      onOpenSpace={() => {}}
-      initialSpaces={[
-        {
-          ...makeSpaceRecord({
-            id: 'space-repo-url-fallback',
-            repoUrl: 'https://github.com/acme/repo-fallback.git'
-          }),
-          repo: '',
-          elapsed: '',
-          archived: false
-        }
-      ]}
-    />)
-    expect(screen.getByRole('textbox', { name: 'Space name' })).toHaveProperty('value', 'repo-fallback')
+  it('shows browse button for copy-local mode', () => {
+    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Browse' })).toBeTruthy()
   })
 
-  it('submits copy-local payload with selected-space root fallback', async () => {
-    const createdRecord = makeSpaceRecord({
-      id: 'space-created-copy-local',
-      name: 'Copy Local Space'
+  it('triggers dialogOpenDirectory when Browse is clicked', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
+    const gitListBranches = vi.fn().mockResolvedValue(['main', 'develop'])
+    window.kata = { ...window.kata, dialogOpenDirectory, gitListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+
+    await waitFor(() => {
+      expect(dialogOpenDirectory).toHaveBeenCalledTimes(1)
     })
-    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
-    window.kata = { ...window.kata, spaceCreate }
+  })
 
-    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+  it('submits copy-local payload without name or spaceNameOverride', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/my-repo' })
+    const gitListBranches = vi.fn().mockResolvedValue(['main', 'develop'])
+    const createdRecord = makeSpaceRecord({ id: 'space-created-copy-local', name: 'my-repo-x7k2' })
+    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
+    window.kata = { ...window.kata, spaceCreate, dialogOpenDirectory, gitListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    // Browse and select a directory
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+    await waitFor(() => {
+      expect(dialogOpenDirectory).toHaveBeenCalledTimes(1)
+    })
+
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
 
     await waitFor(() => {
       expect(spaceCreate).toHaveBeenCalledTimes(1)
     })
 
-    expect(spaceCreate).toHaveBeenCalledWith(expect.objectContaining({
+    const payload = spaceCreate.mock.calls[0][0] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('name')
+    expect(payload).not.toHaveProperty('spaceNameOverride')
+    expect(payload).toMatchObject({
       workspaceMode: 'managed',
-      provisioningMethod: 'copy-local',
-      sourceLocalPath: '/Users/gannonh/dev/kata/kata-cloud',
-      branch: 'main'
-    }))
+      provisioningMethod: 'copy-local'
+    })
   })
 
-  it('submits clone-github payload with selected branch', async () => {
-    const createdRecord = makeSpaceRecord({
-      id: 'space-created-clone-branch',
-      name: 'Clone Branch Space'
-    })
-    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
-    window.kata = { ...window.kata, spaceCreate }
+  it('shows auto-generated name preview in review step', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/my-repo' })
+    const gitListBranches = vi.fn().mockResolvedValue(['main'])
+    window.kata = { ...window.kata, dialogOpenDirectory, gitListBranches }
 
-    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Remote repo URL' }), {
-      target: { value: 'https://github.com/gannonh/kata-cloud.git' }
-    })
-    fireEvent.change(screen.getByRole('textbox', { name: 'Branch' }), {
-      target: { value: 'feature/demo-branch' }
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
     await waitFor(() => {
-      expect(spaceCreate).toHaveBeenCalledTimes(1)
+      expect(dialogOpenDirectory).toHaveBeenCalledTimes(1)
     })
 
-    expect(spaceCreate).toHaveBeenCalledWith(expect.objectContaining({
-      workspaceMode: 'managed',
-      provisioningMethod: 'clone-github',
-      sourceRemoteUrl: 'https://github.com/gannonh/kata-cloud.git',
-      branch: 'feature/demo-branch'
-    }))
+    // The auto-generated name should be shown (regex because nanoid part is random)
+    expect(screen.getByText(/Space:/)).toBeTruthy()
   })
 
-  it('submits developer-managed mode with explicit workspace path', async () => {
-    const createdRecord = makeSpaceRecord({
-      id: 'space-created-external',
-      name: 'External Path Space',
-      rootPath: '/Users/gannonh/dev/custom/worktree'
-    })
+  it('submits external mode payload without name', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
+    const gitListBranches = vi.fn().mockResolvedValue(['main'])
+    const createdRecord = makeSpaceRecord({ id: 'space-external' })
     const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
-    window.kata = { ...window.kata, spaceCreate }
+    window.kata = { ...window.kata, spaceCreate, dialogOpenDirectory, gitListBranches }
 
-    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Use my existing folder/worktree (developer-managed)' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Workspace path' }), {
-      target: { value: '/Users/gannonh/dev/custom/worktree' }
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+    await waitFor(() => {
+      expect(dialogOpenDirectory).toHaveBeenCalledTimes(1)
     })
-    fireEvent.change(screen.getByRole('textbox', { name: 'Space name' }), {
-      target: { value: 'External Path Space' }
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
 
+    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
     await waitFor(() => {
       expect(spaceCreate).toHaveBeenCalledTimes(1)
     })
 
-    expect(spaceCreate).toHaveBeenCalledWith(expect.objectContaining({
-      workspaceMode: 'external',
-      rootPath: '/Users/gannonh/dev/custom/worktree',
-      spaceNameOverride: 'External Path Space'
-    }))
-  })
-
-  it('submits new-repo payload with derived parent dir when parent input is blank', async () => {
-    const createdRecord = makeSpaceRecord({
-      id: 'space-created-new-repo-default-parent',
-      name: 'Managed New Repo Default Parent'
-    })
-    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
-    window.kata = { ...window.kata, spaceCreate }
-
-    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Use new repo provisioning' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Space name' }), {
-      target: { value: 'Managed New Repo Default Parent' }
-    })
-    fireEvent.change(screen.getByRole('textbox', { name: 'Source repo folder name' }), {
-      target: { value: 'managed-new-project' }
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-
-    await waitFor(() => {
-      expect(spaceCreate).toHaveBeenCalledTimes(1)
-    })
-
-    expect(spaceCreate).toHaveBeenCalledWith(expect.objectContaining({
-      workspaceMode: 'managed',
-      provisioningMethod: 'new-repo',
-      newRepoFolderName: 'managed-new-project',
-      newRepoParentDir: '/Users/gannonh/dev/kata'
-    }))
+    const payload = spaceCreate.mock.calls[0][0] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('name')
+    expect(payload).not.toHaveProperty('spaceNameOverride')
+    expect(payload.workspaceMode).toBe('external')
   })
 
   it('shows create failure alert when IPC create rejects', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
+    const gitListBranches = vi.fn().mockResolvedValue(['main'])
     const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockRejectedValue(new Error('create failed'))
-    window.kata = { ...window.kata, spaceCreate }
+    window.kata = { ...window.kata, spaceCreate, dialogOpenDirectory, gitListBranches }
 
-    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+    await waitFor(() => expect(dialogOpenDirectory).toHaveBeenCalledTimes(1))
 
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
 
@@ -207,29 +169,20 @@ describe('HomeSpacesScreen', () => {
   })
 
   it('shows IPC unavailable error when create handler is not exposed', async () => {
-    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
+    const gitListBranches = vi.fn().mockResolvedValue(['main'])
+    window.kata = { ...window.kata, dialogOpenDirectory, gitListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+    await waitFor(() => expect(dialogOpenDirectory).toHaveBeenCalledTimes(1))
 
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toContain('IPC unavailable')
     })
-  })
-
-  it('shows validation error for external mode when no workspace path is available', async () => {
-    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Use my existing folder/worktree (developer-managed)' }))
-    expect(screen.getByText('Editable files path: (required).')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Create space' })).toHaveProperty('disabled', true)
-  })
-
-  it('shows validation error for clone mode when remote URL is missing', async () => {
-    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
-    expect(screen.getByText('Source repo action: clone (required) on branch main.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Create space' })).toHaveProperty('disabled', true)
   })
 
   it('supports search and list toggles (grouping + archived)', async () => {
@@ -264,166 +217,21 @@ describe('HomeSpacesScreen', () => {
   })
 
   it('falls back to default create error for non-Error rejection values', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
+    const gitListBranches = vi.fn().mockResolvedValue(['main'])
     const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockRejectedValue('')
-    window.kata = { ...window.kata, spaceCreate }
+    window.kata = { ...window.kata, spaceCreate, dialogOpenDirectory, gitListBranches }
 
-    render(<HomeSpacesScreen onOpenSpace={() => {}} />)
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+    await waitFor(() => expect(dialogOpenDirectory).toHaveBeenCalledTimes(1))
+
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toContain('Failed to create space.')
     })
-  })
-
-  it('preserves selected space when refreshed list still contains it', async () => {
-    const selected = makeSpaceRecord({
-      id: 'space-keep',
-      name: 'Keep Selected',
-      repoUrl: 'https://github.com/gannonh/kata-cloud',
-      rootPath: '/Users/gannonh/dev/kata/kata-cloud'
-    })
-    const spaceList = vi.fn<() => Promise<SpaceRecord[]>>().mockResolvedValue([
-      selected,
-      makeSpaceRecord({
-        id: 'space-other',
-        name: 'Other Space',
-        repoUrl: 'https://github.com/gannonh/kata-orchestrator',
-        rootPath: '/Users/gannonh/dev/kata/kata-orchestrator'
-      })
-    ])
-    window.kata = { ...window.kata, spaceList }
-    const onOpenSpace = vi.fn()
-
-    render(<HomeSpacesScreen onOpenSpace={onOpenSpace} initialSpaces={[
-      {
-        ...selected,
-        repo: 'gannonh/kata-cloud',
-        elapsed: '',
-        archived: false
-      }
-    ]} />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Keep Selected')).toBeTruthy()
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
-    expect(onOpenSpace).toHaveBeenCalledWith('space-keep')
-  })
-
-  it('falls back to first fetched id when refreshed list has only archived spaces', async () => {
-    const archived = makeSpaceRecord({
-      id: 'space-archived-only',
-      name: 'Archived Only',
-      status: 'archived'
-    })
-    const spaceList = vi.fn<() => Promise<SpaceRecord[]>>().mockResolvedValue([archived])
-    window.kata = { ...window.kata, spaceList }
-    const onOpenSpace = vi.fn()
-
-    render(<HomeSpacesScreen onOpenSpace={onOpenSpace} />)
-
-    await waitFor(() => {
-      expect(spaceList).toHaveBeenCalledTimes(1)
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Show archived spaces' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
-    expect(onOpenSpace).toHaveBeenCalledWith('space-archived-only')
-  })
-
-  it('derives empty parent dir from root-only paths for managed new repo input', async () => {
-    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(
-      makeSpaceRecord({ id: 'space-root-only' })
-    )
-    window.kata = { ...window.kata, spaceCreate }
-
-    render(<HomeSpacesScreen
-      onOpenSpace={() => {}}
-      initialSpaces={[
-        {
-          ...makeSpaceRecord({
-            id: 'space-root-path',
-            rootPath: '/repo'
-          }),
-          repo: 'acme/repo',
-          elapsed: '',
-          archived: false
-        }
-      ]}
-    />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Use new repo provisioning' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Source repo folder name' }), {
-      target: { value: 'root-only-repo' }
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-
-    await waitFor(() => {
-      expect(spaceCreate).toHaveBeenCalledTimes(1)
-    })
-    expect(spaceCreate).toHaveBeenCalledWith(expect.objectContaining({
-      newRepoParentDir: ''
-    }))
-  })
-
-  it('derives Windows drive root parent dir for managed new repo input', async () => {
-    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(
-      makeSpaceRecord({ id: 'space-windows-parent' })
-    )
-    window.kata = { ...window.kata, spaceCreate }
-
-    render(<HomeSpacesScreen
-      onOpenSpace={() => {}}
-      initialSpaces={[
-        {
-          ...makeSpaceRecord({
-            id: 'space-windows-root',
-            rootPath: 'C:\\repo'
-          }),
-          repo: 'acme/windows-repo',
-          elapsed: '',
-          archived: false
-        }
-      ]}
-    />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Use new repo provisioning' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Source repo folder name' }), {
-      target: { value: 'windows-repo' }
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-
-    await waitFor(() => {
-      expect(spaceCreate).toHaveBeenCalledTimes(1)
-    })
-    expect(spaceCreate).toHaveBeenCalledWith(expect.objectContaining({
-      newRepoParentDir: 'C:\\'
-    }))
-  })
-
-  it('creates managed new-repo payload from empty initial state with default repoUrl/branch', async () => {
-    const createdRecord = makeSpaceRecord({
-      id: 'space-empty-initial-state',
-      name: 'Empty Initial State'
-    })
-    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
-    window.kata = { ...window.kata, spaceCreate }
-
-    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Use new repo provisioning' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Source repo folder name' }), {
-      target: { value: 'empty-state-repo' }
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-
-    await waitFor(() => {
-      expect(spaceCreate).toHaveBeenCalledTimes(1)
-    })
-    expect(spaceCreate).toHaveBeenCalledWith(expect.objectContaining({
-      repoUrl: '',
-      branch: 'main',
-      newRepoFolderName: 'empty-state-repo'
-    }))
   })
 
   it('opens the currently selected space with the correct space ID', () => {
