@@ -15,7 +15,7 @@ import {
   WORKSPACE_MODES,
   createDefaultAppState
 } from '../shared/types/space'
-import { resolveSpaceName } from '../shared/space-name'
+import { resolveSpaceName } from './space-name'
 import type { StateStore } from './state-store'
 import {
   WorkspaceProvisioningError,

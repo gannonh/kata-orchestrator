@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { generateShortId, resolveSpaceName } from '../../../src/shared/space-name'
+import { generateShortId, resolveSpaceName } from '../../../src/main/space-name'
 
 describe('generateShortId', () => {
   it('returns a 4-character lowercase alphanumeric string', () => {
