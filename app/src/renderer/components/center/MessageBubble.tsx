@@ -1,9 +1,12 @@
 import { MarkdownRenderer } from '../shared/MarkdownRenderer'
 import { cn } from '../../lib/cn'
 import { type ChatMessage } from '../../types/chat'
+import { type ConversationMessage } from '../../types/session-conversation'
+
+type BubbleMessage = ChatMessage | ConversationMessage
 
 type MessageBubbleProps = {
-  message: ChatMessage
+  message: BubbleMessage
   variant?: 'default' | 'collapsed'
   summary?: string
 }
