@@ -29,6 +29,7 @@ function createBaseProps() {
     isLoadingGithubBranches: false,
     githubError: null as string | null,
     showGithubFallbackUrl: false,
+    githubFallbackUrl: '',
     onGithubFallbackUrlChange: vi.fn(),
     // New repo props
     newRepoParentDir: '/Users/me/dev',

@@ -205,11 +205,12 @@ test.describe('managed provisioning @uat @ci', () => {
     await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
     const createdSpace = await findNewSpace(appWindow, beforeIds)
     const persistedSpaceName = createdSpace.name
+    const persistedSpaceId = createdSpace.id
 
     const preRelaunchSpaces = await listSpaces(appWindow)
     await expect.poll(() => fs.existsSync(managedStateFilePath)).toBe(true)
     const persistedState = await readPersistedState(managedStateFilePath)
-    const persistedSpace = Object.values(persistedState.spaces).find((space) => space.name === persistedSpaceName)
+    const persistedSpace = Object.values(persistedState.spaces).find((space) => space.id === persistedSpaceId)
     expect(persistedSpace).toBeDefined()
     expect(persistedSpace?.workspaceMode).toBe('managed')
     expect(persistedSpace?.branch).toBe('main')
@@ -301,6 +302,7 @@ test.describe('managed provisioning @uat @ci', () => {
       await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
       const createdSpace = await findNewSpace(appWindow, beforeIds)
       const defaultPathSpaceName = createdSpace.name
+      const defaultPathSpaceId = createdSpace.id
 
       const userDataPath = await appWithoutStateOverride.evaluate(async ({ app }) => app.getPath('userData'))
       defaultStatePath = path.join(userDataPath, 'app-state.json')
@@ -310,7 +312,7 @@ test.describe('managed provisioning @uat @ci', () => {
 
       await expect.poll(() => fs.existsSync(defaultStatePath)).toBe(true)
       const persistedState = await readPersistedState(defaultStatePath)
-      persistedSpace = Object.values(persistedState.spaces).find((space) => space.name === defaultPathSpaceName)
+      persistedSpace = Object.values(persistedState.spaces).find((space) => space.id === defaultPathSpaceId)
       expect(persistedSpace).toBeDefined()
       expect(persistedSpace?.workspaceMode).toBe('managed')
       expect(persistedSpace?.branch).toBe('main')

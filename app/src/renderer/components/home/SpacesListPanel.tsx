@@ -95,11 +95,7 @@ export function SpacesListPanel({
       ) : null}
 
       <div className="space-y-6">
-        {groups.map((group, groupIndex) => {
-          if (group.spaces.length === 0) {
-            return null
-          }
-
+        {groups.filter((group) => group.spaces.length > 0).map((group, groupIndex) => {
           return (
             <div key={group.repo} className={groupIndex > 0 ? 'border-t border-border/50 pt-4' : ''}>
               <div className="mb-2 flex items-center justify-between">

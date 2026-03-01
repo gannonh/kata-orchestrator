@@ -15,10 +15,10 @@ declare global {
       spaceList?: () => Promise<SpaceRecord[]>
       spaceGet?: (id: string) => Promise<SpaceRecord | null>
       sessionCreate?: (input: CreateSessionInput) => Promise<SessionRecord>
-      dialogOpenDirectory?: () => Promise<{ path: string } | null>
-      gitListBranches?: (repoPath: string) => Promise<string[]>
-      githubListRepos?: () => Promise<Repo[]>
-      githubListBranches?: (owner: string, repo: string) => Promise<string[]>
+      dialogOpenDirectory?: () => Promise<{ path: string } | { error: string; path: string } | null>
+      gitListBranches?: (repoPath: string) => Promise<string[] | { error: string }>
+      githubListRepos?: () => Promise<Repo[] | { error: string }>
+      githubListBranches?: (owner: string, repo: string) => Promise<string[] | { error: string }>
     }
   }
 }

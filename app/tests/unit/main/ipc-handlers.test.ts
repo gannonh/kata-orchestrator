@@ -672,6 +672,16 @@ describe('registerIpcHandlers', () => {
       const result = await handler(null)
       expect(result).toEqual({ error: 'GitHub CLI not available. Install and authenticate with `gh auth login`.' })
     })
+
+    it('returns parse error object when gh output is malformed JSON', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: (err: Error | null, result: { stdout: string }) => void) => {
+        cb(null, { stdout: '{not-json' })
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('github:listRepos')!
+      const result = await handler(null)
+      expect(result).toEqual({ error: 'Failed to parse GitHub CLI response.' })
+    })
   })
 
   describe('github:listBranches', () => {

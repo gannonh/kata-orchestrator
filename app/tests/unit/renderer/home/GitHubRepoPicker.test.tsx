@@ -25,7 +25,8 @@ function baseProps() {
     isLoadingBranches: false,
     error: null as string | null,
     onFallbackUrlChange: vi.fn(),
-    showFallbackUrl: false
+    showFallbackUrl: false,
+    fallbackUrl: ''
   }
 }
 
@@ -85,6 +86,19 @@ describe('GitHubRepoPicker', () => {
       target: { value: 'https://github.com/org/repo.git' }
     })
     expect(props.onFallbackUrlChange).toHaveBeenCalledWith('https://github.com/org/repo.git')
+  })
+
+  it('renders fallback URL input as controlled value', () => {
+    render(
+      <GitHubRepoPicker
+        {...baseProps()}
+        error="GitHub CLI not available."
+        showFallbackUrl={true}
+        fallbackUrl="https://github.com/org/repo.git"
+      />
+    )
+    const input = screen.getByRole('textbox', { name: /url/i })
+    expect(input).toHaveProperty('value', 'https://github.com/org/repo.git')
   })
 
   it('calls onBranchChange when selecting a branch', () => {

@@ -156,7 +156,7 @@ function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
       }
       return {
         ...baseInput,
-          workspaceMode: 'managed',
+        workspaceMode: 'managed',
         provisioningMethod: 'copy-local',
         sourceLocalPath: sourceLocalPath.trim()
       }
@@ -168,7 +168,7 @@ function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
       }
       return {
         ...baseInput,
-          workspaceMode: 'managed',
+        workspaceMode: 'managed',
         provisioningMethod: 'clone-github',
         sourceRemoteUrl: sourceRemoteUrl.trim()
       }
@@ -185,7 +185,7 @@ function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
       const normalizedParentDir = newRepoParentDir.trim() || path.join(os.homedir(), 'dev')
       return {
         ...baseInput,
-          workspaceMode: 'managed',
+        workspaceMode: 'managed',
         provisioningMethod: 'new-repo',
         newRepoParentDir: normalizedParentDir,
         newRepoFolderName: newRepoFolderName.trim()
@@ -395,7 +395,11 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
       const { stdout } = await execFileAsync('gh', [
         'repo', 'list', '--json', 'name,nameWithOwner,url', '--limit', '100'
       ])
-      return JSON.parse(stdout)
+      try {
+        return JSON.parse(stdout)
+      } catch {
+        return { error: 'Failed to parse GitHub CLI response.' }
+      }
     } catch {
       return { error: 'GitHub CLI not available. Install and authenticate with `gh auth login`.' }
     }

@@ -334,6 +334,22 @@ describe('HomeSpacesScreen', () => {
     })
   })
 
+  it('shows fallback URL when GitHub repo fetch resolves an error payload', async () => {
+    const githubListRepos = vi.fn().mockResolvedValue({
+      error: 'GitHub CLI not available. Install and authenticate with `gh auth login`.'
+    })
+    window.kata = { ...window.kata, githubListRepos }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/GitHub CLI not available/)).toBeTruthy()
+      expect(screen.getByRole('textbox', { name: /repository url/i })).toBeTruthy()
+    })
+  })
+
   it('tolerates browse when dialogOpenDirectory is not exposed', async () => {
     window.kata = {}
     render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
@@ -353,6 +369,24 @@ describe('HomeSpacesScreen', () => {
     })
   })
 
+  it('shows repository error when browse returns an error payload', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({
+      path: '/Users/me/dev/not-a-repo',
+      error: 'Selected directory is not a git repository.'
+    })
+    const gitListBranches = vi.fn()
+    window.kata = { ...window.kata, dialogOpenDirectory, gitListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+
+    await waitFor(() => {
+      expect(dialogOpenDirectory).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('Selected directory is not a git repository.')).toBeTruthy()
+    })
+    expect(gitListBranches).not.toHaveBeenCalled()
+  })
+
   it('tolerates branch loading failure after browse', async () => {
     const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
     const gitListBranches = vi.fn().mockRejectedValue(new Error('git error'))
@@ -365,6 +399,21 @@ describe('HomeSpacesScreen', () => {
       expect(gitListBranches).toHaveBeenCalledTimes(1)
     })
     // Should not throw; branches remain empty
+  })
+
+  it('shows branch error when gitListBranches resolves an error payload', async () => {
+    const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
+    const gitListBranches = vi.fn().mockResolvedValue({ error: 'Could not read branches.' })
+    window.kata = { ...window.kata, dialogOpenDirectory, gitListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
+
+    await waitFor(() => {
+      expect(gitListBranches).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('Could not read branches.')).toBeTruthy()
+    })
+    expect(screen.queryByRole('combobox', { name: /branch/i })).toBeNull()
   })
 
   it('shows error when browse dialog throws', async () => {
@@ -582,6 +631,74 @@ describe('HomeSpacesScreen', () => {
     await waitFor(() => {
       // No branch picker should be shown since loading failed
       expect(screen.queryByRole('combobox', { name: /branch/i })).toBeNull()
+    })
+  })
+
+  it('shows branch error when GitHub branch loading resolves an error payload', async () => {
+    const githubListRepos = vi.fn().mockResolvedValue([
+      { name: 'kata-cloud', nameWithOwner: 'gannonh/kata-cloud', url: 'https://github.com/gannonh/kata-cloud' }
+    ])
+    const githubListBranches = vi.fn().mockResolvedValue({ error: 'Could not fetch branches from GitHub.' })
+    window.kata = { ...window.kata, githubListRepos, githubListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('gannonh/kata-cloud')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('gannonh/kata-cloud'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not fetch branches from GitHub.')).toBeTruthy()
+    })
+    expect(screen.queryByRole('combobox', { name: /branch/i })).toBeNull()
+  })
+
+  it('ignores stale GitHub branch responses when selecting repos quickly', async () => {
+    const repos = [
+      { name: 'repo-a', nameWithOwner: 'org/repo-a', url: 'https://github.com/org/repo-a' },
+      { name: 'repo-b', nameWithOwner: 'org/repo-b', url: 'https://github.com/org/repo-b' }
+    ]
+    const githubListRepos = vi.fn().mockResolvedValue(repos)
+
+    let resolveFirst!: (branches: string[]) => void
+    let resolveSecond!: (branches: string[]) => void
+    const firstPromise = new Promise<string[]>((resolve) => {
+      resolveFirst = resolve
+    })
+    const secondPromise = new Promise<string[]>((resolve) => {
+      resolveSecond = resolve
+    })
+    const githubListBranches = vi.fn((owner: string, repo: string) => {
+      if (owner === 'org' && repo === 'repo-a') return firstPromise
+      return secondPromise
+    })
+
+    window.kata = { ...window.kata, githubListRepos, githubListBranches }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('org/repo-a')).toBeTruthy()
+      expect(screen.getByText('org/repo-b')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByText('org/repo-a'))
+    fireEvent.click(screen.getByText('org/repo-b'))
+
+    resolveSecond(['develop'])
+    await waitFor(() => {
+      const select = screen.getByRole('combobox', { name: /branch/i }) as HTMLSelectElement
+      expect(select.value).toBe('develop')
+    })
+
+    resolveFirst(['main'])
+    await waitFor(() => {
+      const select = screen.getByRole('combobox', { name: /branch/i }) as HTMLSelectElement
+      expect(select.value).toBe('develop')
     })
   })
 })

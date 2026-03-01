@@ -64,6 +64,11 @@ describe('RepoPathPicker', () => {
     expect(screen.getByText('Selected directory is not a git repository.')).toBeTruthy()
   })
 
+  it('shows fallback text when no branches are found', () => {
+    render(<RepoPathPicker {...baseProps()} path="/repo" branches={[]} isLoadingBranches={false} />)
+    expect(screen.getByText(/no branches found\. defaulting to main\./i)).toBeTruthy()
+  })
+
   it('calls onBranchChange when branch is selected', () => {
     const props = baseProps()
     render(<RepoPathPicker {...props} path="/repo" branches={['main', 'develop']} selectedBranch="main" />)

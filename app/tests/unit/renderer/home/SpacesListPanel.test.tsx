@@ -38,4 +38,28 @@ describe('SpacesListPanel repo grouping', () => {
     expect(screen.getByText('kata-cloud-m3p9')).toBeTruthy()
     expect(screen.getByText('kata-tui-j4n1')).toBeTruthy()
   })
+
+  it('does not render a top separator on the first visible group when earlier groups are empty', () => {
+    render(<SpacesListPanel
+      groups={[
+        { repo: 'empty/repo', spaces: [] },
+        { repo: 'visible/repo', spaces: [
+          { id: '1', name: 'visible-space', repoUrl: '', rootPath: '', branch: 'main', orchestrationMode: 'team', createdAt: '', status: 'active', repo: 'visible/repo', elapsed: '', archived: false }
+        ]}
+      ]}
+      selectedSpaceId="1"
+      searchQuery=""
+      groupByRepo={true}
+      showArchived={false}
+      onSearchChange={() => {}}
+      onToggleGroupByRepo={() => {}}
+      onToggleShowArchived={() => {}}
+      onSelectSpace={() => {}}
+    />)
+
+    const heading = screen.getByRole('heading', { level: 3, name: 'visible/repo' })
+    const groupContainer = heading.parentElement?.parentElement
+    expect(groupContainer?.className).not.toContain('border-t')
+    expect(groupContainer?.className).not.toContain('pt-4')
+  })
 })

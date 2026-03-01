@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { CreateSpaceInput, WorkspaceMode } from '@shared/types/space'
 import { toDisplaySpace, type DisplaySpace } from '../../mock/spaces'
@@ -60,6 +60,8 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
   const [isLoadingGithubBranches, setIsLoadingGithubBranches] = useState(false)
   const [githubError, setGithubError] = useState<string | null>(null)
   const [showGithubFallbackUrl, setShowGithubFallbackUrl] = useState(false)
+  const [githubFallbackUrl, setGithubFallbackUrl] = useState('')
+  const githubBranchRequestId = useRef(0)
 
   // New repo state
   const [newRepoParentDir, setNewRepoParentDir] = useState('')
@@ -163,10 +165,10 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
       return repoPath.length > 0
     }
     if (provisioningMethod === 'clone-github') {
-      return selectedGithubRepo !== null
+      return selectedGithubRepo !== null || githubFallbackUrl.trim().length > 0
     }
     return newRepoFolderName.trim().length > 0
-  }, [workspaceMode, provisioningMethod, repoPath, workspacePath, selectedGithubRepo, newRepoFolderName])
+  }, [workspaceMode, provisioningMethod, repoPath, workspacePath, selectedGithubRepo, githubFallbackUrl, newRepoFolderName])
 
   const summaryLines = useMemo(() => {
     const branch = selectedBranch || 'main'
@@ -181,7 +183,7 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
     const sourceLine = provisioningMethod === 'copy-local'
       ? `Source repo action: copy local repo from ${repoPath || '(required)'} on branch ${branch}.`
       : provisioningMethod === 'clone-github'
-        ? `Source repo action: clone ${selectedGithubRepo?.url || '(required)'} on branch ${selectedGithubBranch || 'main'}.`
+        ? `Source repo action: clone ${selectedGithubRepo?.url || githubFallbackUrl || '(required)'} on branch ${selectedGithubBranch || 'main'}.`
         : `Source repo action: create at ${newRepoParentDir || '~/dev'}/${newRepoFolderName || '(required)'} on branch main.`
 
     return [
@@ -189,7 +191,7 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
       sourceLine,
       'Editable files path: ~/.kata/workspaces/<repo>-<id>/repo.'
     ]
-  }, [provisioningMethod, repoPath, selectedBranch, selectedGithubRepo, selectedGithubBranch, newRepoParentDir, newRepoFolderName, workspaceMode])
+  }, [provisioningMethod, repoPath, selectedBranch, selectedGithubRepo, githubFallbackUrl, selectedGithubBranch, newRepoParentDir, newRepoFolderName, workspaceMode])
 
   async function handleBrowse() {
     const dialogOpenDirectory = window.kata?.dialogOpenDirectory
@@ -199,7 +201,16 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
 
     try {
       const result = await dialogOpenDirectory()
-      if (!result?.path) {
+      if (!result) {
+        return
+      }
+      if ('error' in result && result.error) {
+        setRepoPathError(result.error)
+        setBranches([])
+        setSelectedBranch('')
+        return
+      }
+      if (!result.path) {
         return
       }
 
@@ -209,12 +220,21 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
       setIsLoadingBranches(true)
       try {
         const branchList = await window.kata?.gitListBranches?.(result.path) ?? []
-        setBranches(branchList)
-        if (branchList.length > 0) {
-          setSelectedBranch(branchList[0])
+        if (Array.isArray(branchList)) {
+          setBranches(branchList)
+          if (branchList.length > 0) {
+            setSelectedBranch(branchList[0])
+          } else {
+            setSelectedBranch('')
+          }
+        } else {
+          setBranches([])
+          setSelectedBranch('')
+          setRepoPathError(branchList.error || 'Could not read branches.')
         }
       } catch {
         setBranches([])
+        setSelectedBranch('')
       } finally {
         setIsLoadingBranches(false)
       }
@@ -224,9 +244,12 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
   }
 
   function handleGithubRepoSelect(repo: Repo) {
+    const requestId = ++githubBranchRequestId.current
     setSelectedGithubRepo(repo)
     setGithubBranches([])
     setSelectedGithubBranch('')
+    setGithubError(null)
+    setShowGithubFallbackUrl(false)
     setIsLoadingGithubBranches(true)
 
     const owner = repo.nameWithOwner.split('/')[0]
@@ -235,15 +258,28 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
     /* v8 ignore start -- callbacks tested via UI assertions; V8 can't instrument promise chains in jsdom */
     window.kata?.githubListBranches?.(owner!, name)
       .then((branchList) => {
-        setGithubBranches(branchList ?? [])
-        if (branchList?.length) {
-          setSelectedGithubBranch(branchList[0])
+        if (requestId !== githubBranchRequestId.current) return
+        if (Array.isArray(branchList)) {
+          setGithubBranches(branchList)
+          if (branchList.length > 0) {
+            setSelectedGithubBranch(branchList[0])
+          } else {
+            setSelectedGithubBranch('')
+          }
+          return
         }
+        setGithubBranches([])
+        setSelectedGithubBranch('')
+        setGithubError(branchList.error || 'Could not fetch branches from GitHub.')
       })
       .catch(() => {
+        if (requestId !== githubBranchRequestId.current) return
         setGithubBranches([])
+        setSelectedGithubBranch('')
+        setGithubError('Could not fetch branches from GitHub.')
       })
       .finally(() => {
+        if (requestId !== githubBranchRequestId.current) return
         setIsLoadingGithubBranches(false)
       })
     /* v8 ignore stop */
@@ -269,12 +305,20 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
     window.kata?.githubListRepos?.()
       .then((repos) => {
         if (cancelled) return
-        setGithubRepos(repos ?? [])
-        setShowGithubFallbackUrl(false)
+        if (Array.isArray(repos)) {
+          setGithubRepos(repos)
+          setGithubError(null)
+          setShowGithubFallbackUrl(false)
+          return
+        }
+        setGithubRepos([])
+        setGithubError(repos?.error || 'GitHub CLI not available. Enter a URL instead.')
+        setShowGithubFallbackUrl(true)
       })
       .catch(() => {
         if (cancelled) return
         setGithubError('GitHub CLI not available. Enter a URL instead.')
+        setGithubRepos([])
         setShowGithubFallbackUrl(true)
       })
       .finally(() => {
@@ -321,13 +365,14 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
       }
     } else if (provisioningMethod === 'clone-github') {
       /* v8 ignore start -- tested via 'submits clone-github payload' assertion; V8 loses async branch tracking in jsdom */
+      const sourceRemoteUrl = selectedGithubRepo?.url ?? githubFallbackUrl.trim()
       createInput = {
-        repoUrl: selectedGithubRepo?.url ?? '',
+        repoUrl: sourceRemoteUrl,
         branch: selectedGithubBranch || 'main',
         workspaceMode: 'managed',
         orchestrationMode: 'team',
         provisioningMethod: 'clone-github',
-        sourceRemoteUrl: selectedGithubRepo?.url ?? ''
+        sourceRemoteUrl
       }
       /* v8 ignore stop */
     } else {
@@ -353,6 +398,7 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
       setRepoPath('')
       setBranches([])
       setSelectedBranch('')
+      setGithubFallbackUrl('')
     } catch (error) {
       console.error('[HomeSpacesScreen] spaceCreate IPC failed:', error)
       const message = error instanceof Error ? error.message : String(error)
@@ -402,7 +448,8 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
             isLoadingGithubBranches={isLoadingGithubBranches}
             githubError={githubError}
             showGithubFallbackUrl={showGithubFallbackUrl}
-            onGithubFallbackUrlChange={/* v8 ignore next -- no-op prop; never invoked in test scenarios */ () => {}}
+            githubFallbackUrl={githubFallbackUrl}
+            onGithubFallbackUrlChange={setGithubFallbackUrl}
             newRepoParentDir={newRepoParentDir}
             newRepoFolderName={newRepoFolderName}
             onNewRepoParentDirChange={setNewRepoParentDir}

@@ -25,6 +25,13 @@ export function resolveSpaceName(input: {
     }
   }
 
-  // Fallback: 6-char id on repeated collisions
-  return `${safeRepo}-${generateShortId(6)}`
+  // Fallback: keep checking uniqueness with a longer suffix.
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const candidate = `${safeRepo}-${generateShortId(6)}`
+    if (!input.existingNames.has(candidate)) {
+      return candidate
+    }
+  }
+
+  throw new Error('Unable to generate a unique space name')
 }

@@ -31,6 +31,7 @@ type CreateSpacePanelProps = {
   isLoadingGithubBranches: boolean
   githubError: string | null
   showGithubFallbackUrl: boolean
+  githubFallbackUrl: string
   onGithubFallbackUrlChange: (url: string) => void
   // New repo props
   newRepoParentDir: string
@@ -74,6 +75,7 @@ export function CreateSpacePanel({
   isLoadingGithubBranches,
   githubError,
   showGithubFallbackUrl,
+  githubFallbackUrl,
   onGithubFallbackUrlChange,
   newRepoParentDir,
   newRepoFolderName,
@@ -189,6 +191,7 @@ export function CreateSpacePanel({
                 error={githubError}
                 onFallbackUrlChange={onGithubFallbackUrlChange}
                 showFallbackUrl={showGithubFallbackUrl}
+                fallbackUrl={githubFallbackUrl}
               />
             )}
 

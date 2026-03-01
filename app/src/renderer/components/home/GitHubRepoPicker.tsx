@@ -14,6 +14,7 @@ type GitHubRepoPickerProps = {
   error: string | null
   onFallbackUrlChange: (url: string) => void
   showFallbackUrl: boolean
+  fallbackUrl: string
 }
 
 export function GitHubRepoPicker({
@@ -29,7 +30,8 @@ export function GitHubRepoPicker({
   isLoadingBranches,
   error,
   onFallbackUrlChange,
-  showFallbackUrl
+  showFallbackUrl,
+  fallbackUrl
 }: GitHubRepoPickerProps) {
   const query = searchQuery.toLowerCase()
   const filtered = query
@@ -64,6 +66,7 @@ export function GitHubRepoPicker({
             id="fallback-url"
             type="text"
             aria-label="Repository URL"
+            value={fallbackUrl}
             onChange={(e) => onFallbackUrlChange(e.target.value)}
             placeholder="https://github.com/org/repo.git"
             className="h-8 w-full rounded-md border border-border bg-background/70 px-2 text-xs outline-none focus:border-ring"
