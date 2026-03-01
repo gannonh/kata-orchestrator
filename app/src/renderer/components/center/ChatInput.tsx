@@ -1,20 +1,31 @@
 import { type FormEvent, type KeyboardEvent, useState } from 'react'
-import { ArrowUpRight, Plus, Send } from 'lucide-react'
+import { ArrowUpRight, Plus, RotateCcw, Send } from 'lucide-react'
 
+import type { ConversationRunState } from '../../types/session-conversation'
 import { Button } from '../ui/button'
 import { Textarea } from '../ui/textarea'
 
 type ChatInputProps = {
   onSend: (message: string) => void
   disabled?: boolean
+  runState?: ConversationRunState
+  onRetry?: () => void
 }
 
-export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  disabled = false,
+  runState = 'empty',
+  onRetry,
+}: ChatInputProps) {
   const [value, setValue] = useState('')
+  const isPending = runState === 'pending'
+  const isError = runState === 'error'
+  const canSend = !disabled && !isPending && value.trim().length > 0
 
   const submit = (): void => {
     const trimmed = value.trim()
-    if (!trimmed || disabled) {
+    if (!trimmed || disabled || isPending) {
       return
     }
 
@@ -88,15 +99,30 @@ export function ChatInput({ onSend, disabled = false }: ChatInputProps) {
             </span>
           </div>
 
-          <Button
-            type="submit"
-            size="sm"
-            className="gap-1.5"
-            disabled={disabled || value.trim().length === 0}
-          >
-            <Send className="h-3.5 w-3.5" />
-            Send
-          </Button>
+          {isError ? (
+            <Button
+              type="button"
+              size="sm"
+              className="gap-1.5"
+              disabled={disabled || !onRetry}
+              onClick={() => {
+                onRetry?.()
+              }}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Retry
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              size="sm"
+              className="gap-1.5"
+              disabled={!canSend}
+            >
+              <Send className="h-3.5 w-3.5" />
+              Send
+            </Button>
+          )}
         </div>
       </form>
     </div>

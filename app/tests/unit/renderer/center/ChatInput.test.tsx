@@ -71,6 +71,38 @@ describe('ChatInput', () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
+  it('locks submit while pending', () => {
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        runState="pending"
+      />
+    )
+
+    const textarea = screen.getByLabelText('Message input')
+    const sendButton = screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement
+
+    fireEvent.change(textarea, { target: { value: 'still running' } })
+
+    expect(sendButton.disabled).toBe(true)
+  })
+
+  it('shows retry affordance when in error state', () => {
+    const onRetry = vi.fn()
+
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        runState="error"
+        onRetry={onRetry}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+
+    expect(onRetry).toHaveBeenCalled()
+  })
+
   it('renders model affordance and context-first placeholder copy', () => {
     render(<ChatInput onSend={vi.fn()} />)
 
