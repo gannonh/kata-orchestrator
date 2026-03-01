@@ -5,6 +5,8 @@ import type {
   SessionRecord,
   SpaceRecord
 } from '../shared/types/space'
+import type { RunRecord } from '../shared/types/run'
+import type { SessionRuntimeEvent } from '../renderer/types/session-runtime-adapter'
 
 const OPEN_EXTERNAL_URL_CHANNEL = 'kata:openExternalUrl'
 const SPACE_CREATE_CHANNEL = 'space:create'
@@ -15,6 +17,14 @@ const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
 const GIT_LIST_BRANCHES_CHANNEL = 'git:listBranches'
 const GITHUB_LIST_REPOS_CHANNEL = 'github:listRepos'
 const GITHUB_LIST_BRANCHES_CHANNEL = 'github:listBranches'
+const RUN_SUBMIT_CHANNEL = 'run:submit'
+const RUN_ABORT_CHANNEL = 'run:abort'
+const RUN_LIST_CHANNEL = 'run:list'
+const RUN_EVENT_CHANNEL = 'run:event'
+const AUTH_STATUS_CHANNEL = 'auth:status'
+const AUTH_LOGIN_CHANNEL = 'auth:login'
+const AUTH_LOGOUT_CHANNEL = 'auth:logout'
+const MODEL_LIST_CHANNEL = 'model:list'
 
 function invokeTyped<TResult>(channel: string, ...args: unknown[]): Promise<TResult> {
   return ipcRenderer.invoke(channel, ...args) as Promise<TResult>
@@ -47,7 +57,34 @@ const kataApi = {
   githubListRepos: (): Promise<Array<{ name: string; nameWithOwner: string; url: string }> | { error: string }> =>
     invokeTyped(GITHUB_LIST_REPOS_CHANNEL),
   githubListBranches: (owner: string, repo: string): Promise<string[] | { error: string }> =>
-    invokeTyped(GITHUB_LIST_BRANCHES_CHANNEL, { owner, repo })
+    invokeTyped(GITHUB_LIST_BRANCHES_CHANNEL, { owner, repo }),
+
+  // Run channels
+  runSubmit: (input: { sessionId: string; prompt: string; model: string; provider: string }) =>
+    invokeTyped<{ runId: string }>(RUN_SUBMIT_CHANNEL, input),
+  runAbort: (input: { runId: string }) =>
+    invokeTyped<boolean>(RUN_ABORT_CHANNEL, input),
+  runList: (sessionId: string) =>
+    invokeTyped<RunRecord[]>(RUN_LIST_CHANNEL, { sessionId }),
+  onRunEvent: (callback: (event: SessionRuntimeEvent) => void) => {
+    const handler = (_event: unknown, data: SessionRuntimeEvent) => callback(data)
+    ipcRenderer.on(RUN_EVENT_CHANNEL, handler)
+    return () => {
+      ipcRenderer.removeListener(RUN_EVENT_CHANNEL, handler)
+    }
+  },
+
+  // Auth channels
+  authStatus: (provider: string) =>
+    invokeTyped<'oauth' | 'api_key' | 'none'>(AUTH_STATUS_CHANNEL, { provider }),
+  authLogin: (provider: string) =>
+    invokeTyped<boolean>(AUTH_LOGIN_CHANNEL, { provider }),
+  authLogout: (provider: string) =>
+    invokeTyped<boolean>(AUTH_LOGOUT_CHANNEL, { provider }),
+
+  // Model channel
+  modelList: () =>
+    invokeTyped<Array<{ provider: string; modelId: string; name: string; authStatus: string }>>(MODEL_LIST_CHANNEL)
 }
 
 contextBridge.exposeInMainWorld('kata', kataApi)
