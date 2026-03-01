@@ -124,6 +124,22 @@ describe('HomeSpacesScreen', () => {
     expect(screen.getByText(/Space:/)).toBeTruthy()
   })
 
+  it('fetches GitHub repos immediately when clone-github is selected', async () => {
+    const githubListRepos = vi.fn().mockResolvedValue([
+      { name: 'kata-cloud', nameWithOwner: 'gannonh/kata-cloud', url: 'https://github.com/gannonh/kata-cloud' }
+    ])
+    window.kata = { ...window.kata, githubListRepos }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(githubListRepos).toHaveBeenCalledTimes(1)
+      expect(screen.getByText('gannonh/kata-cloud')).toBeTruthy()
+    })
+  })
+
   it('submits external mode payload without name', async () => {
     const dialogOpenDirectory = vi.fn().mockResolvedValue({ path: '/Users/me/dev/repo' })
     const gitListBranches = vi.fn().mockResolvedValue(['main'])

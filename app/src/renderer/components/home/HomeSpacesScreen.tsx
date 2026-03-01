@@ -247,28 +247,42 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = mockSpaces }: Ho
       })
   }
 
-  function handleGithubSearchChange(query: string) {
-    setGithubSearchQuery(query)
+  // Eagerly fetch GitHub repos when clone-github is selected
+  useEffect(() => {
+    if (provisioningMethod !== 'clone-github' || workspaceMode !== 'managed') {
+      return
+    }
 
-    if (!query.trim()) {
+    // Skip if repos already loaded
+    if (githubRepos.length > 0 || githubError) {
       return
     }
 
     setIsLoadingGithubRepos(true)
     setGithubError(null)
 
+    let cancelled = false
+
     window.kata?.githubListRepos?.()
       .then((repos) => {
+        if (cancelled) return
         setGithubRepos(repos ?? [])
         setShowGithubFallbackUrl(false)
       })
       .catch(() => {
+        if (cancelled) return
         setGithubError('GitHub CLI not available. Enter a URL instead.')
         setShowGithubFallbackUrl(true)
       })
       .finally(() => {
-        setIsLoadingGithubRepos(false)
+        if (!cancelled) setIsLoadingGithubRepos(false)
       })
+
+    return () => { cancelled = true }
+  }, [provisioningMethod, workspaceMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleGithubSearchChange(query: string) {
+    setGithubSearchQuery(query)
   }
 
   async function handleCreateSpace() {
