@@ -1,10 +1,20 @@
 import type { ConversationMessage, ConversationRunState } from './session-conversation'
 
-export type RunStateChangedEvent = {
+type NonErrorConversationRunState = Exclude<ConversationRunState, 'error'>
+
+export type ErrorRunStateChangedEvent = {
   type: 'run_state_changed'
-  runState: ConversationRunState
-  errorMessage?: string
+  runState: 'error'
+  errorMessage: string
 }
+
+export type NonErrorRunStateChangedEvent = {
+  type: 'run_state_changed'
+  runState: NonErrorConversationRunState
+  errorMessage?: never
+}
+
+export type RunStateChangedEvent = ErrorRunStateChangedEvent | NonErrorRunStateChangedEvent
 
 export type MessageAppendedEvent = {
   type: 'message_appended'

@@ -10,13 +10,21 @@ describe('SessionRuntimeAdapter contract', () => {
     await expect(import('../../../../src/renderer/types/session-runtime-adapter')).resolves.toBeDefined()
   })
 
-  it('enforces subscribe, submitPrompt, and retry signatures', () => {
+  it('enforces runtime execution checks for subscribe, submitPrompt, and retry', () => {
+    let unsubscribed = false
+    const receivedEvents: SessionRuntimeEvent[] = []
+
     const subscribe: SessionRuntimeAdapter['subscribe'] = (
       onEvent: (event: SessionRuntimeEvent) => void
     ) => {
       onEvent({
         type: 'run_state_changed',
         runState: 'pending'
+      })
+      onEvent({
+        type: 'run_state_changed',
+        runState: 'error',
+        errorMessage: 'Network timeout'
       })
       onEvent({
         type: 'message_appended',
@@ -28,12 +36,13 @@ describe('SessionRuntimeAdapter contract', () => {
         }
       })
 
-      return () => {}
+      return () => {
+        unsubscribed = true
+      }
     }
 
     const submitPrompt: SessionRuntimeAdapter['submitPrompt'] = (prompt: string) => {
-      const normalizedPrompt: string = prompt
-      void normalizedPrompt
+      expect(typeof prompt).toBe('string')
     }
 
     const retry: SessionRuntimeAdapter['retry'] = () => Promise.resolve()
@@ -44,19 +53,39 @@ describe('SessionRuntimeAdapter contract', () => {
       retry
     }
 
+    expect(adapter.subscribe.length).toBe(1)
+    expect(adapter.submitPrompt.length).toBe(1)
+    expect(adapter.retry.length).toBe(0)
+
     const submitResult: Promise<void> | void = adapter.submitPrompt('Plan phase 2')
     const retryResult: Promise<void> | void = adapter.retry()
     const unsubscribe: () => void = adapter.subscribe((event: SessionRuntimeEvent) => {
-      expect(['run_state_changed', 'message_appended']).toContain(event.type)
+      receivedEvents.push(event)
     })
 
-    void submitResult
-    void retryResult
-    unsubscribe()
+    expect(submitResult === undefined || submitResult instanceof Promise).toBe(true)
+    expect(retryResult === undefined || retryResult instanceof Promise).toBe(true)
+    expect(typeof unsubscribe).toBe('function')
 
-    const runtimeAdapter = adapter as Record<string, unknown>
-    expect(typeof runtimeAdapter.subscribe).toBe('function')
-    expect(typeof runtimeAdapter.submitPrompt).toBe('function')
-    expect(typeof runtimeAdapter.retry).toBe('function')
+    expect(receivedEvents.map((event) => event.type)).toEqual([
+      'run_state_changed',
+      'run_state_changed',
+      'message_appended'
+    ])
+
+    for (const event of receivedEvents) {
+      if (event.type !== 'run_state_changed') {
+        continue
+      }
+
+      if (event.runState === 'error') {
+        expect(event.errorMessage).toBeTypeOf('string')
+      } else {
+        expect('errorMessage' in event).toBe(false)
+      }
+    }
+
+    unsubscribe()
+    expect(unsubscribed).toBe(true)
   })
 })
