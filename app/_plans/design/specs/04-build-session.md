@@ -8,20 +8,20 @@ A build session is the primary workspace where a user iterates with AI agents on
 
 ## Component Inventory
 
-| Component | Description | Source File |
-|-----------|-------------|-------------|
-| `BuildSessionHeader` | Top bar showing space name ("Build kata cloud product"), product label ("Plan Product Build"), breadcrumb-style session indicator. Includes toolbar with share/settings icons. | `src/main.tsx` L1253-L1270 (currently `shell-header`) |
-| `LeftSidebar` | Vertical panel containing session list, agent list, task checklist, and conversation entry selector. Collapsible sections with disclosure triangles. | `src/main.tsx` L1278-L1429 (currently the Explorer `<section>`) |
-| `SessionListSection` | Expandable section labeled "Sessions" listing session entries (e.g., "MVP Planning Session"). Active session highlighted. | `src/main.tsx` L1304-L1321 |
-| `AgentListSection` | Expandable section labeled "Agents" listing agent/specialist entries (e.g., "Kata Agents", "MVP Planning Coordinator"). Each agent shows an avatar dot and name. | Not implemented |
-| `TaskChecklistSection` | Expandable section listing tasks with checkbox indicators. Tasks show title text and completion state (checked/unchecked). Grouped under "Tasks" header. | Not implemented (mock shows structured checklist; code only has `OrchestratorDelegatedTaskRecord` with `implement`/`verify`/`debug` types) |
-| `ConversationEntryList` | Bottom section of left sidebar listing conversation turns (e.g., "Spec Updated", "Architecture proposed") with timestamps. Clicking scrolls center panel to that entry. | Not implemented |
-| `CenterConversationPanel` | Scrollable conversation thread between user and orchestrator agents. Shows markdown-formatted messages with role labels ("kata.agents.set", "MVP Planning Coordinator"). Includes message input at bottom. | `src/main.tsx` L1431-L1690 (currently the Orchestrator `<section>` with info-card layout) |
-| `AgentMessageBubble` | Individual message in the conversation thread. Shows agent name, role label, and markdown body. User messages are visually distinct from agent messages. | Not implemented (current code renders run status as info-cards) |
-| `MessageInput` | Text input at bottom of center panel with "Ask anything or type @ for context" placeholder and submit affordance ("GPT 4.1 mini" model selector visible). | `src/main.tsx` L1438-L1461 (currently `space-prompt-input` textarea + "Run Orchestrator" button) |
-| `RightSpecPanel` | Fixed panel displaying the structured spec document. Shows "Spec" tab header. Contains Goal, Tasks (checklist), Acceptance Criteria, Non-goals, Assumptions, Verification Plan, and Rollback Plan sections. | `src/notes/spec-note-panel.tsx` (SpecNotePanel component) |
-| `SpecTaskChecklist` | Checklist within the right spec panel. Each task row has a checkbox, task title, and optional strikethrough for completed items. Uses green checkmark for completed tasks. | `src/features/spec-panel/types.ts` (`SpecTaskRecord`) |
-| `SpecSectionBlock` | Reusable block for each spec section (Goal, Tasks, Acceptance Criteria, etc.). Displays a section heading and body content. | Partially in `SpecNotePanel`; spec draft content is generated as markdown in `src/main.tsx` L164-L177 |
+| Component                 | Description                                                                                                                                                                                                 | Source File                                                                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `BuildSessionHeader`      | Top bar showing space name ("Build kata cloud product"), product label ("Plan Product Build"), breadcrumb-style session indicator. Includes toolbar with share/settings icons.                              | `src/main.tsx` L1253-L1270 (currently `shell-header`)                                                                                      |
+| `LeftSidebar`             | Vertical panel containing session list, agent list, task checklist, and conversation entry selector. Collapsible sections with disclosure triangles.                                                        | `src/main.tsx` L1278-L1429 (currently the Explorer `<section>`)                                                                            |
+| `SessionListSection`      | Expandable section labeled "Sessions" listing session entries (e.g., "MVP Planning Session"). Active session highlighted.                                                                                   | `src/main.tsx` L1304-L1321                                                                                                                 |
+| `AgentListSection`        | Expandable section labeled "Agents" listing agent/specialist entries (e.g., "Kata Agents", "MVP Planning Coordinator"). Each agent shows an avatar dot and name.                                            | Not implemented                                                                                                                            |
+| `TaskChecklistSection`    | Expandable section listing tasks with checkbox indicators. Tasks show title text and completion state (checked/unchecked). Grouped under "Tasks" header.                                                    | Not implemented (mock shows structured checklist; code only has `OrchestratorDelegatedTaskRecord` with `implement`/`verify`/`debug` types) |
+| `ConversationEntryList`   | Bottom section of left sidebar listing conversation turns (e.g., "Spec Updated", "Architecture proposed") with timestamps. Clicking scrolls center panel to that entry.                                     | Not implemented                                                                                                                            |
+| `CenterConversationPanel` | Scrollable conversation thread between user and orchestrator agents. Shows markdown-formatted messages with role labels ("kata.agents.set", "MVP Planning Coordinator"). Includes message input at bottom.  | `src/main.tsx` L1431-L1690 (currently the Orchestrator `<section>` with info-card layout)                                                  |
+| `AgentMessageBubble`      | Individual message in the conversation thread. Shows agent name, role label, and markdown body. User messages are visually distinct from agent messages.                                                    | Not implemented (current code renders run status as info-cards)                                                                            |
+| `MessageInput`            | Text input at bottom of center panel with "Ask anything or type @ for context" placeholder and submit affordance ("GPT 4.1 mini" model selector visible).                                                   | `src/main.tsx` L1438-L1461 (currently `space-prompt-input` textarea + "Run Orchestrator" button)                                           |
+| `RightSpecPanel`          | Fixed panel displaying the structured spec document. Shows "Spec" tab header. Contains Goal, Tasks (checklist), Acceptance Criteria, Non-goals, Assumptions, Verification Plan, and Rollback Plan sections. | `src/notes/spec-note-panel.tsx` (SpecNotePanel component)                                                                                  |
+| `SpecTaskChecklist`       | Checklist within the right spec panel. Each task row has a checkbox, task title, and optional strikethrough for completed items. Uses green checkmark for completed tasks.                                  | `src/features/spec-panel/types.ts` (`SpecTaskRecord`)                                                                                      |
+| `SpecSectionBlock`        | Reusable block for each spec section (Goal, Tasks, Acceptance Criteria, etc.). Displays a section heading and body content.                                                                                 | Partially in `SpecNotePanel`; spec draft content is generated as markdown in `src/main.tsx` L164-L177                                      |
 
 ## States
 
@@ -96,16 +96,19 @@ A build session is the primary workspace where a user iterates with AI agents on
 The left sidebar in the mocks contains four distinct sections, each with expand/collapse behavior:
 
 ### Session List
+
 - Header: "Sessions" with disclosure triangle.
 - Entries: Session name labels (e.g., "MVP Planning Session"). Active session is highlighted (bold text or accent border).
 - Selection: Clicking a session switches `activeSessionId` in `AppState`.
 
 ### Agent List
+
 - Header: "Agents" with disclosure triangle.
 - Entries: Agent name with colored avatar dot (small circle, 8-10px diameter). Two agents visible: "Kata Agents" (system-level agent set) and "MVP Planning Coordinator" (session-specific agent).
 - The agent list does not exist in the current data model. `OrchestratorDelegatedTaskRecord` tracks task specialists (`implementor`, `verifier`, `developer`), but there is no persistent agent roster or agent identity entity.
 
 ### Task Checklist
+
 - Header: "Tasks" (or "Content" in Mock 10).
 - Entries: Checkbox + task title text. Checked items indicate completion. Tasks are derived from the spec document's task list.
 - In Mock 10, tasks include: "Spec summary set", "Spec submitted", "Task list reviewed".
@@ -113,12 +116,14 @@ The left sidebar in the mocks contains four distinct sections, each with expand/
 - Checkbox state maps to `SpecTaskRecord.status` (from `src/features/spec-panel/types.ts` L17-L23). `complete` status renders as checked.
 
 ### Conversation Entry Index
+
 - Located below the task list in Mock 10.
 - Entries: Short label + timestamp referencing conversation turns (e.g., "Spec Updated", "I updated the ...").
 - Clicking an entry scrolls the center panel to that conversation turn.
 - Not present or collapsed in Mocks 12-14.
 
 ### Expand/Collapse Behavior
+
 - Each section has a disclosure triangle to the left of its heading.
 - Collapsed state: triangle points right, section content hidden.
 - Expanded state: triangle points down, section content visible.
@@ -127,94 +132,94 @@ The left sidebar in the mocks contains four distinct sections, each with expand/
 
 ## Data Dependencies
 
-| Data | Source | Type |
-|------|--------|------|
-| Space name and metadata | `AppState.spaces` | `SpaceRecord` (`src/shared/state.ts` L45-L56) |
-| Active session | `AppState.sessions` filtered by `activeSpaceId` | `SessionRecord` (`src/shared/state.ts` L58-L65) |
-| Orchestrator run status | `AppState.orchestratorRuns` filtered by `activeSpaceId` + `activeSessionId` | `OrchestratorRunRecord` (`src/shared/state.ts` L67-L87) |
-| Spec draft content | `OrchestratorRunRecord.draft` | `OrchestratorSpecDraft` (`src/shared/state.ts` L26-L30) |
-| Delegated task status | `OrchestratorRunRecord.delegatedTasks` | `OrchestratorDelegatedTaskRecord[]` (`src/shared/state.ts` L32-L43) |
-| Spec note document | Loaded via `loadSpecNote()` | `SpecNoteDocument` (`src/features/spec-panel/types.ts` L36-L41) |
-| Spec tasks (checklist) | `SpecNoteDocument.tasks` | `SpecTaskRecord[]` (`src/features/spec-panel/types.ts` L25-L34) |
-| Context snippets | `OrchestratorRunRecord.contextSnippets` | `ContextSnippet[]` (from `src/context/types.ts`) |
-| Context provenance | `OrchestratorRunRecord.resolvedProviderId`, `fallbackFromProviderId` | `ContextProviderId` |
-| Agent roster | Not modeled | Requires new type (see Gap Analysis) |
-| Conversation message history | Not modeled | Requires new type (see Gap Analysis) |
+| Data                         | Source                                                                      | Type                                                                |
+| ---------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Space name and metadata      | `AppState.spaces`                                                           | `SpaceRecord` (`src/shared/state.ts` L45-L56)                       |
+| Active session               | `AppState.sessions` filtered by `activeSpaceId`                             | `SessionRecord` (`src/shared/state.ts` L58-L65)                     |
+| Orchestrator run status      | `AppState.orchestratorRuns` filtered by `activeSpaceId` + `activeSessionId` | `OrchestratorRunRecord` (`src/shared/state.ts` L67-L87)             |
+| Spec draft content           | `OrchestratorRunRecord.draft`                                               | `OrchestratorSpecDraft` (`src/shared/state.ts` L26-L30)             |
+| Delegated task status        | `OrchestratorRunRecord.delegatedTasks`                                      | `OrchestratorDelegatedTaskRecord[]` (`src/shared/state.ts` L32-L43) |
+| Spec note document           | Loaded via `loadSpecNote()`                                                 | `SpecNoteDocument` (`src/features/spec-panel/types.ts` L36-L41)     |
+| Spec tasks (checklist)       | `SpecNoteDocument.tasks`                                                    | `SpecTaskRecord[]` (`src/features/spec-panel/types.ts` L25-L34)     |
+| Context snippets             | `OrchestratorRunRecord.contextSnippets`                                     | `ContextSnippet[]` (from `src/context/types.ts`)                    |
+| Context provenance           | `OrchestratorRunRecord.resolvedProviderId`, `fallbackFromProviderId`        | `ContextProviderId`                                                 |
+| Agent roster                 | Not modeled                                                                 | Requires new type (see Gap Analysis)                                |
+| Conversation message history | Not modeled                                                                 | Requires new type (see Gap Analysis)                                |
 
 ## Interactions
 
-| Action | Trigger | Effect | IPC Channel |
-|--------|---------|--------|-------------|
-| Run orchestrator | Click "Run Orchestrator" button or submit message input | Enqueues `OrchestratorRunRecord` (queued), transitions to running, retrieves context, generates spec draft, builds delegated task timeline, transitions to completed/failed | `kata-cloud/context:retrieve` for context retrieval; state persisted via `kata-cloud/state:save` |
-| Switch session | Click session item in sidebar | Updates `AppState.activeSessionId`, re-derives `runsForActiveSession` and `latestRunForActiveSession` | `kata-cloud/state:save` |
-| Toggle task checkbox (sidebar) | Click checkbox next to task | Updates `SpecTaskRecord.status` between `not_started` and `complete` | `kata-cloud/state:save` (via spec note persistence) |
-| Toggle task checkbox (spec panel) | Click checkbox in right panel task list | Same effect as sidebar checkbox toggle | `kata-cloud/state:save` |
-| Expand/collapse sidebar section | Click disclosure triangle on section header | Toggles section visibility. Local UI state (not persisted). | None |
-| Scroll to conversation entry | Click conversation entry in sidebar index | Scrolls center panel to corresponding message | None (local scroll behavior) |
-| Submit message | Type in message input, press enter or click submit | Sends user message to orchestrator, appends to conversation history, triggers agent response | Not implemented (current code uses `spacePrompt` + "Run Orchestrator") |
-| Approve plan | Click approval button in conversation | Advances session state, marks relevant tasks, updates spec document | Not implemented |
-| Select model | Click model selector badge in message input | Changes active AI model for the session | Not implemented |
+| Action                            | Trigger                                                 | Effect                                                                                                                                                                      | IPC Channel                                                                                      |
+| --------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Run orchestrator                  | Click "Run Orchestrator" button or submit message input | Enqueues `OrchestratorRunRecord` (queued), transitions to running, retrieves context, generates spec draft, builds delegated task timeline, transitions to completed/failed | `kata-cloud/context:retrieve` for context retrieval; state persisted via `kata-cloud/state:save` |
+| Switch session                    | Click session item in sidebar                           | Updates `AppState.activeSessionId`, re-derives `runsForActiveSession` and `latestRunForActiveSession`                                                                       | `kata-cloud/state:save`                                                                          |
+| Toggle task checkbox (sidebar)    | Click checkbox next to task                             | Updates `SpecTaskRecord.status` between `not_started` and `complete`                                                                                                        | `kata-cloud/state:save` (via spec note persistence)                                              |
+| Toggle task checkbox (spec panel) | Click checkbox in right panel task list                 | Same effect as sidebar checkbox toggle                                                                                                                                      | `kata-cloud/state:save`                                                                          |
+| Expand/collapse sidebar section   | Click disclosure triangle on section header             | Toggles section visibility. Local UI state (not persisted).                                                                                                                 | None                                                                                             |
+| Scroll to conversation entry      | Click conversation entry in sidebar index               | Scrolls center panel to corresponding message                                                                                                                               | None (local scroll behavior)                                                                     |
+| Submit message                    | Type in message input, press enter or click submit      | Sends user message to orchestrator, appends to conversation history, triggers agent response                                                                                | Not implemented (current code uses `spacePrompt` + "Run Orchestrator")                           |
+| Approve plan                      | Click approval button in conversation                   | Advances session state, marks relevant tasks, updates spec document                                                                                                         | Not implemented                                                                                  |
+| Select model                      | Click model selector badge in message input             | Changes active AI model for the session                                                                                                                                     | Not implemented                                                                                  |
 
 ## Visual Specifications
 
 ### Color Tokens
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--bg` | `#0f1116` | App background |
-| `--bg-accent` | `#1a2333` | Header/elevated surface background |
-| `--panel-bg` | `#141923` | Panel background |
-| `--panel-border` | `#2a3347` | Panel and card borders |
-| `--panel-focus` | `#55b5ff` | Focused panel border accent |
-| `--text` | `#dbe2ee` | Primary text |
-| `--muted` | `#9aaccc` | Secondary/muted text |
-| `--green` | `#60d394` | Active state indicators, completed task checkboxes |
-| `--amber` | `#f2c66d` | Warning/pending indicators |
-| Error red | `#ff948f` | Error messages, failed states |
-| Agent avatar dot (teal) | Approximately `#4ecdc4` | Agent identity dot in sidebar (observed in mocks) |
+| Token                   | Value                   | Usage                                                    |
+| ----------------------- | ----------------------- | -------------------------------------------------------- |
+| `--bg`                  | `#0f1116`               | App background                                           |
+| `--bg-accent`           | `#1a2333`               | Header/elevated surface background                       |
+| `--panel-bg`            | `#141923`               | Panel background                                         |
+| `--panel-border`        | `#2a3347`               | Panel and card borders                                   |
+| `--panel-focus`         | `#55b5ff`               | Focused panel border accent                              |
+| `--text`                | `#dbe2ee`               | Primary text                                             |
+| `--muted`               | `#9aaccc`               | Secondary/muted text                                     |
+| `--green`               | `#60d394`               | Active state indicators, completed task checkboxes       |
+| `--amber`               | `#f2c66d`               | Warning/pending indicators                               |
+| Error red               | `#ff948f`               | Error messages, failed states                            |
+| Agent avatar dot (teal) | Approximately `#4ecdc4` | Agent identity dot in sidebar (observed in mocks)        |
 | Agent avatar dot (blue) | Approximately `#5b8def` | Second agent identity dot in sidebar (observed in mocks) |
 
 ### Typography
 
-| Element | Font | Size | Weight |
-|---------|------|------|--------|
-| App title | IBM Plex Sans | 1.1rem | 600 |
-| Panel heading | IBM Plex Sans | 0.95rem | 600 |
-| Section heading (sidebar) | IBM Plex Sans | 0.82rem | 600 |
-| Body text | IBM Plex Sans | 0.79-0.8rem | 400 |
-| Muted/meta text | IBM Plex Sans | 0.75-0.78rem | 400 |
-| Code/mono text | IBM Plex Mono | 0.75-0.8rem | 400 |
-| Pill button label | IBM Plex Sans | 0.72rem | 400 |
-| Conversation messages (mocks) | System sans-serif | ~13-14px | 400 |
-| Agent name label (mocks) | System sans-serif | ~12px | 600 |
+| Element                       | Font              | Size         | Weight |
+| ----------------------------- | ----------------- | ------------ | ------ |
+| App title                     | IBM Plex Sans     | 1.1rem       | 600    |
+| Panel heading                 | IBM Plex Sans     | 0.95rem      | 600    |
+| Section heading (sidebar)     | IBM Plex Sans     | 0.82rem      | 600    |
+| Body text                     | IBM Plex Sans     | 0.79-0.8rem  | 400    |
+| Muted/meta text               | IBM Plex Sans     | 0.75-0.78rem | 400    |
+| Code/mono text                | IBM Plex Mono     | 0.75-0.8rem  | 400    |
+| Pill button label             | IBM Plex Sans     | 0.72rem      | 400    |
+| Conversation messages (mocks) | System sans-serif | ~13-14px     | 400    |
+| Agent name label (mocks)      | System sans-serif | ~12px        | 600    |
 
 ### Spacing & Layout
 
-| Property | Value |
-|----------|-------|
-| Three-column grid | `grid-template-columns: minmax(250px, 1fr) minmax(360px, 1.4fr) minmax(320px, 1.25fr)` |
-| Grid gap | `0.75rem` |
-| Panel padding | `0.95rem` (panel-body) |
-| Card padding | `0.75rem 0.8rem` |
-| Card border radius | `10px` (info-card), `12px` (panel), `8px` (space-card, session-section) |
-| Sidebar section spacing | `0.45rem` between items |
-| Session list item padding | Minimal, text-only with `0.4rem` gap |
-| Task checklist item gap | `0.45-0.55rem` per item |
-| Message input area | Bottom-anchored, ~48px height, full width of center panel |
-| Responsive breakpoint | `1180px` (collapses to single column) |
+| Property                  | Value                                                                                  |
+| ------------------------- | -------------------------------------------------------------------------------------- |
+| Three-column grid         | `grid-template-columns: minmax(250px, 1fr) minmax(360px, 1.4fr) minmax(320px, 1.25fr)` |
+| Grid gap                  | `0.75rem`                                                                              |
+| Panel padding             | `0.95rem` (panel-body)                                                                 |
+| Card padding              | `0.75rem 0.8rem`                                                                       |
+| Card border radius        | `10px` (info-card), `12px` (panel), `8px` (space-card, session-section)                |
+| Sidebar section spacing   | `0.45rem` between items                                                                |
+| Session list item padding | Minimal, text-only with `0.4rem` gap                                                   |
+| Task checklist item gap   | `0.45-0.55rem` per item                                                                |
+| Message input area        | Bottom-anchored, ~48px height, full width of center panel                              |
+| Responsive breakpoint     | `1180px` (collapses to single column)                                                  |
 
 ## Implementation Gap Analysis
 
-| Feature | Mock Shows | Current Code | Gap |
-|---------|-----------|--------------|-----|
-| Conversational message thread | Multi-turn chat between user and agents with markdown rendering, role labels, timestamps | Single `spacePrompt` textarea + "Run Orchestrator" button. Runs displayed as info-cards with raw status text (`src/main.tsx` L1431-L1690). | No message history data model. No chat-style rendering. No markdown rendering in messages. Requires new `ConversationMessage` type and `ConversationThread` collection on `SessionRecord` or `OrchestratorRunRecord`. |
-| Agent roster in sidebar | Named agents with colored avatar dots ("Kata Agents", "MVP Planning Coordinator") | `OrchestratorDelegatedTaskRecord.specialist` stores string labels (`implementor`, `verifier`, `developer`). No agent identity entity. No sidebar agent list. (`src/shared/orchestrator-delegation.ts` L7-L11) | Requires new `AgentRecord` type with `id`, `name`, `avatarColor`, `role`. Requires new `AgentListSection` component. |
-| Task checklist in sidebar | Checkbox + title list derived from spec tasks | `SpecTaskRecord` exists in types (`src/features/spec-panel/types.ts` L25-L34) but is not rendered in the left sidebar. Sidebar currently shows only space-list and session-list. | Requires new `TaskChecklistSection` component in left sidebar. Need to connect `SpecNoteDocument.tasks` to sidebar rendering. |
-| Expand/collapse sidebar sections | Disclosure triangles on Sessions, Agents, Tasks headings | No collapse behavior on any sidebar section. Sessions and spaces are always visible. | Requires local UI state for section collapse (`expandedSections: Record<string, boolean>`). Requires disclosure triangle icon rendering. |
-| Conversation entry index in sidebar | Timestamped entry list scrolling center panel | Not implemented. No conversation entry data model. | Requires conversation message model and scroll-to-anchor behavior. |
-| Message input with model selector | Input bar with "@" context mention, model badge ("GPT 4.1 mini") | `spacePrompt` textarea with "Run Orchestrator" button (`src/main.tsx` L1438-L1461). No model selector. No @ mention. | Requires model selection UI (provider runtime exists at `src/main/provider-runtime/`). Requires @ mention/context insertion. Requires input bar redesign from textarea+button to chat-style input. |
-| Approval buttons in conversation | "Approve the plan..." and "Keep the last switch..." action buttons inline in agent message | No inline action buttons. Draft approval uses `draftAppliedAt` field but has no explicit approval UI. (`src/shared/state.ts` L84) | Requires inline action button rendering in agent messages. Requires approval action handler that updates spec and task state. |
-| Structured spec panel (right) | Spec document with Goal, Tasks (checkboxes), Acceptance Criteria, Non-goals, Assumptions, Verification Plan, Rollback Plan sections | `SpecNotePanel` (`src/notes/spec-note-panel.tsx`) renders spec notes with comments. Spec draft is generated as flat markdown (`src/main.tsx` L164-L177) with Goal, Tasks, Context Snippets, Acceptance Criteria, Verification Plan. | Current draft lacks Non-goals, Assumptions, Rollback Plan sections. `SpecNotePanel` renders markdown preview but does not parse into discrete section blocks. Task checkboxes in spec panel require interactive toggle wiring. |
-| Three-column layout matching mocks | Left sidebar narrow (~220px), center conversation wide (~480px), right spec panel medium (~340px) | Current `panel-grid` uses `grid-template-columns: minmax(250px, 1fr) minmax(360px, 1.4fr) minmax(320px, 1.25fr)` (`src/styles.css` L96). Three panels exist: Explorer, Orchestrator, Spec/Changes/Browser. | Column proportions are close but the center panel needs to become a conversation thread instead of an info-card stack. The left panel (Explorer) needs to become a session/agent/task sidebar instead of a space list. |
-| Session-scoped conversation persistence | Conversation history preserved across app restarts | `OrchestratorRunRecord` persists run metadata and draft but not individual conversation messages. State persisted to `~/.config/kata-cloud/kata-cloud-state.json`. | Requires conversation message array on `OrchestratorRunRecord` or `SessionRecord`. |
-| Real-time task status sync | Task checkbox in sidebar and spec panel stay in sync | `SpecTaskRecord` exists but is only stored in `SpecNoteDocument.tasks`. No bidirectional binding between sidebar checklist and spec panel checklist. | Requires shared task state source with event-driven sync between sidebar `TaskChecklistSection` and `SpecNotePanel` task rendering. |
+| Feature                                 | Mock Shows                                                                                                                          | Current Code                                                                                                                                                                                                                        | Gap                                                                                                                                                                                                                            |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Conversational message thread           | Multi-turn chat between user and agents with markdown rendering, role labels, timestamps                                            | Single `spacePrompt` textarea + "Run Orchestrator" button. Runs displayed as info-cards with raw status text (`src/main.tsx` L1431-L1690).                                                                                          | No message history data model. No chat-style rendering. No markdown rendering in messages. Requires new `ConversationMessage` type and `ConversationThread` collection on `SessionRecord` or `OrchestratorRunRecord`.          |
+| Agent roster in sidebar                 | Named agents with colored avatar dots ("Kata Agents", "MVP Planning Coordinator")                                                   | `OrchestratorDelegatedTaskRecord.specialist` stores string labels (`implementor`, `verifier`, `developer`). No agent identity entity. No sidebar agent list. (`src/shared/orchestrator-delegation.ts` L7-L11)                       | Requires new `AgentRecord` type with `id`, `name`, `avatarColor`, `role`. Requires new `AgentListSection` component.                                                                                                           |
+| Task checklist in sidebar               | Checkbox + title list derived from spec tasks                                                                                       | `SpecTaskRecord` exists in types (`src/features/spec-panel/types.ts` L25-L34) but is not rendered in the left sidebar. Sidebar currently shows only space-list and session-list.                                                    | Requires new `TaskChecklistSection` component in left sidebar. Need to connect `SpecNoteDocument.tasks` to sidebar rendering.                                                                                                  |
+| Expand/collapse sidebar sections        | Disclosure triangles on Sessions, Agents, Tasks headings                                                                            | No collapse behavior on any sidebar section. Sessions and spaces are always visible.                                                                                                                                                | Requires local UI state for section collapse (`expandedSections: Record<string, boolean>`). Requires disclosure triangle icon rendering.                                                                                       |
+| Conversation entry index in sidebar     | Timestamped entry list scrolling center panel                                                                                       | Not implemented. No conversation entry data model.                                                                                                                                                                                  | Requires conversation message model and scroll-to-anchor behavior.                                                                                                                                                             |
+| Message input with model selector       | Input bar with "@" context mention, model badge ("GPT 4.1 mini")                                                                    | `spacePrompt` textarea with "Run Orchestrator" button (`src/main.tsx` L1438-L1461). No model selector. No @ mention.                                                                                                                | Requires model selection UI (provider runtime exists at `src/main/provider-runtime/`). Requires @ mention/context insertion. Requires input bar redesign from textarea+button to chat-style input.                             |
+| Approval buttons in conversation        | "Approve the plan..." and "Keep the last switch..." action buttons inline in agent message                                          | No inline action buttons. Draft approval uses `draftAppliedAt` field but has no explicit approval UI. (`src/shared/state.ts` L84)                                                                                                   | Requires inline action button rendering in agent messages. Requires approval action handler that updates spec and task state.                                                                                                  |
+| Structured spec panel (right)           | Spec document with Goal, Tasks (checkboxes), Acceptance Criteria, Non-goals, Assumptions, Verification Plan, Rollback Plan sections | `SpecNotePanel` (`src/notes/spec-note-panel.tsx`) renders spec notes with comments. Spec draft is generated as flat markdown (`src/main.tsx` L164-L177) with Goal, Tasks, Context Snippets, Acceptance Criteria, Verification Plan. | Current draft lacks Non-goals, Assumptions, Rollback Plan sections. `SpecNotePanel` renders markdown preview but does not parse into discrete section blocks. Task checkboxes in spec panel require interactive toggle wiring. |
+| Three-column layout matching mocks      | Left sidebar narrow (~220px), center conversation wide (~480px), right spec panel medium (~340px)                                   | Current `panel-grid` uses `grid-template-columns: minmax(250px, 1fr) minmax(360px, 1.4fr) minmax(320px, 1.25fr)` (`src/styles.css` L96). Three panels exist: Explorer, Orchestrator, Spec/Changes/Browser.                          | Column proportions are close but the center panel needs to become a conversation thread instead of an info-card stack. The left panel (Explorer) needs to become a session/agent/task sidebar instead of a space list.         |
+| Session-scoped conversation persistence | Conversation history preserved across app restarts                                                                                  | `OrchestratorRunRecord` persists run metadata and draft but not individual conversation messages. State persisted to `~/.config/kata-cloud/kata-cloud-state.json`.                                                                  | Requires conversation message array on `OrchestratorRunRecord` or `SessionRecord`.                                                                                                                                             |
+| Real-time task status sync              | Task checkbox in sidebar and spec panel stay in sync                                                                                | `SpecTaskRecord` exists but is only stored in `SpecNoteDocument.tasks`. No bidirectional binding between sidebar checklist and spec panel checklist.                                                                                | Requires shared task state source with event-driven sync between sidebar `TaskChecklistSection` and `SpecNotePanel` task rendering.                                                                                            |

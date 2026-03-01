@@ -71,17 +71,6 @@ async function createBranchCommit(repoDir: string, branch: string): Promise<void
   runGit(repoDir, ['checkout', 'main'])
 }
 
-async function getSpaceByName(appWindow: import('@playwright/test').Page, name: string): Promise<SpaceListEntry> {
-  const allSpaces = await appWindow.evaluate(async () => {
-    const api = (window as { kata?: { spaceList?: () => Promise<unknown> } }).kata
-    return await api?.spaceList?.()
-  })
-
-  const matched = ((allSpaces as SpaceListEntry[] | undefined) ?? []).find((space) => space.name === name)
-  expect(matched).toBeDefined()
-  return matched as SpaceListEntry
-}
-
 async function listSpaces(appWindow: import('@playwright/test').Page): Promise<SpaceListEntry[]> {
   const allSpaces = await appWindow.evaluate(async () => {
     const api = (window as { kata?: { spaceList?: () => Promise<unknown> } }).kata
@@ -89,6 +78,16 @@ async function listSpaces(appWindow: import('@playwright/test').Page): Promise<S
   })
 
   return (allSpaces as SpaceListEntry[] | undefined) ?? []
+}
+
+async function findNewSpace(
+  appWindow: import('@playwright/test').Page,
+  knownIds: Set<string>
+): Promise<SpaceListEntry> {
+  const spaces = await listSpaces(appWindow)
+  const newSpace = spaces.find((space) => !knownIds.has(space.id))
+  expect(newSpace).toBeDefined()
+  return newSpace as SpaceListEntry
 }
 
 async function readPersistedState(stateFilePath: string): Promise<PersistedState> {
@@ -105,14 +104,13 @@ test.describe('managed provisioning @uat @ci', () => {
     await createSeedRepo(localSourcePath)
 
     await ensureHomeSpacesView(appWindow)
+    const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
-    await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed Copy Local Space')
     await appWindow.getByRole('textbox', { name: 'Local repo path' }).fill(localSourcePath)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
-    await expect(appWindow.getByRole('button', { name: 'Select space Managed Copy Local Space' })).toBeVisible()
-
-    const createdSpace = await getSpaceByName(appWindow, 'Managed Copy Local Space')
+    await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
+    const createdSpace = await findNewSpace(appWindow, beforeIds)
     expect(createdSpace.workspaceMode).toBe('managed')
     expect(createdSpace.rootPath.endsWith('/repo')).toBe(true)
     expect(fs.existsSync(createdSpace.rootPath)).toBe(true)
@@ -135,16 +133,15 @@ test.describe('managed provisioning @uat @ci', () => {
     runGit(path.dirname(bareRemotePath), ['clone', '--bare', upstreamRepoPath, bareRemotePath])
 
     await ensureHomeSpacesView(appWindow)
+    const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
     await appWindow.getByRole('button', { name: 'Use clone github provisioning' }).click()
-    await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed Clone Space')
     await appWindow.getByRole('textbox', { name: 'Remote repo URL' }).fill(bareRemotePath)
     await appWindow.getByRole('textbox', { name: 'Branch' }).fill('feature/e2e-clone')
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
-    await expect(appWindow.getByRole('button', { name: 'Select space Managed Clone Space' })).toBeVisible()
-
-    const createdSpace = await getSpaceByName(appWindow, 'Managed Clone Space')
+    await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
+    const createdSpace = await findNewSpace(appWindow, beforeIds)
     expect(createdSpace.workspaceMode).toBe('managed')
     expect(fs.existsSync(createdSpace.rootPath)).toBe(true)
     expect(runGit(createdSpace.rootPath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('feature/e2e-clone')
@@ -155,16 +152,15 @@ test.describe('managed provisioning @uat @ci', () => {
     await fsPromises.mkdir(newRepoParentDir, { recursive: true })
 
     await ensureHomeSpacesView(appWindow)
+    const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
     await appWindow.getByRole('button', { name: 'Use new repo provisioning' }).click()
-    await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed New Repo Space')
     await appWindow.getByRole('textbox', { name: 'Source repo parent directory' }).fill(newRepoParentDir)
     await appWindow.getByRole('textbox', { name: 'Source repo folder name' }).fill('managed-new-project')
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
-    await expect(appWindow.getByRole('button', { name: 'Select space Managed New Repo Space' })).toBeVisible()
-
-    const createdSpace = await getSpaceByName(appWindow, 'Managed New Repo Space')
+    await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
+    const createdSpace = await findNewSpace(appWindow, beforeIds)
     expect(createdSpace.workspaceMode).toBe('managed')
     expect(fs.existsSync(createdSpace.rootPath)).toBe(true)
     expect(fs.existsSync(path.join(createdSpace.rootPath, 'README.md'))).toBe(true)
@@ -177,15 +173,14 @@ test.describe('managed provisioning @uat @ci', () => {
     const sourceFolderName = `managed-new-project-blank-parent-${Date.now()}`
 
     await ensureHomeSpacesView(appWindow)
+    const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
     await appWindow.getByRole('button', { name: 'Use new repo provisioning' }).click()
-    await appWindow.getByRole('textbox', { name: 'Space name' }).fill('Managed New Repo Blank Parent')
     await appWindow.getByRole('textbox', { name: 'Source repo folder name' }).fill(sourceFolderName)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
-    await expect(appWindow.getByRole('button', { name: 'Select space Managed New Repo Blank Parent' })).toBeVisible()
-
-    const createdSpace = await getSpaceByName(appWindow, 'Managed New Repo Blank Parent')
+    await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
+    const createdSpace = await findNewSpace(appWindow, beforeIds)
     expect(createdSpace.workspaceMode).toBe('managed')
     expect(fs.existsSync(createdSpace.rootPath)).toBe(true)
     expect(runGit(createdSpace.rootPath, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()).toBe('main')
@@ -200,20 +195,22 @@ test.describe('managed provisioning @uat @ci', () => {
     managedStateFilePath
   }) => {
     const localSourcePath = path.join(managedTestRootDir, 'fixtures', 'persist-source')
-    const persistedSpaceName = `Persisted Space ${Date.now()}`
     await createSeedRepo(localSourcePath)
 
     await ensureHomeSpacesView(appWindow)
+    const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
-    await appWindow.getByRole('textbox', { name: 'Space name' }).fill(persistedSpaceName)
     await appWindow.getByRole('textbox', { name: 'Local repo path' }).fill(localSourcePath)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
-    await expect(appWindow.getByRole('button', { name: `Select space ${persistedSpaceName}` })).toBeVisible()
+    await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
+    const createdSpace = await findNewSpace(appWindow, beforeIds)
+    const persistedSpaceName = createdSpace.name
+    const persistedSpaceId = createdSpace.id
 
     const preRelaunchSpaces = await listSpaces(appWindow)
     await expect.poll(() => fs.existsSync(managedStateFilePath)).toBe(true)
     const persistedState = await readPersistedState(managedStateFilePath)
-    const persistedSpace = Object.values(persistedState.spaces).find((space) => space.name === persistedSpaceName)
+    const persistedSpace = Object.values(persistedState.spaces).find((space) => space.id === persistedSpaceId)
     expect(persistedSpace).toBeDefined()
     expect(persistedSpace?.workspaceMode).toBe('managed')
     expect(persistedSpace?.branch).toBe('main')
@@ -264,7 +261,6 @@ test.describe('managed provisioning @uat @ci', () => {
     managedRepoCacheBaseDir
   }) => {
     const localSourcePath = path.join(managedTestRootDir, 'fixtures', 'default-state-path-source')
-    const defaultPathSpaceName = `Default State Path Space ${Date.now()}`
     await createSeedRepo(localSourcePath)
 
     const launchArgs = process.env.CI
@@ -299,11 +295,14 @@ test.describe('managed provisioning @uat @ci', () => {
       const appWindow = await appWithoutStateOverride.firstWindow()
       await appWindow.waitForLoadState('load')
       await ensureHomeSpacesView(appWindow)
+      const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
-      await appWindow.getByRole('textbox', { name: 'Space name' }).fill(defaultPathSpaceName)
       await appWindow.getByRole('textbox', { name: 'Local repo path' }).fill(localSourcePath)
       await appWindow.getByRole('button', { name: 'Create space' }).click()
-      await expect(appWindow.getByRole('button', { name: `Select space ${defaultPathSpaceName}` })).toBeVisible()
+      await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
+      const createdSpace = await findNewSpace(appWindow, beforeIds)
+      const defaultPathSpaceName = createdSpace.name
+      const defaultPathSpaceId = createdSpace.id
 
       const userDataPath = await appWithoutStateOverride.evaluate(async ({ app }) => app.getPath('userData'))
       defaultStatePath = path.join(userDataPath, 'app-state.json')
@@ -313,7 +312,7 @@ test.describe('managed provisioning @uat @ci', () => {
 
       await expect.poll(() => fs.existsSync(defaultStatePath)).toBe(true)
       const persistedState = await readPersistedState(defaultStatePath)
-      persistedSpace = Object.values(persistedState.spaces).find((space) => space.name === defaultPathSpaceName)
+      persistedSpace = Object.values(persistedState.spaces).find((space) => space.id === defaultPathSpaceId)
       expect(persistedSpace).toBeDefined()
       expect(persistedSpace?.workspaceMode).toBe('managed')
       expect(persistedSpace?.branch).toBe('main')

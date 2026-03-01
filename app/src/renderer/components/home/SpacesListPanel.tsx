@@ -94,16 +94,12 @@ export function SpacesListPanel({
         </div>
       ) : null}
 
-      <div className="space-y-4">
-        {groups.map((group) => {
-          if (group.spaces.length === 0) {
-            return null
-          }
-
+      <div className="space-y-6">
+        {groups.filter((group) => group.spaces.length > 0).map((group, groupIndex) => {
           return (
-            <div key={group.repo}>
+            <div key={group.repo} className={groupIndex > 0 ? 'border-t border-border/50 pt-4' : ''}>
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.repo}</p>
+                <h3 className="text-sm font-semibold text-foreground">{group.repo}</h3>
               </div>
               <ul className="space-y-1.5">
                 {group.spaces.map((space) => (

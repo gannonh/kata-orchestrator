@@ -30,9 +30,6 @@ export type SessionRecord = {
 }
 
 export type CreateSpaceInput = {
-  name?: string
-  prompt?: string
-  spaceNameOverride?: string
   repoUrl: string
   branch: string
   workspaceMode?: WorkspaceMode

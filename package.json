@@ -24,6 +24,7 @@
     "test:skills": "node --test --test-reporter spec --test-reporter-destination stdout --test-reporter junit --test-reporter-destination junit.xml tests/skills/*.test.js",
     "test:skill": "node --test --test-reporter spec",
     "test:affected": "node -e \"import('./tests/harness/affected.js').then(m => console.log(m.getAffectedTestFiles().join(' ')))\" | xargs -r node --test",
+    "test:ci:local": "npm test && npm run test:scripts && npm run build:plugin && npm run test:artifacts && npm run test:app:quality-gate",
     "build": "node scripts/build.js plugin",
     "build:plugin": "node scripts/build.js plugin",
     "build:skills-sh": "node scripts/build.js skills-sh"

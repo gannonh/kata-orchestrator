@@ -110,4 +110,39 @@ describe('preload bridge', () => {
 
     await expect(api.openExternalUrl('https://example.com')).resolves.toBe(false)
   })
+
+  it('exposes dialogOpenDirectory, gitListBranches, githubListRepos, and githubListBranches', async () => {
+    await import('../../../src/preload/index')
+
+    const [, api] = exposeInMainWorld.mock.calls[0] as [
+      string,
+      {
+        dialogOpenDirectory: () => Promise<unknown>
+        gitListBranches: (repoPath: string) => Promise<unknown>
+        githubListRepos: () => Promise<unknown>
+        githubListBranches: (owner: string, repo: string) => Promise<unknown>
+      }
+    ]
+
+    // dialogOpenDirectory
+    invoke.mockResolvedValueOnce({ path: '/Users/me/dev/repo' })
+    await expect(api.dialogOpenDirectory()).resolves.toEqual({ path: '/Users/me/dev/repo' })
+    expect(invoke).toHaveBeenCalledWith('dialog:openDirectory')
+
+    // gitListBranches
+    invoke.mockResolvedValueOnce(['main', 'develop'])
+    await expect(api.gitListBranches('/Users/me/dev/repo')).resolves.toEqual(['main', 'develop'])
+    expect(invoke).toHaveBeenCalledWith('git:listBranches', '/Users/me/dev/repo')
+
+    // githubListRepos
+    const mockRepos = [{ name: 'repo', nameWithOwner: 'org/repo', url: 'https://github.com/org/repo' }]
+    invoke.mockResolvedValueOnce(mockRepos)
+    await expect(api.githubListRepos()).resolves.toEqual(mockRepos)
+    expect(invoke).toHaveBeenCalledWith('github:listRepos')
+
+    // githubListBranches
+    invoke.mockResolvedValueOnce(['main', 'feature'])
+    await expect(api.githubListBranches('org', 'repo')).resolves.toEqual(['main', 'feature'])
+    expect(invoke).toHaveBeenCalledWith('github:listBranches', { owner: 'org', repo: 'repo' })
+  })
 })

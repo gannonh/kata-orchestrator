@@ -7,11 +7,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultAppState } from '../../../src/shared/types/space'
 import type { AppState } from '../../../src/shared/types/space'
 
-const { mockRemoveHandler, mockHandle, mockOpenExternal, mockProvisionManagedWorkspace } = vi.hoisted(() => ({
+const { mockRemoveHandler, mockHandle, mockOpenExternal, mockShowOpenDialog, mockProvisionManagedWorkspace, mockFsAccess, mockExecFile } = vi.hoisted(() => ({
   mockRemoveHandler: vi.fn(),
   mockHandle: vi.fn(),
   mockOpenExternal: vi.fn(),
-  mockProvisionManagedWorkspace: vi.fn()
+  mockShowOpenDialog: vi.fn(),
+  mockProvisionManagedWorkspace: vi.fn(),
+  mockFsAccess: vi.fn(),
+  mockExecFile: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -21,8 +24,37 @@ vi.mock('electron', () => ({
   },
   shell: {
     openExternal: mockOpenExternal
+  },
+  dialog: {
+    showOpenDialog: mockShowOpenDialog
   }
 }))
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      promises: {
+        ...actual.promises,
+        access: mockFsAccess
+      }
+    },
+    promises: {
+      ...actual.promises,
+      access: mockFsAccess
+    }
+  }
+})
+
+vi.mock('node:child_process', async () => {
+  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+  return {
+    ...actual,
+    execFile: mockExecFile
+  }
+})
 
 vi.mock('../../../src/main/workspace-provisioning', async () => {
   const actual = await vi.importActual<typeof import('../../../src/main/workspace-provisioning')>(
@@ -98,7 +130,6 @@ describe('registerIpcHandlers', () => {
     const spaceList = handlers.get('space:list')
 
     const createdSpace = await spaceCreate?.({}, {
-      name: 'Fallback Space',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/repo',
       branch: 'main',
@@ -114,16 +145,15 @@ describe('registerIpcHandlers', () => {
     const spaceCreate = getHandlersByChannel().get('space:create')
 
     const createdSpace = await spaceCreate?.({}, {
-      name: 'My External Space',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/repo',
       branch: 'main',
       workspaceMode: 'external',
       orchestrationMode: 'single'
-    })
+    }) as { name: string }
 
+    expect(createdSpace.name).toMatch(/^repo-[a-z0-9]{4}$/)
     expect(createdSpace).toMatchObject({
-      name: 'My External Space',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/repo',
       branch: 'main',
@@ -164,14 +194,13 @@ describe('registerIpcHandlers', () => {
 
     const spaceCreate = getHandlersByChannel().get('space:create')
     const createdSpace = await spaceCreate?.({}, {
-      prompt: 'Build feature',
       repoUrl: 'https://github.com/org/kata-cloud',
       branch: 'main',
       workspaceMode: 'managed',
       provisioningMethod: 'clone-github',
       sourceRemoteUrl: 'https://github.com/org/kata-cloud.git',
       orchestrationMode: 'team'
-    })
+    }) as { name: string }
 
     expect(mockProvisionManagedWorkspace).toHaveBeenCalledWith({
       workspaceBaseDir: '/tmp/workspaces',
@@ -185,8 +214,8 @@ describe('registerIpcHandlers', () => {
       })
     })
 
+    expect(createdSpace.name).toMatch(/^kata-cloud-[a-z0-9]{4}$/)
     expect(createdSpace).toMatchObject({
-      name: 'kata-cloud main (2)',
       rootPath: '/tmp/workspaces/kata-cloud-abcd1234/repo',
       branch: 'main',
       workspaceMode: 'managed',
@@ -223,13 +252,14 @@ describe('registerIpcHandlers', () => {
         sourceLocalPath: '/Users/me/dev/local-repo'
       })
     }))
+    const created = createdSpace as { name: string }
+    expect(created.name).toMatch(/^local-repo-[a-z0-9]{4}$/)
     expect(createdSpace).toMatchObject({
-      name: 'local-repo main',
       workspaceMode: 'managed'
     })
   })
 
-  it('defaults omitted workspaceMode to managed and honors spaceNameOverride', async () => {
+  it('defaults omitted workspaceMode to managed and auto-generates nanoid name', async () => {
     mockProvisionManagedWorkspace.mockResolvedValue({
       rootPath: '/tmp/workspaces/override-abcd1234/repo',
       cacheRepoPath: '/tmp/repos/override',
@@ -244,17 +274,15 @@ describe('registerIpcHandlers', () => {
       repoUrl: 'https://github.com/org/override',
       branch: 'main',
       provisioningMethod: 'clone-github',
-      sourceRemoteUrl: 'https://github.com/org/override.git',
-      spaceNameOverride: 'My Override Space'
-    })
+      sourceRemoteUrl: 'https://github.com/org/override.git'
+    }) as { name: string }
 
     expect(mockProvisionManagedWorkspace).toHaveBeenCalledWith(expect.objectContaining({
       input: expect.objectContaining({
-        workspaceMode: 'managed',
-        spaceNameOverride: 'My Override Space'
+        workspaceMode: 'managed'
       })
     }))
-    expect(createdSpace).toMatchObject({ name: 'My Override Space' })
+    expect(createdSpace.name).toMatch(/^override-[a-z0-9]{4}$/)
   })
 
   it('space:create surfaces actionable managed provisioning errors', async () => {
@@ -447,16 +475,6 @@ describe('registerIpcHandlers', () => {
         repoUrl: 'https://github.com/user/repo',
         branch: 'main',
         workspaceMode: 'managed',
-        provisioningMethod: 'clone-github',
-        sourceRemoteUrl: 'https://github.com/user/repo.git',
-        name: 123
-      })
-    ).rejects.toThrow('Space input name must be a string when provided')
-    await expect(
-      spaceCreate?.({}, {
-        repoUrl: 'https://github.com/user/repo',
-        branch: 'main',
-        workspaceMode: 'managed',
         provisioningMethod: 'copy-local',
         sourceLocalPath: ''
       })
@@ -571,6 +589,127 @@ describe('registerIpcHandlers', () => {
       workspaceMode: 'external',
       rootPath: '/Users/me/repo'
     })
-    expect(created).toMatchObject({ name: 'repo main' })
+    const createdRecord = created as { name: string }
+    expect(createdRecord.name).toMatch(/^repo-[a-z0-9]{4}$/)
+  })
+
+  describe('dialog:openDirectory', () => {
+    it('returns selected directory path when .git exists', async () => {
+      mockShowOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/Users/me/dev/repo'] })
+      mockFsAccess.mockResolvedValue(undefined)
+      registerIpcHandlers(createMockStore())
+      const handlers = getHandlersByChannel()
+      const handler = handlers.get('dialog:openDirectory')!
+      const result = await handler(null)
+      expect(result).toEqual({ path: '/Users/me/dev/repo' })
+    })
+
+    it('returns null when dialog is canceled', async () => {
+      mockShowOpenDialog.mockResolvedValue({ canceled: true, filePaths: [] })
+      registerIpcHandlers(createMockStore())
+      const handlers = getHandlersByChannel()
+      const handler = handlers.get('dialog:openDirectory')!
+      const result = await handler(null)
+      expect(result).toBeNull()
+    })
+
+    it('returns error when selected directory is not a git repository', async () => {
+      mockShowOpenDialog.mockResolvedValue({ canceled: false, filePaths: ['/Users/me/dev/not-a-repo'] })
+      mockFsAccess.mockRejectedValue(new Error('ENOENT'))
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('dialog:openDirectory')!
+      const result = await handler(null)
+      expect(result).toEqual({ error: 'Selected directory is not a git repository.', path: '/Users/me/dev/not-a-repo' })
+    })
+  })
+
+  describe('git:listBranches', () => {
+    it('returns branch list on success', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: (err: Error | null, result: { stdout: string }) => void) => {
+        cb(null, { stdout: 'main\ndevelop\nfeature/test\n' })
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('git:listBranches')!
+      const result = await handler(null, '/Users/me/dev/repo')
+      expect(result).toEqual(['main', 'develop', 'feature/test'])
+    })
+
+    it('returns error object when git fails', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: (err: Error | null) => void) => {
+        cb(new Error('git failed'))
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('git:listBranches')!
+      const result = await handler(null, '/bad/path')
+      expect(result).toEqual({ error: 'Could not read branches.' })
+    })
+
+    it('returns error object when repoPath is not a string', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('git:listBranches')!
+      await expect(handler(null, 123)).resolves.toEqual({ error: 'repoPath must be a string' })
+    })
+  })
+
+  describe('github:listRepos', () => {
+    it('returns parsed repo list on success', async () => {
+      const repos = [{ name: 'repo', nameWithOwner: 'org/repo', url: 'https://github.com/org/repo' }]
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: (err: Error | null, result: { stdout: string }) => void) => {
+        cb(null, { stdout: JSON.stringify(repos) })
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('github:listRepos')!
+      const result = await handler(null)
+      expect(result).toEqual(repos)
+    })
+
+    it('returns error object when gh CLI fails', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: (err: Error | null) => void) => {
+        cb(new Error('gh not found'))
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('github:listRepos')!
+      const result = await handler(null)
+      expect(result).toEqual({ error: 'GitHub CLI not available. Install and authenticate with `gh auth login`.' })
+    })
+
+    it('returns parse error object when gh output is malformed JSON', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: (err: Error | null, result: { stdout: string }) => void) => {
+        cb(null, { stdout: '{not-json' })
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('github:listRepos')!
+      const result = await handler(null)
+      expect(result).toEqual({ error: 'Failed to parse GitHub CLI response.' })
+    })
+  })
+
+  describe('github:listBranches', () => {
+    it('returns branch list on success', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: (err: Error | null, result: { stdout: string }) => void) => {
+        cb(null, { stdout: 'main\ndevelop\n' })
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('github:listBranches')!
+      const result = await handler(null, { owner: 'org', repo: 'repo' })
+      expect(result).toEqual(['main', 'develop'])
+    })
+
+    it('returns error object when gh CLI fails', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], cb: (err: Error | null) => void) => {
+        cb(new Error('gh api failed'))
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('github:listBranches')!
+      const result = await handler(null, { owner: 'org', repo: 'repo' })
+      expect(result).toEqual({ error: 'Could not fetch branches from GitHub.' })
+    })
+
+    it('returns error object when input is missing owner or repo', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('github:listBranches')!
+      await expect(handler(null, { owner: 'org' })).resolves.toEqual({ error: 'input must have string owner and repo fields' })
+      await expect(handler(null, null)).resolves.toEqual({ error: 'input must have string owner and repo fields' })
+    })
   })
 })

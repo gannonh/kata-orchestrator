@@ -34,7 +34,6 @@ export async function ensureWorkspaceShell(
       .getByRole('button', { name: 'Use my existing folder/worktree (developer-managed)' })
       .click()
     await appWindow.getByRole('textbox', { name: 'Workspace path' }).fill(workspacePath)
-    await appWindow.getByRole('textbox', { name: 'Space name' }).fill(`E2E Workspace ${Date.now()}`)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
   })
 

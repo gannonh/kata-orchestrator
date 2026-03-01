@@ -1,43 +1,66 @@
 // @vitest-environment node
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { deriveDefaultSpaceName, ensureUniqueSpaceName, resolveSpaceName } from '../../../src/shared/space-name'
+const { mockRandomBytes } = vi.hoisted(() => ({
+  mockRandomBytes: vi.fn()
+}))
 
-describe('deriveDefaultSpaceName', () => {
-  it('uses repo and branch values', () => {
-    expect(deriveDefaultSpaceName('kata-cloud', 'main')).toBe('kata-cloud main')
+vi.mock('node:crypto', async () => {
+  const actual = await vi.importActual<typeof import('node:crypto')>('node:crypto')
+  return {
+    ...actual,
+    randomBytes: mockRandomBytes
+  }
+})
+
+import { generateShortId, resolveSpaceName } from '../../../src/main/space-name'
+
+describe('generateShortId', () => {
+  beforeEach(() => {
+    mockRandomBytes.mockReset()
   })
 
-  it('falls back to safe defaults for blank values', () => {
-    expect(deriveDefaultSpaceName(' ', '')).toBe('repo main')
+  it('returns a 4-character lowercase alphanumeric string', () => {
+    mockRandomBytes.mockReturnValue(Buffer.from([0, 1, 2, 3]))
+    const id = generateShortId()
+    expect(id).toMatch(/^[a-z0-9]{4}$/)
+  })
+
+  it('produces different values on successive calls', () => {
+    mockRandomBytes
+      .mockReturnValueOnce(Buffer.from([0, 0, 0, 0]))
+      .mockReturnValueOnce(Buffer.from([1, 1, 1, 1]))
+
+    const ids = new Set([generateShortId(), generateShortId()])
+    expect(ids.size).toBe(2)
   })
 })
 
-describe('ensureUniqueSpaceName', () => {
-  it('returns base name when not taken', () => {
-    expect(ensureUniqueSpaceName('kata-cloud main', new Set())).toBe('kata-cloud main')
+describe('resolveSpaceName (nanoid)', () => {
+  beforeEach(() => {
+    mockRandomBytes.mockReset()
   })
 
-  it('adds numeric suffix when base name is taken', () => {
-    const taken = new Set(['kata-cloud main', 'kata-cloud main (2)'])
-    expect(ensureUniqueSpaceName('kata-cloud main', taken)).toBe('kata-cloud main (3)')
-  })
-})
-
-describe('resolveSpaceName', () => {
-  it('derives default name from repo + branch and applies numeric collision suffixes', () => {
-    const taken = new Set(['kata-cloud main', 'kata-cloud main (2)'])
-    expect(resolveSpaceName({ repoLabel: 'kata-cloud', branch: 'main', override: '', existingNames: taken }))
-      .toBe('kata-cloud main (3)')
+  it('generates repoLabel-shortId format', () => {
+    mockRandomBytes.mockReturnValue(Buffer.from([0, 1, 2, 3]))
+    const name = resolveSpaceName({ repoLabel: 'kata-cloud', existingNames: new Set() })
+    expect(name).toMatch(/^kata-cloud-[a-z0-9]{4}$/)
   })
 
-  it('prefers explicit override when present', () => {
-    expect(resolveSpaceName({
-      repoLabel: 'kata-cloud',
-      branch: 'main',
-      override: 'My custom space',
-      existingNames: new Set()
-    })).toBe('My custom space')
+  it('retries on collision', () => {
+    mockRandomBytes
+      .mockReturnValueOnce(Buffer.from([0, 0, 0, 0])) // aaaa
+      .mockReturnValueOnce(Buffer.from([0, 0, 0, 1])) // aaab
+
+    const existingNames = new Set(['repo-aaaa'])
+    const name = resolveSpaceName({ repoLabel: 'repo', existingNames })
+    expect(name).toBe('repo-aaab')
+  })
+
+  it('uses safe repo label for blank input', () => {
+    mockRandomBytes.mockReturnValue(Buffer.from([0, 1, 2, 3]))
+    const name = resolveSpaceName({ repoLabel: '  ', existingNames: new Set() })
+    expect(name).toMatch(/^repo-[a-z0-9]{4}$/)
   })
 })
