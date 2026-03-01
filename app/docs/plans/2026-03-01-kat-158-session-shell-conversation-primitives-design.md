@@ -63,6 +63,19 @@ Cons:
 
 Proceed with **Approach 1**. It gives deterministic UI states and layout parity quickly, keeps this ticket isolated to the design-spec minimum, and sets up `KAT-159` to replace adapter state with real runtime data without rewriting the shell.
 
+## Stack Decisions (Updated)
+
+Per latest direction, this slice is now constrained by:
+
+- **Data layer:** Convex
+- **LLM adapter primitives:** `pi-mono` (`@mariozechner/pi-ai`)
+- **Agent runtime primitives for next slice integration:** `@mariozechner/pi-agent-core`
+
+Implications for `KAT-158`:
+
+- `KAT-158` remains deterministic UI-only for state proof, but the local UI state shape must mirror the upcoming Convex-backed thread/message model.
+- `KAT-158` must avoid coupling UI components directly to mock-only message schemas that would block `KAT-159` migration.
+
 ## Proposed Design
 
 ## 1) Shell Composition (Minimum 02/04 Parity)
@@ -92,6 +105,12 @@ type SessionMessage = {
 
 type RunUiStatus = 'empty' | 'pending' | 'error' | 'idle'
 ```
+
+Shape alignment rules for Convex handoff:
+
+- `SessionMessage.id` remains string-compatible with future Convex document IDs.
+- Message role maps to eventual thread message source (`user` / `agent`).
+- `createdAt` remains explicit to preserve deterministic ordering rules when replacing local state with Convex query results.
 
 Primitive behavior:
 
@@ -166,6 +185,22 @@ Primary state screenshot evidence (required by issue):
 - Persistence and resume across relaunch (`KAT-161`)
 - Full left-lane agent/task/conversation index parity (`KAT-185+`)
 
+## 7) KAT-159 Handoff Contract (Convex + PI Primitives)
+
+`KAT-158` will hand off a UI contract that `KAT-159` must satisfy via real integration:
+
+- Convex:
+  - Use Convex functions split by concern:
+    - Queries for reading thread/message state
+    - Mutations for deterministic write transitions
+    - Actions for external LLM/provider calls
+  - Store thread/message history in Convex-backed records and stream state updates to renderer.
+- PI primitives:
+  - Use `@mariozechner/pi-ai` as the provider/model abstraction boundary.
+  - Use `@mariozechner/pi-agent-core` event flow (`message_start`, `message_update`, `message_end`, tool events) to drive run status and message updates in UI.
+- Adapter boundary:
+  - Define a renderer-facing `SessionRuntimeAdapter` interface in `KAT-159` so current deterministic reducer can be replaced with live events without changing presentational components.
+
 ## Risks and Mitigations
 
 - Risk: Over-coupling temporary state logic to mock hooks.
@@ -180,3 +215,11 @@ Primary state screenshot evidence (required by issue):
 If approved, next step is to generate the implementation plan via `writing-plans` at:
 
 - `docs/plans/2026-03-01-kat-158-session-shell-conversation-primitives-implementation-plan.md`
+
+## Source References
+
+- Convex docs index: https://docs.convex.dev/llms.txt
+- Convex full docs (agent/function guidance): https://docs.convex.dev/llms-full.txt
+- PI monorepo overview: https://github.com/badlogic/pi-mono
+- `@mariozechner/pi-ai` package docs: https://github.com/badlogic/pi-mono/tree/main/packages/ai
+- `@mariozechner/pi-agent-core` package docs: https://github.com/badlogic/pi-mono/tree/main/packages/agent
