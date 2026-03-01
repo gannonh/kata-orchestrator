@@ -8,15 +8,27 @@ describe('RunStatusBadge', () => {
     cleanup()
   })
 
-  it('renders pending as Thinking', () => {
-    render(<RunStatusBadge runState="pending" />)
+  it.each([
+    ['empty', 'Ready'],
+    ['pending', 'Thinking'],
+    ['idle', 'Stopped'],
+    ['error', 'Error']
+  ] as const)('renders %s with an accessible status region', (runState, label) => {
+    render(<RunStatusBadge runState={runState} />)
 
-    expect(screen.getByText('Thinking')).toBeTruthy()
+    const statusRegion = screen.getByRole('status', { name: label })
+
+    expect(statusRegion.getAttribute('aria-live')).toBe('polite')
+    expect(statusRegion.textContent).toContain(label)
   })
 
-  it('renders error state copy', () => {
-    render(<RunStatusBadge runState="error" />)
+  it('uses motion-safe pulse styling for the pending dot', () => {
+    const { container } = render(<RunStatusBadge runState="pending" />)
 
-    expect(screen.getByText('Error')).toBeTruthy()
+    const dot = container.querySelector('[aria-hidden="true"]')
+    const classes = dot?.className.split(/\s+/) ?? []
+
+    expect(classes).toContain('motion-safe:animate-pulse')
+    expect(classes).not.toContain('animate-pulse')
   })
 })
