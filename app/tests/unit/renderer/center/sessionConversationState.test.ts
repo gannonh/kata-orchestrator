@@ -11,22 +11,17 @@ describe('sessionConversationReducer', () => {
 
     const nextState = sessionConversationReducer(initialState, {
       type: 'SUBMIT_PROMPT',
-      message: {
-        id: 'u-1',
-        role: 'user',
-        content: 'Plan phase 2',
-        createdAt: '2026-03-01T10:00:00.000Z'
-      }
+      prompt: 'Plan phase 2'
     })
 
     expect(nextState.runState).toBe('pending')
     expect(nextState.errorMessage).toBeUndefined()
     expect(nextState.messages).toEqual([
       {
-        id: 'u-1',
+        id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '2026-03-01T10:00:00.000Z'
+        createdAt: '1970-01-01T00:00:01.000Z'
       }
     ])
   })
@@ -34,38 +29,28 @@ describe('sessionConversationReducer', () => {
   it('pending -> idle and appends agent message on RUN_SUCCEEDED', () => {
     const pendingState = sessionConversationReducer(createInitialSessionConversationState(), {
       type: 'SUBMIT_PROMPT',
-      message: {
-        id: 'u-1',
-        role: 'user',
-        content: 'Plan phase 2',
-        createdAt: '2026-03-01T10:00:00.000Z'
-      }
+      prompt: 'Plan phase 2'
     })
 
     const nextState = sessionConversationReducer(pendingState, {
       type: 'RUN_SUCCEEDED',
-      message: {
-        id: 'a-1',
-        role: 'agent',
-        content: 'Draft complete.',
-        createdAt: '2026-03-01T10:00:01.000Z'
-      }
+      response: 'Draft complete.'
     })
 
     expect(nextState.runState).toBe('idle')
     expect(nextState.errorMessage).toBeUndefined()
     expect(nextState.messages).toEqual([
       {
-        id: 'u-1',
+        id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '2026-03-01T10:00:00.000Z'
+        createdAt: '1970-01-01T00:00:01.000Z'
       },
       {
-        id: 'a-1',
+        id: 'agent-2',
         role: 'agent',
         content: 'Draft complete.',
-        createdAt: '2026-03-01T10:00:01.000Z'
+        createdAt: '1970-01-01T00:00:02.000Z'
       }
     ])
   })
@@ -73,27 +58,22 @@ describe('sessionConversationReducer', () => {
   it('pending -> error and stores errorMessage on RUN_FAILED', () => {
     const pendingState = sessionConversationReducer(createInitialSessionConversationState(), {
       type: 'SUBMIT_PROMPT',
-      message: {
-        id: 'u-1',
-        role: 'user',
-        content: 'Plan phase 2',
-        createdAt: '2026-03-01T10:00:00.000Z'
-      }
+      prompt: 'Plan phase 2'
     })
 
     const nextState = sessionConversationReducer(pendingState, {
       type: 'RUN_FAILED',
-      errorMessage: 'Network timeout'
+      error: 'Network timeout'
     })
 
     expect(nextState.runState).toBe('error')
     expect(nextState.errorMessage).toBe('Network timeout')
     expect(nextState.messages).toEqual([
       {
-        id: 'u-1',
+        id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '2026-03-01T10:00:00.000Z'
+        createdAt: '1970-01-01T00:00:01.000Z'
       }
     ])
   })

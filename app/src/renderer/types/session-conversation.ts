@@ -17,17 +17,17 @@ export interface SessionConversationState {
 
 export type SubmitPromptEvent = {
   type: 'SUBMIT_PROMPT'
-  message: ConversationMessage & { role: 'user' }
+  prompt: string
 }
 
 export type RunSucceededEvent = {
   type: 'RUN_SUCCEEDED'
-  message: ConversationMessage & { role: 'agent' }
+  response: string
 }
 
 export type RunFailedEvent = {
   type: 'RUN_FAILED'
-  errorMessage: string
+  error: string
 }
 
 export type RetryFromErrorEvent = {
