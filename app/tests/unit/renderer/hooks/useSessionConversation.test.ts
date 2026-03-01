@@ -63,18 +63,27 @@ describe('useSessionConversation', () => {
     ])
   })
 
-  it('does not cancel the active run when submit is called again while pending', () => {
+  it('does not reschedule the active run when submit is called again while pending', () => {
     vi.useFakeTimers()
 
     const { result } = renderHook(() => useSessionConversation())
 
     act(() => {
       result.current.submitPrompt('Create spec')
+      vi.advanceTimersByTime(450)
       result.current.submitPrompt('Ignored while pending')
     })
 
+    expect(result.current.state.runState).toBe('pending')
+
     act(() => {
-      vi.runAllTimers()
+      vi.advanceTimersByTime(449)
+    })
+
+    expect(result.current.state.runState).toBe('pending')
+
+    act(() => {
+      vi.advanceTimersByTime(1)
     })
 
     expect(result.current.state.runState).toBe('idle')

@@ -4,6 +4,7 @@ import {
   createInitialSessionConversationState,
   sessionConversationReducer
 } from '../components/center/sessionConversationState'
+import type { ConversationRunState } from '../types/session-conversation'
 
 const RUN_SUCCESS_DELAY_MS = 900
 const DETERMINISTIC_ERROR_MESSAGE = 'Deterministic error state for shell testing.'
@@ -16,6 +17,7 @@ export function useSessionConversation() {
     createInitialSessionConversationState
   )
   const timeoutRef = useRef<number | null>(null)
+  const runStateRef = useRef<ConversationRunState>('empty')
 
   const clearPendingTimer = useCallback(() => {
     if (timeoutRef.current !== null) {
@@ -25,6 +27,10 @@ export function useSessionConversation() {
   }, [])
 
   useEffect(() => {
+    runStateRef.current = state.runState
+  }, [state.runState])
+
+  useEffect(() => {
     return () => {
       clearPendingTimer()
     }
@@ -32,7 +38,8 @@ export function useSessionConversation() {
 
   const submitPrompt = useCallback(
     (prompt: string) => {
-      const canStartRun = state.runState === 'empty' || state.runState === 'idle'
+      const canStartRun =
+        runStateRef.current === 'empty' || runStateRef.current === 'idle'
 
       dispatch({
         type: 'SUBMIT_PROMPT',
@@ -43,9 +50,11 @@ export function useSessionConversation() {
         return
       }
 
+      runStateRef.current = 'pending'
       clearPendingTimer()
 
       if (prompt.trim().startsWith('/error')) {
+        runStateRef.current = 'error'
         dispatch({
           type: 'RUN_FAILED',
           error: DETERMINISTIC_ERROR_MESSAGE
@@ -55,16 +64,21 @@ export function useSessionConversation() {
 
       timeoutRef.current = window.setTimeout(() => {
         timeoutRef.current = null
+        runStateRef.current = 'idle'
         dispatch({
           type: 'RUN_SUCCEEDED',
           response: RUN_SUCCESS_RESPONSE
         })
       }, RUN_SUCCESS_DELAY_MS)
     },
-    [clearPendingTimer, state.runState]
+    [clearPendingTimer]
   )
 
   const retry = useCallback(() => {
+    if (runStateRef.current === 'error') {
+      runStateRef.current = 'pending'
+    }
+
     dispatch({
       type: 'RETRY_FROM_ERROR'
     })
