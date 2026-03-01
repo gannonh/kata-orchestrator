@@ -117,24 +117,6 @@ function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
     orchestrationMode: orchestrationModeValue
   }
 
-  const optionalTextFieldNames: Array<'name' | 'prompt' | 'spaceNameOverride'> = [
-    'name',
-    'prompt',
-    'spaceNameOverride'
-  ]
-  for (const fieldName of optionalTextFieldNames) {
-    const fieldValue = input[fieldName]
-    if (fieldValue !== undefined && typeof fieldValue !== 'string') {
-      throw new Error(`Space input ${fieldName} must be a string when provided`)
-    }
-  }
-
-  const optionalTexts = {
-    ...(typeof input.name === 'string' ? { name: input.name } : {}),
-    ...(typeof input.prompt === 'string' ? { prompt: input.prompt } : {}),
-    ...(typeof input.spaceNameOverride === 'string' ? { spaceNameOverride: input.spaceNameOverride } : {})
-  }
-
   if (baseInput.workspaceMode === 'external') {
     const rootPathValue = input.rootPath
     if (typeof rootPathValue !== 'string' || !rootPathValue.trim()) {
@@ -147,7 +129,6 @@ function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
 
     return {
       ...baseInput,
-      ...optionalTexts,
       workspaceMode: 'external',
       rootPath: normalizedRootPath
     }
@@ -166,8 +147,7 @@ function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
       }
       return {
         ...baseInput,
-        ...optionalTexts,
-        workspaceMode: 'managed',
+          workspaceMode: 'managed',
         provisioningMethod: 'copy-local',
         sourceLocalPath: sourceLocalPath.trim()
       }
@@ -179,8 +159,7 @@ function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
       }
       return {
         ...baseInput,
-        ...optionalTexts,
-        workspaceMode: 'managed',
+          workspaceMode: 'managed',
         provisioningMethod: 'clone-github',
         sourceRemoteUrl: sourceRemoteUrl.trim()
       }
@@ -197,8 +176,7 @@ function parseCreateSpaceInput(input: unknown): ParsedCreateSpaceInput {
       const normalizedParentDir = newRepoParentDir.trim() || path.join(os.homedir(), 'dev')
       return {
         ...baseInput,
-        ...optionalTexts,
-        workspaceMode: 'managed',
+          workspaceMode: 'managed',
         provisioningMethod: 'new-repo',
         newRepoParentDir: normalizedParentDir,
         newRepoFolderName: newRepoFolderName.trim()
@@ -310,11 +288,8 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
     })()
 
     const existingNames = new Set(Object.values(state.spaces).map((space) => space.name))
-    const override = parsedInput.spaceNameOverride?.trim() || parsedInput.name?.trim()
     const resolvedName = resolveSpaceName({
       repoLabel: deriveRepoLabel(parsedInput),
-      branch: resolvedSpace.branch,
-      override,
       existingNames
     })
 

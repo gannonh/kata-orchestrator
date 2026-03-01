@@ -98,7 +98,6 @@ describe('registerIpcHandlers', () => {
     const spaceList = handlers.get('space:list')
 
     const createdSpace = await spaceCreate?.({}, {
-      name: 'Fallback Space',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/repo',
       branch: 'main',
@@ -114,16 +113,15 @@ describe('registerIpcHandlers', () => {
     const spaceCreate = getHandlersByChannel().get('space:create')
 
     const createdSpace = await spaceCreate?.({}, {
-      name: 'My External Space',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/repo',
       branch: 'main',
       workspaceMode: 'external',
       orchestrationMode: 'single'
-    })
+    }) as { name: string }
 
+    expect(createdSpace.name).toMatch(/^repo-[a-z0-9]{4}$/)
     expect(createdSpace).toMatchObject({
-      name: 'My External Space',
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/repo',
       branch: 'main',
@@ -164,14 +162,13 @@ describe('registerIpcHandlers', () => {
 
     const spaceCreate = getHandlersByChannel().get('space:create')
     const createdSpace = await spaceCreate?.({}, {
-      prompt: 'Build feature',
       repoUrl: 'https://github.com/org/kata-cloud',
       branch: 'main',
       workspaceMode: 'managed',
       provisioningMethod: 'clone-github',
       sourceRemoteUrl: 'https://github.com/org/kata-cloud.git',
       orchestrationMode: 'team'
-    })
+    }) as { name: string }
 
     expect(mockProvisionManagedWorkspace).toHaveBeenCalledWith({
       workspaceBaseDir: '/tmp/workspaces',
@@ -185,8 +182,8 @@ describe('registerIpcHandlers', () => {
       })
     })
 
+    expect(createdSpace.name).toMatch(/^kata-cloud-[a-z0-9]{4}$/)
     expect(createdSpace).toMatchObject({
-      name: 'kata-cloud main (2)',
       rootPath: '/tmp/workspaces/kata-cloud-abcd1234/repo',
       branch: 'main',
       workspaceMode: 'managed',
@@ -223,13 +220,14 @@ describe('registerIpcHandlers', () => {
         sourceLocalPath: '/Users/me/dev/local-repo'
       })
     }))
+    const created = createdSpace as { name: string }
+    expect(created.name).toMatch(/^local-repo-[a-z0-9]{4}$/)
     expect(createdSpace).toMatchObject({
-      name: 'local-repo main',
       workspaceMode: 'managed'
     })
   })
 
-  it('defaults omitted workspaceMode to managed and honors spaceNameOverride', async () => {
+  it('defaults omitted workspaceMode to managed and auto-generates nanoid name', async () => {
     mockProvisionManagedWorkspace.mockResolvedValue({
       rootPath: '/tmp/workspaces/override-abcd1234/repo',
       cacheRepoPath: '/tmp/repos/override',
@@ -244,17 +242,15 @@ describe('registerIpcHandlers', () => {
       repoUrl: 'https://github.com/org/override',
       branch: 'main',
       provisioningMethod: 'clone-github',
-      sourceRemoteUrl: 'https://github.com/org/override.git',
-      spaceNameOverride: 'My Override Space'
-    })
+      sourceRemoteUrl: 'https://github.com/org/override.git'
+    }) as { name: string }
 
     expect(mockProvisionManagedWorkspace).toHaveBeenCalledWith(expect.objectContaining({
       input: expect.objectContaining({
-        workspaceMode: 'managed',
-        spaceNameOverride: 'My Override Space'
+        workspaceMode: 'managed'
       })
     }))
-    expect(createdSpace).toMatchObject({ name: 'My Override Space' })
+    expect(createdSpace.name).toMatch(/^override-[a-z0-9]{4}$/)
   })
 
   it('space:create surfaces actionable managed provisioning errors', async () => {
@@ -447,16 +443,6 @@ describe('registerIpcHandlers', () => {
         repoUrl: 'https://github.com/user/repo',
         branch: 'main',
         workspaceMode: 'managed',
-        provisioningMethod: 'clone-github',
-        sourceRemoteUrl: 'https://github.com/user/repo.git',
-        name: 123
-      })
-    ).rejects.toThrow('Space input name must be a string when provided')
-    await expect(
-      spaceCreate?.({}, {
-        repoUrl: 'https://github.com/user/repo',
-        branch: 'main',
-        workspaceMode: 'managed',
         provisioningMethod: 'copy-local',
         sourceLocalPath: ''
       })
@@ -571,6 +557,7 @@ describe('registerIpcHandlers', () => {
       workspaceMode: 'external',
       rootPath: '/Users/me/repo'
     })
-    expect(created).toMatchObject({ name: 'repo main' })
+    const createdRecord = created as { name: string }
+    expect(createdRecord.name).toMatch(/^repo-[a-z0-9]{4}$/)
   })
 })
