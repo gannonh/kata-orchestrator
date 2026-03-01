@@ -159,10 +159,10 @@ export function HomeSpacesScreen({ onOpenSpace, initialSpaces = [] }: HomeSpaces
 
   const canCreate = useMemo(() => {
     if (workspaceMode === 'external') {
-      return workspacePath.length > 0
+      return workspacePath.trim().length > 0
     }
     if (provisioningMethod === 'copy-local') {
-      return repoPath.length > 0
+      return repoPath.trim().length > 0
     }
     if (provisioningMethod === 'clone-github') {
       return selectedGithubRepo !== null || githubFallbackUrl.trim().length > 0

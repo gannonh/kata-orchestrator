@@ -380,7 +380,7 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
 
   ipcMain.handle(GIT_LIST_BRANCHES_CHANNEL, async (_event, repoPath: unknown) => {
     if (typeof repoPath !== 'string') {
-      throw new Error('repoPath must be a string')
+      return { error: 'repoPath must be a string' }
     }
     try {
       const { stdout } = await execFileAsync('git', ['branch', '--list', '--format=%(refname:short)'], { cwd: repoPath })
@@ -407,7 +407,7 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
 
   ipcMain.handle(GITHUB_LIST_BRANCHES_CHANNEL, async (_event, input: unknown) => {
     if (!isObjectRecord(input) || typeof input.owner !== 'string' || typeof input.repo !== 'string') {
-      throw new Error('input must have string owner and repo fields')
+      return { error: 'input must have string owner and repo fields' }
     }
     try {
       const { stdout } = await execFileAsync('gh', [

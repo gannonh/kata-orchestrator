@@ -644,10 +644,10 @@ describe('registerIpcHandlers', () => {
       expect(result).toEqual({ error: 'Could not read branches.' })
     })
 
-    it('throws when repoPath is not a string', async () => {
+    it('returns error object when repoPath is not a string', async () => {
       registerIpcHandlers(createMockStore())
       const handler = getHandlersByChannel().get('git:listBranches')!
-      await expect(handler(null, 123)).rejects.toThrow('repoPath must be a string')
+      await expect(handler(null, 123)).resolves.toEqual({ error: 'repoPath must be a string' })
     })
   })
 
@@ -705,11 +705,11 @@ describe('registerIpcHandlers', () => {
       expect(result).toEqual({ error: 'Could not fetch branches from GitHub.' })
     })
 
-    it('throws when input is missing owner or repo', async () => {
+    it('returns error object when input is missing owner or repo', async () => {
       registerIpcHandlers(createMockStore())
       const handler = getHandlersByChannel().get('github:listBranches')!
-      await expect(handler(null, { owner: 'org' })).rejects.toThrow('input must have string owner and repo fields')
-      await expect(handler(null, null)).rejects.toThrow('input must have string owner and repo fields')
+      await expect(handler(null, { owner: 'org' })).resolves.toEqual({ error: 'input must have string owner and repo fields' })
+      await expect(handler(null, null)).resolves.toEqual({ error: 'input must have string owner and repo fields' })
     })
   })
 })

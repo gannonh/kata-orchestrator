@@ -350,6 +350,36 @@ describe('HomeSpacesScreen', () => {
     })
   })
 
+  it('submits typed fallback repository URL when GitHub CLI is unavailable', async () => {
+    const githubListRepos = vi.fn().mockResolvedValue({
+      error: 'GitHub CLI not available.'
+    })
+    const createdRecord = makeSpaceRecord({ id: 'space-fallback' })
+    const spaceCreate = vi.fn<(input: unknown) => Promise<SpaceRecord>>().mockResolvedValue(createdRecord)
+    window.kata = { ...window.kata, githubListRepos, spaceCreate }
+
+    render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Use clone github provisioning' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: /repository url/i })).toBeTruthy()
+    })
+
+    fireEvent.change(screen.getByRole('textbox', { name: /repository url/i }), {
+      target: { value: 'https://github.com/org/manual-repo.git' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
+
+    await waitFor(() => {
+      expect(spaceCreate).toHaveBeenCalledTimes(1)
+    })
+    expect(spaceCreate.mock.calls[0]?.[0]).toMatchObject({
+      provisioningMethod: 'clone-github',
+      sourceRemoteUrl: 'https://github.com/org/manual-repo.git',
+      repoUrl: 'https://github.com/org/manual-repo.git'
+    })
+  })
+
   it('tolerates browse when dialogOpenDirectory is not exposed', async () => {
     window.kata = {}
     render(<HomeSpacesScreen onOpenSpace={() => {}} initialSpaces={[]} />)
