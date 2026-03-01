@@ -1,108 +1,64 @@
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MockChatPanel } from '../../../../src/renderer/components/center/MockChatPanel'
 
-const mockSendMessage = vi.fn()
-let mockMessages = [
-  {
-    id: 'assistant-1',
-    role: 'assistant' as const,
-    content: '## Existing context',
-    toolCalls: [{ id: 'tool-1', name: 'read_file', args: { path: 'foo' }, output: 'ok' }]
-  }
-]
-let mockIsStreaming = true
-
-vi.mock('../../../../src/renderer/hooks/useMockChat', () => ({
-  useMockChat: () => ({
-    messages: mockMessages,
-    isStreaming: mockIsStreaming,
-    sendMessage: mockSendMessage
-  })
-}))
-
 describe('MockChatPanel', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
   afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
     cleanup()
   })
 
-  it('composes messages, tool call records, streaming indicator, and input', () => {
-    mockMessages = [
-      {
-        id: 'assistant-1',
-        role: 'assistant',
-        content: '## Existing context',
-        toolCalls: [{ id: 'tool-1', name: 'read_file', args: { path: 'foo' }, output: 'ok' }]
-      }
-    ]
-    mockIsStreaming = true
-
+  it('renders empty pre-run state', () => {
     render(<MockChatPanel />)
 
-    expect(screen.getByRole('heading', { name: 'Existing context', level: 2 })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Tool: read_file' })).toBeTruthy()
-    expect(screen.getByText('Kata is streaming a response...')).toBeTruthy()
+    expect(screen.getByText('Ready')).toBeTruthy()
     expect(screen.getByLabelText('Message input')).toBeTruthy()
   })
 
-  it('renders context chips and thinking status in context-reading state', () => {
-    mockMessages = [{ id: 'user-1', role: 'user', content: 'Read ## Context now for # Kata Cloud (Kata V2)' }]
-    mockIsStreaming = true
-
+  it('renders pending immediately after submit', () => {
     render(<MockChatPanel />)
 
-    expect(screen.getByText('# Kata Cloud (Kata V2)')).toBeTruthy()
-    expect(screen.getByText('## Context...')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Message input'), {
+      target: { value: 'Ship slice A' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
     expect(screen.getByText('Thinking')).toBeTruthy()
+    expect(screen.getByText('Ship slice A')).toBeTruthy()
   })
 
-  it('renders stopped status after streaming ends', () => {
-    mockMessages = [{ id: 'user-2', role: 'user', content: 'Pasted 205 lines' }]
-    mockIsStreaming = false
-
+  it('renders the deterministic agent response after the pending run completes', () => {
     render(<MockChatPanel />)
+
+    fireEvent.change(screen.getByLabelText('Message input'), {
+      target: { value: 'Ship slice A' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    act(() => {
+      vi.advanceTimersByTime(900)
+    })
 
     expect(screen.getByText('Stopped')).toBeTruthy()
+    expect(screen.getByText('Draft ready for review.')).toBeTruthy()
   })
 
-  it('renders a collapsed summary bubble in inferred analyzing state', () => {
-    mockMessages = [
-      {
-        id: 'user-3',
-        role: 'user',
-        content:
-          'Please provide an overview of this migration and analyze the implementation approach with risks, dependencies, and rollout details for stakeholders.'
-      }
-    ]
-    mockIsStreaming = true
-
+  it('renders the deterministic error state and retries back to pending', () => {
     render(<MockChatPanel />)
 
-    expect(screen.getByText('You')).toBeTruthy()
-    expect(
-      screen.getByText(
-        (text) => text.startsWith('Please provide an overview of this migration and analyze') && text.endsWith('...')
-      )
-    ).toBeTruthy()
-    expect(screen.queryByText(mockMessages[0].content)).toBeNull()
-  })
+    fireEvent.change(screen.getByLabelText('Message input'), {
+      target: { value: '/error trigger deterministic failure' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
-  it('renders collapsed summaries through the shared message bubble variant', () => {
-    mockMessages = [
-      {
-        id: 'user-5',
-        role: 'user',
-        content:
-          'Please provide an overview of this migration and analyze the implementation approach with risks, dependencies, and rollout details for stakeholders.'
-      }
-    ]
-    mockIsStreaming = true
-
-    render(<MockChatPanel />)
-
-    const summaryNode = screen.getByText((text) => text.startsWith('Please provide an overview of this migration'))
-    const summaryBubble = summaryNode.closest('div')
-    expect(summaryBubble?.className).toContain('border-dashed')
+    expect(screen.getByText('Error')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(screen.getByText('Thinking')).toBeTruthy()
   })
 })
