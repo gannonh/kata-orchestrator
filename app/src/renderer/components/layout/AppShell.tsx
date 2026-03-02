@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { LeftPanel } from './LeftPanel'
 import { CenterPanel } from '../center/CenterPanel'
-import { MockChatPanel } from '../center/MockChatPanel'
+import { ChatPanel } from '../center/ChatPanel'
 import { PanelResizer } from './PanelResizer'
 import { RightPanel } from './RightPanel'
 
@@ -189,7 +189,7 @@ export function AppShell({ activeSpaceId, onOpenHome }: AppShellProps = {}) {
         )}
 
         <CenterPanel>
-          <MockChatPanel />
+          <ChatPanel sessionId={null} />
         </CenterPanel>
 
         <PanelResizer

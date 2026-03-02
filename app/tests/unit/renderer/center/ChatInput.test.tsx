@@ -144,10 +144,22 @@ describe('ChatInput', () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
-  it('renders model affordance and context-first placeholder copy', () => {
+  it('renders modelSlot when provided and context-first placeholder copy', () => {
+    render(
+      <ChatInput
+        onSend={vi.fn()}
+        modelSlot={<span>Claude Sonnet</span>}
+      />
+    )
+
+    expect(screen.getByText('Claude Sonnet')).toBeTruthy()
+    expect(screen.getByPlaceholderText('Ask anything or type @ for context')).toBeTruthy()
+  })
+
+  it('renders no model badge when modelSlot is omitted', () => {
     render(<ChatInput onSend={vi.fn()} />)
 
-    expect(screen.getByText('GPT-5.3 Codex')).toBeTruthy()
+    expect(screen.queryByText('GPT-5.3 Codex')).toBeNull()
     expect(screen.getByPlaceholderText('Ask anything or type @ for context')).toBeTruthy()
   })
 })

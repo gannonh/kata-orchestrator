@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, type ReactNode, useState } from 'react'
 import { ArrowUpRight, Plus, RotateCcw, Send } from 'lucide-react'
 
 import type { ConversationRunState } from '../../types/session-conversation'
@@ -10,6 +10,7 @@ type ChatInputProps = {
   disabled?: boolean
   runState?: ConversationRunState
   onRetry?: () => void
+  modelSlot?: ReactNode
 }
 
 export function ChatInput({
@@ -17,6 +18,7 @@ export function ChatInput({
   disabled = false,
   runState = 'empty',
   onRetry,
+  modelSlot,
 }: ChatInputProps) {
   const [value, setValue] = useState('')
   const isPending = runState === 'pending'
@@ -81,9 +83,7 @@ export function ChatInput({
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-[11px] font-medium text-foreground">
-              GPT-5.3 Codex
-            </span>
+            {modelSlot}
             <Button
               type="button"
               variant="ghost"
