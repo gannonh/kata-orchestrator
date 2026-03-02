@@ -178,6 +178,7 @@ test.describe('managed provisioning @uat @ci', () => {
     const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
     await appWindow.getByRole('button', { name: 'Use new repo provisioning' }).click()
+    await appWindow.getByRole('textbox', { name: 'New repo parent directory' }).clear()
     await appWindow.getByRole('textbox', { name: 'New repo name' }).fill(newRepoName)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
 
@@ -187,7 +188,6 @@ test.describe('managed provisioning @uat @ci', () => {
 
   test('persists spaces across app restart @quality-gate', async ({
     appWindow,
-    electronApp,
     managedTestRootDir,
     managedWorkspaceBaseDir,
     managedRepoCacheBaseDir,
@@ -199,6 +199,7 @@ test.describe('managed provisioning @uat @ci', () => {
     await ensureHomeSpacesView(appWindow)
     const beforeIds = new Set((await listSpaces(appWindow)).map((s) => s.id))
 
+    await appWindow.getByRole('button', { name: 'Use copy local provisioning' }).click()
     await appWindow.getByRole('textbox', { name: 'Local repo path' }).fill(localSourcePath)
     await appWindow.getByRole('button', { name: 'Create space' }).click()
     await expect.poll(async () => (await listSpaces(appWindow)).length, { timeout: 10_000 }).toBeGreaterThan(beforeIds.size)
@@ -215,7 +216,10 @@ test.describe('managed provisioning @uat @ci', () => {
     expect(persistedSpace?.branch).toBe('main')
     expect(persistedSpace?.rootPath.endsWith('/repo')).toBe(true)
 
-    await electronApp.close()
+    // Copy state file for the relaunched instance to avoid file-lock conflicts
+    // with the shared worker-scoped Electron app
+    const relaunchStateFilePath = path.join(managedTestRootDir, 'state-relaunch.json')
+    await fsPromises.copyFile(managedStateFilePath, relaunchStateFilePath)
 
     const launchArgs = process.env.CI
       ? ['--no-sandbox', '--disable-setuid-sandbox', mainEntry]
@@ -227,7 +231,8 @@ test.describe('managed provisioning @uat @ci', () => {
         ...process.env,
         KATA_WORKSPACE_BASE_DIR: managedWorkspaceBaseDir,
         KATA_REPO_CACHE_BASE_DIR: managedRepoCacheBaseDir,
-        KATA_STATE_FILE: managedStateFilePath
+        KATA_STATE_FILE: relaunchStateFilePath,
+        ...(process.env.CI || process.env.KATA_E2E_HEADLESS ? { KATA_E2E_HEADLESS: '1' } : {})
       }
     })
 
