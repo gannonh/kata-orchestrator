@@ -412,16 +412,21 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       createdSession.createdAt
     )
 
-    stateStore.save({
-      ...state,
-      sessions: { ...state.sessions, [createdSession.id]: createdSession },
-      agentRoster: {
-        ...state.agentRoster,
-        ...Object.fromEntries(baselineRosterEntries.map((entry) => [entry.id, entry]))
-      },
-      activeSpaceId: parsedInput.spaceId,
-      activeSessionId: createdSession.id
-    })
+    try {
+      stateStore.save({
+        ...state,
+        sessions: { ...state.sessions, [createdSession.id]: createdSession },
+        agentRoster: {
+          ...state.agentRoster,
+          ...Object.fromEntries(baselineRosterEntries.map((entry) => [entry.id, entry]))
+        },
+        activeSpaceId: parsedInput.spaceId,
+        activeSessionId: createdSession.id
+      })
+    } catch (saveError) {
+      const code = (saveError as NodeJS.ErrnoException).code ?? 'UNKNOWN'
+      throw new Error(`Session created but failed to save state (${code})`)
+    }
 
     return createdSession
   })

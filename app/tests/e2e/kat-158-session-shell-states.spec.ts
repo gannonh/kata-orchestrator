@@ -67,7 +67,8 @@ test.describe('KAT-158 session shell run-state evidence @uat', () => {
     await retryButton.click()
 
     await expectRunStatus(appWindow, 'Thinking', 1_000)
-    await expectTerminalRunStatus(appWindow, 30_000)
+    const postRetryTerminalStatus = await expectTerminalRunStatus(appWindow, 30_000)
+    expect(postRetryTerminalStatus).toBe('Stopped')
     await appWindow.screenshot({ path: idleStatePath, fullPage: true })
   })
 })

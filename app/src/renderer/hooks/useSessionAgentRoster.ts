@@ -20,7 +20,7 @@ function toErrorMessage(error: unknown): string {
   return 'Failed to load session agent roster.'
 }
 
-export function useSessionAgentRoster(activeSpaceId: string | null): SessionAgentRosterState {
+export function useSessionAgentRoster(activeSpaceId: string | null, activeSessionId: string | null): SessionAgentRosterState {
   const [state, setState] = useState<SessionAgentRosterState>(EMPTY_STATE)
 
   useEffect(() => {
@@ -80,7 +80,7 @@ export function useSessionAgentRoster(activeSpaceId: string | null): SessionAgen
     return () => {
       isDisposed = true
     }
-  }, [activeSpaceId])
+  }, [activeSpaceId, activeSessionId])
 
   return state
 }

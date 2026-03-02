@@ -68,7 +68,7 @@ describe('useSessionAgentRoster', () => {
       })
     ])
 
-    const { result } = renderHook(() => useSessionAgentRoster('space-1'))
+    const { result } = renderHook(() => useSessionAgentRoster('space-1', null))
     await flushAsyncWork()
 
     expect(mockSessionListBySpace).toHaveBeenCalledWith({ spaceId: 'space-1' })
@@ -106,7 +106,7 @@ describe('useSessionAgentRoster', () => {
       sessionListBySpace: mockSessionListBySpace
     }
 
-    const { result } = renderHook(() => useSessionAgentRoster('space-1'))
+    const { result } = renderHook(() => useSessionAgentRoster('space-1', null))
     await flushAsyncWork()
 
     expect(mockSessionListBySpace).not.toHaveBeenCalled()
@@ -119,7 +119,7 @@ describe('useSessionAgentRoster', () => {
   })
 
   it('skips API calls when activeSpaceId is null', () => {
-    const { result } = renderHook(() => useSessionAgentRoster(null))
+    const { result } = renderHook(() => useSessionAgentRoster(null, null))
 
     expect(mockSessionListBySpace).not.toHaveBeenCalled()
     expect(mockSessionAgentRosterList).not.toHaveBeenCalled()
@@ -133,7 +133,7 @@ describe('useSessionAgentRoster', () => {
   it('returns an empty roster with no error when there are no sessions', async () => {
     mockSessionListBySpace.mockResolvedValue([])
 
-    const { result } = renderHook(() => useSessionAgentRoster('space-1'))
+    const { result } = renderHook(() => useSessionAgentRoster('space-1', null))
     await flushAsyncWork()
 
     expect(mockSessionListBySpace).toHaveBeenCalledWith({ spaceId: 'space-1' })
@@ -154,7 +154,7 @@ describe('useSessionAgentRoster', () => {
         })
     )
 
-    const { result } = renderHook(() => useSessionAgentRoster('space-1'))
+    const { result } = renderHook(() => useSessionAgentRoster('space-1', null))
 
     await act(async () => {
       resolveSessions?.([])
@@ -172,7 +172,7 @@ describe('useSessionAgentRoster', () => {
     mockSessionListBySpace.mockResolvedValue([createSession('session-newest')])
     mockSessionAgentRosterList.mockRejectedValue(new Error('roster fetch failed'))
 
-    const { result } = renderHook(() => useSessionAgentRoster('space-1'))
+    const { result } = renderHook(() => useSessionAgentRoster('space-1', null))
     await flushAsyncWork()
 
     expect(result.current.agents).toEqual([])
@@ -190,7 +190,7 @@ describe('useSessionAgentRoster', () => {
         })
     )
 
-    const { result } = renderHook(() => useSessionAgentRoster('space-1'))
+    const { result } = renderHook(() => useSessionAgentRoster('space-1', null))
     await flushAsyncWork()
 
     await act(async () => {
@@ -209,7 +209,7 @@ describe('useSessionAgentRoster', () => {
     mockSessionListBySpace.mockResolvedValue([createSession('session-newest')])
     mockSessionAgentRosterList.mockRejectedValue('boom')
 
-    const { result } = renderHook(() => useSessionAgentRoster('space-1'))
+    const { result } = renderHook(() => useSessionAgentRoster('space-1', null))
     await flushAsyncWork()
 
     expect(result.current.agents).toEqual([])
@@ -226,7 +226,7 @@ describe('useSessionAgentRoster', () => {
         })
     )
 
-    const { unmount } = renderHook(() => useSessionAgentRoster('space-1'))
+    const { unmount } = renderHook(() => useSessionAgentRoster('space-1', null))
     unmount()
 
     await act(async () => {
@@ -235,5 +235,32 @@ describe('useSessionAgentRoster', () => {
     })
 
     expect(mockSessionAgentRosterList).toHaveBeenCalledWith({ sessionId: 'session-newest' })
+  })
+
+  it('re-fetches roster when activeSessionId changes', async () => {
+    mockSessionListBySpace.mockResolvedValue([createSession('session-newest')])
+    mockSessionAgentRosterList.mockResolvedValue([createRosterRecord()])
+
+    const { result, rerender } = renderHook(
+      ({ spaceId, sessionId }: { spaceId: string | null; sessionId: string | null }) =>
+        useSessionAgentRoster(spaceId, sessionId),
+      { initialProps: { spaceId: 'space-1', sessionId: null } }
+    )
+    await flushAsyncWork()
+
+    expect(mockSessionListBySpace).toHaveBeenCalledTimes(1)
+    expect(result.current.agents).toHaveLength(1)
+
+    mockSessionListBySpace.mockResolvedValue([createSession('session-newest')])
+    mockSessionAgentRosterList.mockResolvedValue([
+      createRosterRecord({ id: 'agent-1' }),
+      createRosterRecord({ id: 'agent-2', name: 'New Agent' })
+    ])
+
+    rerender({ spaceId: 'space-1', sessionId: 'session-newest' })
+    await flushAsyncWork()
+
+    expect(mockSessionListBySpace).toHaveBeenCalledTimes(2)
+    expect(result.current.agents).toHaveLength(2)
   })
 })

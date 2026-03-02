@@ -50,6 +50,18 @@ describe('AgentsTab', () => {
     expect(screen.getByText('MVP Planning Coordinator')).toBeTruthy()
   })
 
+  it('hides empty-state message when error is present and agents is empty', () => {
+    render(
+      <AgentsTab
+        agents={[]}
+        error="Unable to refresh"
+      />
+    )
+
+    expect(screen.getByText('Unable to refresh agents right now.')).toBeTruthy()
+    expect(screen.queryByText('No agents in this space yet.')).toBeNull()
+  })
+
   it('keeps non-delegated system and coordinator rows visible when flat roster has delegated entries between them', () => {
     const flatRoster: AgentSummary[] = [
       {

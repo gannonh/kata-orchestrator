@@ -22,6 +22,7 @@ type LeftPanelTab = 'agents' | 'context' | 'changes' | 'files'
 
 type LeftPanelProps = {
   activeSpaceId?: string | null
+  activeSessionId?: string | null
   collapsed?: boolean
   onCollapsedChange?: (collapsed: boolean) => void
   theme?: 'dark' | 'light'
@@ -65,6 +66,7 @@ function nextPreviewState(current: PreviewState): PreviewState {
 
 export function LeftPanel({
   activeSpaceId,
+  activeSessionId,
   collapsed,
   onCollapsedChange,
   theme,
@@ -75,7 +77,7 @@ export function LeftPanel({
   const [internalCollapsed, setInternalCollapsed] = useState(false)
   const [previewState, setPreviewState] = useState<PreviewState>(0)
   const project = useMemo(() => getMockProject(), [])
-  const { agents, isLoading: isAgentsLoading, error: agentsError } = useSessionAgentRoster(activeSpaceId ?? null)
+  const { agents, isLoading: isAgentsLoading, error: agentsError } = useSessionAgentRoster(activeSpaceId ?? null, activeSessionId ?? null)
   const statusTasks = previewState === 0 ? project.tasks : previewTasks[previewState]
   const contextTabCount = getContextTabCount(previewState, project.tasks.length)
   const changesTabCount = getChangesTabCount(previewState, mockGit)

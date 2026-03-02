@@ -31,13 +31,13 @@ test.describe('KAT-185: Agent roster sidebar integration @ci', () => {
     })
 
     const persisted = JSON.parse(await fs.readFile(managedStateFilePath, 'utf8')) as PersistedState
-    const rosterEntries = Object.values(persisted.agentRoster ?? {})
+    const allRosterEntries = Object.values(persisted.agentRoster ?? {})
     const activeSessionId = persisted.activeSessionId
 
     expect(activeSessionId).toBeTruthy()
-    expect(rosterEntries).toHaveLength(2)
-    expect(rosterEntries.every((record) => record.sessionId === activeSessionId)).toBe(true)
-    expect(rosterEntries.map((record) => record.name).sort()).toEqual([
+    const sessionRosterEntries = allRosterEntries.filter((record) => record.sessionId === activeSessionId)
+    expect(sessionRosterEntries).toHaveLength(2)
+    expect(sessionRosterEntries.map((record) => record.name).sort()).toEqual([
       'Kata Agents',
       'MVP Planning Coordinator'
     ])

@@ -6,7 +6,7 @@ import { mockAgents } from '../../../../src/renderer/mock/agents'
 import { LEFT_STATUS_SCENARIO_KEY } from '../../../../src/renderer/mock/project'
 
 const mockUseSessionAgentRoster = vi.fn<
-  [string | null],
+  [string | null, string | null],
   {
     agents: typeof mockAgents
     isLoading: boolean
@@ -15,7 +15,7 @@ const mockUseSessionAgentRoster = vi.fn<
 >()
 
 vi.mock('../../../../src/renderer/hooks/useSessionAgentRoster', () => ({
-  useSessionAgentRoster: (...args: [string | null]) => mockUseSessionAgentRoster(...args)
+  useSessionAgentRoster: (...args: [string | null, string | null]) => mockUseSessionAgentRoster(...args)
 }))
 
 describe('LeftPanel', () => {
@@ -57,7 +57,7 @@ describe('LeftPanel', () => {
 
     render(<LeftPanel activeSpaceId="space-42" />)
 
-    expect(mockUseSessionAgentRoster).toHaveBeenCalledWith('space-42')
+    expect(mockUseSessionAgentRoster).toHaveBeenCalledWith('space-42', null)
     expect(screen.getByRole('tab', { name: 'Agents' }).getAttribute('title')).toBe(`Agents (${roster.length})`)
   })
 
