@@ -160,6 +160,41 @@ describe('useIpcSessionConversation', () => {
     expect(result.current.state.latestDraft).toBeUndefined()
   })
 
+  it('ignores stale replay errors from the previous session after a session switch', async () => {
+    let rejectFirstReplay: ((error: unknown) => void) | null = null
+
+    mockRunList.mockImplementation((sessionId: string) => {
+      if (sessionId === 's-1') {
+        return new Promise((_resolve, reject) => {
+          rejectFirstReplay = reject
+        })
+      }
+
+      return Promise.resolve([])
+    })
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result, rerender } = renderHook(
+      ({ sessionId }) => useIpcSessionConversation(sessionId),
+      {
+        initialProps: { sessionId: 's-1' }
+      }
+    )
+
+    rerender({ sessionId: 's-2' })
+
+    await act(async () => {
+      rejectFirstReplay?.(new Error('stale replay failure'))
+      await Promise.resolve()
+    })
+
+    expect(result.current.state.runState).toBe('empty')
+    expect(result.current.state.messages).toEqual([])
+    expect(result.current.state.latestDraft).toBeUndefined()
+  })
+
   it('receiving message_appended event adds agent message and transitions to idle', async () => {
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
@@ -216,6 +251,28 @@ describe('useIpcSessionConversation', () => {
         '- [x] Keep the runtime wiring stable'
       ].join('\n')
     })
+  })
+
+  it('builds a draft with an empty prompt when message_appended arrives before submit', async () => {
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'message_appended',
+        message: {
+          id: 'agent-pre',
+          role: 'agent',
+          content: 'Draft created before prompt',
+          createdAt: '2026-03-01T00:00:01.000Z'
+        }
+      })
+    })
+
+    expect(result.current.state.latestDraft?.runId).toBe('run-agent-pre')
+    expect(result.current.state.latestDraft?.content.startsWith('## Goal\n\n')).toBe(true)
   })
 
   it('receiving message_updated streams assistant content before completion', async () => {
@@ -389,6 +446,22 @@ describe('useIpcSessionConversation', () => {
     expect(result.current.state.messages).toEqual([])
   })
 
+  it('handles non-Error replay rejections without crashing', async () => {
+    mockRunList.mockRejectedValue('network down')
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    expect(result.current.state.runState).toBe('empty')
+    expect(result.current.state.messages).toEqual([])
+  })
+
   it('transitions to error when submitPrompt IPC call rejects', async () => {
     mockRunSubmit.mockRejectedValue(new Error('IPC failed'))
 
@@ -522,6 +595,33 @@ describe('useIpcSessionConversation', () => {
 
     expect(result.current.state.runState).toBe('empty')
     expect(mockRunSubmit).not.toHaveBeenCalled()
+  })
+
+  it('retry is a no-op when runSubmit is unavailable in error state', async () => {
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    act(() => {
+      result.current.submitPrompt('retry without runSubmit')
+    })
+    act(() => {
+      onRunEventCallback?.({
+        type: 'run_state_changed',
+        runState: 'error',
+        errorMessage: 'Failed'
+      })
+    })
+
+    delete (window as any).kata.runSubmit
+
+    act(() => {
+      result.current.retry()
+    })
+
+    expect(result.current.state.runState).toBe('error')
+    expect(result.current.state.errorMessage).toBe('Failed')
   })
 
   it('retry is a no-op with null sessionId even when in error state', async () => {

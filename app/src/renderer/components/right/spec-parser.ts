@@ -49,12 +49,7 @@ export function parseStructuredSpec(markdown: string): StructuredSpecDocument {
       return
     }
 
-    const section = sectionLines.get(currentSection)
-    if (!section) {
-      return
-    }
-
-    section.push({ content: line, lineIndex })
+    sectionLines.get(currentSection)!.push({ content: line, lineIndex })
   })
 
   return {

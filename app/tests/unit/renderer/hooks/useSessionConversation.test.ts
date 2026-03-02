@@ -246,4 +246,38 @@ describe('useSessionConversation', () => {
     expect(result.current.state.messages).toEqual([])
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('keeps latestDraft cleared while retry is pending after an error', () => {
+    vi.useFakeTimers()
+
+    const { result } = renderHook(() => useSessionConversation())
+
+    act(() => {
+      result.current.submitPrompt('Initial success')
+      vi.runAllTimers()
+    })
+
+    expect(result.current.state.latestDraft?.runId).toBe('run-2')
+
+    act(() => {
+      result.current.submitPrompt('/error now')
+    })
+
+    expect(result.current.state.runState).toBe('error')
+    expect(result.current.state.latestDraft).toBeUndefined()
+
+    act(() => {
+      result.current.retry()
+    })
+
+    expect(result.current.state.runState).toBe('pending')
+    expect(result.current.state.latestDraft).toBeUndefined()
+
+    act(() => {
+      vi.runAllTimers()
+    })
+
+    expect(result.current.state.runState).toBe('idle')
+    expect(result.current.state.latestDraft?.runId).toBe('run-4')
+  })
 })

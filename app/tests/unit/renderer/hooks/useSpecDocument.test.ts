@@ -179,4 +179,63 @@ describe('useSpecDocument', () => {
       tasks: []
     })
   })
+
+  it('falls back to an empty parsed document when storage JSON is invalid', () => {
+    window.localStorage.setItem('kata.spec-panel.v1:space-1:session-1', '{')
+
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    expect(result.current.document).toMatchObject({
+      markdown: '',
+      sections: {
+        goal: ''
+      },
+      tasks: []
+    })
+  })
+
+  it('falls back when persisted markdown is not a string', () => {
+    window.localStorage.setItem(
+      'kata.spec-panel.v1:space-1:session-1',
+      JSON.stringify({ markdown: 42, appliedRunId: 'run-1' })
+    )
+
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    expect(result.current.document).toMatchObject({
+      markdown: '',
+      sections: {
+        goal: ''
+      },
+      tasks: []
+    })
+  })
+
+  it('ignores unknown task ids when toggling', () => {
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    act(() => {
+      result.current.applyDraft({
+        runId: 'run-99',
+        generatedAt: '2026-03-02T12:05:00.000Z',
+        content: ['## Goal', 'Keep existing state', '', '## Tasks', '- [ ] Existing task'].join('\n')
+      })
+    })
+
+    const beforeMarkdown = result.current.document.markdown
+    const beforeStorage = window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1')
+
+    act(() => {
+      result.current.toggleTask('missing-task-id')
+    })
+
+    expect(result.current.document.markdown).toBe(beforeMarkdown)
+    expect(window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1')).toBe(beforeStorage)
+  })
 })

@@ -97,4 +97,77 @@ describe('SpecTab structured states', () => {
     expect(onToggleTask).toHaveBeenCalledWith('task-1')
     expect(onEditMarkdown).toHaveBeenCalledTimes(1)
   })
+
+  it('renders markdown editing controls and delegates editor callbacks', () => {
+    const onDraftMarkdownChange = vi.fn()
+    const onSaveMarkdown = vi.fn()
+    const onCancelEditing = vi.fn()
+
+    render(
+      <SpecTab
+        project={mockProject}
+        specState={{
+          mode: 'editing',
+          document: {
+            markdown: ['## Goal', 'Initial goal'].join('\n'),
+            sections: {
+              goal: 'Initial goal',
+              acceptanceCriteria: [],
+              nonGoals: [],
+              assumptions: [],
+              verificationPlan: [],
+              rollbackPlan: []
+            },
+            tasks: [],
+            updatedAt: '2026-03-02T12:00:00.000Z'
+          },
+          draftMarkdown: ['## Goal', 'Initial goal'].join('\n'),
+          onDraftMarkdownChange,
+          onSaveMarkdown,
+          onCancelEditing,
+          commentStatusNote: 'Comments are deferred.'
+        }}
+      />
+    )
+
+    fireEvent.change(screen.getByLabelText('Spec markdown editor'), {
+      target: { value: ['## Goal', 'Edited goal'].join('\n') }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(screen.getByRole('heading', { name: 'Edit Spec Markdown' })).toBeTruthy()
+    expect(onDraftMarkdownChange).toHaveBeenCalledWith(['## Goal', 'Edited goal'].join('\n'))
+    expect(onCancelEditing).toHaveBeenCalledTimes(1)
+    expect(onSaveMarkdown).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows fallback goal copy when structured goal text is empty', () => {
+    render(
+      <SpecTab
+        project={mockProject}
+        specState={{
+          mode: 'structured_view',
+          document: {
+            markdown: ['## Goal', '', '## Tasks'].join('\n'),
+            sections: {
+              goal: '',
+              acceptanceCriteria: [],
+              nonGoals: [],
+              assumptions: [],
+              verificationPlan: [],
+              rollbackPlan: []
+            },
+            tasks: [],
+            updatedAt: '2026-03-02T12:00:00.000Z'
+          },
+          onToggleTask: () => undefined,
+          onEditMarkdown: () => undefined,
+          commentStatusNote: 'Comments are deferred.'
+        }}
+      />
+    )
+
+    expect(screen.getByText('No goal yet.')).toBeTruthy()
+  })
 })

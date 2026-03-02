@@ -96,7 +96,6 @@ export function useSessionConversation() {
     }
 
     runStateRef.current = 'pending'
-    setLatestDraft(undefined)
 
     dispatch({
       type: 'RETRY_FROM_ERROR'

@@ -35,4 +35,12 @@ describe('spec-task-markdown', () => {
     expect(updated).toBe(['## Tasks', '1. [/] Task A', '2. [x] Task B'].join('\r\n'))
     expect(updated).toContain('\r\n')
   })
+
+  it('returns original markdown when the target line does not exist', () => {
+    const markdown = ['## Tasks', '- [ ] Task A'].join('\n')
+
+    const updated = updateTaskLineInMarkdown(markdown, 10, 'complete')
+
+    expect(updated).toBe(markdown)
+  })
 })

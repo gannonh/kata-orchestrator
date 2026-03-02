@@ -78,6 +78,14 @@ describe('parseStructuredSpec', () => {
     expect(parsed.tasks).toEqual([])
   })
 
+  it('trims leading blank goal lines while preserving intentional paragraph breaks', () => {
+    const markdown = ['## Goal', '', 'Ship parser parity.', '', 'Keep paragraph spacing.'].join('\n')
+
+    const parsed = parseStructuredSpec(markdown)
+
+    expect(parsed.sections.goal).toBe(['Ship parser parity.', '', 'Keep paragraph spacing.'].join('\n'))
+  })
+
   it('appends indented wrapped lines to the previous list item', () => {
     const markdown = [
       '## Acceptance Criteria',
@@ -141,6 +149,40 @@ describe('parseStructuredSpec', () => {
     expect(parsed.sections.nonGoals).toEqual([
       'Do not redesign the shell',
       'Do not ship comments'
+    ])
+  })
+
+  it('treats plain text lines in list sections as standalone items', () => {
+    const markdown = [
+      '## Assumptions',
+      'Repository exists locally',
+      'No network calls are needed'
+    ].join('\n')
+
+    const parsed = parseStructuredSpec(markdown)
+
+    expect(parsed.sections.assumptions).toEqual([
+      'Repository exists locally',
+      'No network calls are needed'
+    ])
+  })
+
+  it('skips non-checkbox lines in tasks sections', () => {
+    const markdown = [
+      '## Tasks',
+      'Implementation details:',
+      '- [ ] Build parser'
+    ].join('\n')
+
+    const parsed = parseStructuredSpec(markdown)
+
+    expect(parsed.tasks).toEqual([
+      {
+        id: 'task-1',
+        title: 'Build parser',
+        status: 'not_started',
+        markdownLineIndex: 2
+      }
     ])
   })
 })

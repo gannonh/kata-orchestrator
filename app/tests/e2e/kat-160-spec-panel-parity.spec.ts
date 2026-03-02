@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import { expect, test, type Page } from './fixtures/electron'
-import { ensureWorkspaceShell } from './helpers/shell-view'
+import { ensureHomeSpacesView, ensureWorkspaceShell } from './helpers/shell-view'
 
 const evidenceDir = path.resolve(process.cwd(), 'test-results/kat-160')
 const generatingStatePath = path.join(evidenceDir, 'state-generating.png')
@@ -11,6 +11,22 @@ const structuredStatePath = path.join(evidenceDir, 'state-structured.png')
 
 async function expectRunStatus(appWindow: Page, label: 'Ready' | 'Thinking', timeout: number): Promise<void> {
   await expect(appWindow.getByRole('status', { name: label })).toBeVisible({ timeout })
+}
+
+async function ensureSendButtonReady(appWindow: Page): Promise<void> {
+  const sendButton = appWindow.getByRole('button', { name: 'Send' })
+  if (await sendButton.isVisible()) {
+    return
+  }
+
+  // Prior tests can leave the shared worker session in error/retry mode.
+  // Re-opening the selected space creates a new session with a clean input state.
+  await ensureHomeSpacesView(appWindow)
+  const openSelectedSpaceButton = appWindow.getByRole('button', { name: 'Open selected space' })
+  await expect(openSelectedSpaceButton).toBeEnabled()
+  await openSelectedSpaceButton.click()
+  await expect(appWindow.getByTestId('app-shell-root')).toBeVisible()
+  await expect(sendButton).toBeVisible()
 }
 
 test.describe('KAT-160 spec panel parity evidence @uat', () => {
@@ -35,6 +51,7 @@ test.describe('KAT-160 spec panel parity evidence @uat', () => {
     const rightPanel = appWindow.getByTestId('right-panel')
     const rightTabs = rightPanel.getByRole('tablist', { name: 'Right panel tabs' })
     await rightTabs.getByRole('tab', { name: 'Spec' }).click()
+    await ensureSendButtonReady(appWindow)
 
     const prompt = 'Respond with OK only.'
     await appWindow.getByLabel('Message input').fill(prompt)
