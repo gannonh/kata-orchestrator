@@ -41,7 +41,9 @@ function createWindow(): void {
   })
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show()
+    if (!process.env.KATA_E2E_HEADLESS) {
+      mainWindow.show()
+    }
   })
 
   if (process.env.ELECTRON_RENDERER_URL) {
