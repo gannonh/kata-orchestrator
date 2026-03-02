@@ -62,6 +62,12 @@ describe('AuthStorage', () => {
     expect(loaded).toEqual({ type: 'api_key', key: 'sk-ant-test' })
   })
 
+  it('rethrows non-ENOENT errors from readData', async () => {
+    // Create a directory where the file should be — readFileSync on a directory throws EISDIR
+    fs.mkdirSync(authPath)
+    await expect(storage.get('anthropic')).rejects.toThrow()
+  })
+
   it('rejects __proto__ as provider key', async () => {
     await expect(storage.get('__proto__')).rejects.toThrow('Invalid provider key')
     await expect(storage.set('__proto__', { type: 'api_key', key: 'k' })).rejects.toThrow('Invalid provider key')

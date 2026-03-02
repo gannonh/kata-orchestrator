@@ -74,6 +74,24 @@ describe('AuthDialog', () => {
     expect(mockAuthLogin).not.toHaveBeenCalled()
   })
 
+  it('handles authLogin rejection without crashing', async () => {
+    mockAuthLogin.mockRejectedValueOnce(new Error('auth failed'))
+
+    render(
+      <AuthDialog
+        open={true}
+        onClose={vi.fn()}
+      />
+    )
+
+    fireEvent.click(screen.getByText(/anthropic/i))
+
+    // Give the rejection time to propagate — should not throw
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(mockAuthLogin).toHaveBeenCalledWith('anthropic')
+  })
+
   it('does not render when open is false', () => {
     const { container } = render(
       <AuthDialog

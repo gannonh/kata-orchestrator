@@ -172,6 +172,23 @@ describe('createStateStore', () => {
     expect(state).toEqual(createDefaultAppState())
   })
 
+  test('returns default state when runs is defined but not an object', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: 'not-an-object',
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const store = createStateStore(filePath)
+    const state = store.load()
+    expect(state).toEqual(createDefaultAppState())
+  })
+
   test('loads state and defaults runs to {} when runs field is missing', () => {
     fs.writeFileSync(
       filePath,
