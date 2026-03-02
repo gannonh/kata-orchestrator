@@ -189,6 +189,7 @@ export function AppShell({ activeSpaceId, onOpenHome }: AppShellProps = {}) {
         )}
 
         <CenterPanel>
+          {/* TODO(KAT-159): Wire activeSessionId from app state */}
           <ChatPanel sessionId={null} />
         </CenterPanel>
 
