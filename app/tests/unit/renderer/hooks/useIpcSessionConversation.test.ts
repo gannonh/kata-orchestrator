@@ -218,6 +218,64 @@ describe('useIpcSessionConversation', () => {
     })
   })
 
+  it('receiving message_updated streams assistant content before completion', async () => {
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    act(() => {
+      result.current.submitPrompt('stream this')
+    })
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'message_updated',
+        message: {
+          id: 'agent-1',
+          role: 'agent',
+          content: 'Draft',
+          createdAt: '2026-03-01T00:00:01.000Z'
+        }
+      })
+    })
+
+    expect(result.current.state.runState).toBe('pending')
+    expect(result.current.state.messages).toHaveLength(2)
+    expect(result.current.state.messages[1]?.content).toBe('Draft')
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'message_updated',
+        message: {
+          id: 'agent-1',
+          role: 'agent',
+          content: 'Draft complete',
+          createdAt: '2026-03-01T00:00:01.000Z'
+        }
+      })
+    })
+
+    expect(result.current.state.messages).toHaveLength(2)
+    expect(result.current.state.messages[1]?.content).toBe('Draft complete')
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'message_appended',
+        message: {
+          id: 'agent-1',
+          role: 'agent',
+          content: 'Draft complete.',
+          createdAt: '2026-03-01T00:00:01.000Z'
+        }
+      })
+    })
+
+    expect(result.current.state.runState).toBe('idle')
+    expect(result.current.state.messages).toHaveLength(2)
+    expect(result.current.state.messages[1]?.content).toBe('Draft complete.')
+  })
+
   it('receiving error event transitions to error state', async () => {
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'

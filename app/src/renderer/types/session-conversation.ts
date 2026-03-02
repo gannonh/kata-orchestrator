@@ -28,6 +28,11 @@ export type RunSucceededEvent = {
   response: string
 }
 
+export type RunStreamUpdatedEvent = {
+  type: 'RUN_STREAM_UPDATED'
+  response: string
+}
+
 export type RunFailedEvent = {
   type: 'RUN_FAILED'
   error: string
@@ -47,6 +52,7 @@ export type ResetConversationEvent = {
 
 export type SessionConversationEvent =
   | SubmitPromptEvent
+  | RunStreamUpdatedEvent
   | RunSucceededEvent
   | RunFailedEvent
   | RetryFromErrorEvent

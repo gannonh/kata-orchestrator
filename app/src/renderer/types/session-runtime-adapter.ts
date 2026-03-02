@@ -21,7 +21,12 @@ export type MessageAppendedEvent = {
   message: ConversationMessage
 }
 
-export type SessionRuntimeEvent = RunStateChangedEvent | MessageAppendedEvent
+export type MessageUpdatedEvent = {
+  type: 'message_updated'
+  message: ConversationMessage
+}
+
+export type SessionRuntimeEvent = RunStateChangedEvent | MessageAppendedEvent | MessageUpdatedEvent
 
 export type SessionRuntimeAdapter = {
   subscribe: (onEvent: (event: SessionRuntimeEvent) => void) => () => void

@@ -51,6 +51,11 @@ export function useIpcSessionConversation(sessionId: string | null) {
           })
         )
         dispatch({ type: 'RUN_SUCCEEDED', response: event.message.content })
+        return
+      }
+
+      if (event.type === 'message_updated') {
+        dispatch({ type: 'RUN_STREAM_UPDATED', response: event.message.content })
       }
     })
 

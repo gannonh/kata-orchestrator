@@ -28,6 +28,15 @@ describe('SessionRuntimeAdapter contract', () => {
           errorMessage: 'Network timeout'
         })
         onEvent({
+          type: 'message_updated',
+          message: {
+            id: 'agent-1',
+            role: 'agent',
+            content: 'hel',
+            createdAt: '1970-01-01T00:00:01.000Z'
+          }
+        })
+        onEvent({
           type: 'message_appended',
           message: {
             id: 'agent-1',
@@ -66,6 +75,7 @@ describe('SessionRuntimeAdapter contract', () => {
     expect(receivedEvents.map((event) => event.type)).toEqual([
       'run_state_changed',
       'run_state_changed',
+      'message_updated',
       'message_appended'
     ])
 
