@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StateStore } from '../../../src/main/state-store'
 import type { AppState } from '@shared/types/space'
 import { createDefaultAppState } from '@shared/types/space'
@@ -112,6 +112,35 @@ describe('Orchestrator', () => {
 
     expect(state.runs[run.id].messages).toHaveLength(2) // user + agent
     expect(state.runs[run.id].messages[1].role).toBe('agent')
+  })
+
+  it('updateRunStatus is a no-op for nonexistent runId', async () => {
+    const { updateRunStatus } = await import('../../../src/main/orchestrator')
+    const saveSpy = vi.fn()
+    const noopStore = {
+      load: () => ({ ...state }),
+      save: saveSpy
+    }
+
+    updateRunStatus(noopStore, 'nonexistent-run-id', 'running')
+    expect(saveSpy).not.toHaveBeenCalled()
+  })
+
+  it('appendRunMessage is a no-op for nonexistent runId', async () => {
+    const { appendRunMessage } = await import('../../../src/main/orchestrator')
+    const saveSpy = vi.fn()
+    const noopStore = {
+      load: () => ({ ...state }),
+      save: saveSpy
+    }
+
+    appendRunMessage(noopStore, 'nonexistent-run-id', {
+      id: 'agent-1',
+      role: 'agent',
+      content: 'Should not be saved.',
+      createdAt: new Date().toISOString()
+    })
+    expect(saveSpy).not.toHaveBeenCalled()
   })
 
   it('getRunsForSession returns runs filtered by sessionId', async () => {

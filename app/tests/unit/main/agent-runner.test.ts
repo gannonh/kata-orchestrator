@@ -15,9 +15,14 @@ const mockSubscribe = vi.fn((cb: (event: AgentEvent) => void) => {
   }
 })
 
+let capturedStreamFn: ((model: unknown, context: unknown, options?: Record<string, unknown>) => unknown) | null = null
+
 vi.mock('@mariozechner/pi-agent-core', () => {
   return {
-    Agent: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    Agent: vi.fn().mockImplementation(function (this: Record<string, unknown>, config: { streamFn?: (model: unknown, context: unknown, options?: Record<string, unknown>) => unknown }) {
+      if (config?.streamFn) {
+        capturedStreamFn = config.streamFn
+      }
       this.state = { messages: [], isStreaming: false }
       this.subscribe = mockSubscribe
       this.prompt = mockPrompt
@@ -42,6 +47,7 @@ vi.mock('@mariozechner/pi-ai', () => ({
 describe('AgentRunner', () => {
   beforeEach(() => {
     subscribeCallback = null
+    capturedStreamFn = null
     mockAbort.mockReset()
     mockSetSystemPrompt.mockReset()
     mockSetModel.mockReset()
@@ -180,6 +186,127 @@ describe('AgentRunner', () => {
 
     runner.abort()
     expect(mockAbort).toHaveBeenCalled()
+  })
+
+  it('passes apiKey through streamFn to streamSimple', async () => {
+    const { streamSimple } = await import('@mariozechner/pi-ai')
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+
+    createAgentRunner({
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic',
+      apiKey: 'sk-ant-key-123',
+      systemPrompt: 'test',
+      onEvent: () => {}
+    })
+
+    expect(capturedStreamFn).not.toBeNull()
+    const mockModel = { id: 'test' }
+    const mockContext = [{ role: 'user', content: 'hello' }]
+    capturedStreamFn!(mockModel, mockContext, { temperature: 0.5 })
+    expect(streamSimple).toHaveBeenCalledWith(
+      mockModel,
+      mockContext,
+      { temperature: 0.5, apiKey: 'sk-ant-key-123' }
+    )
+  })
+
+  it('handles message_end with non-array content', async () => {
+    mockPrompt.mockReset().mockImplementation(async () => {
+      if (subscribeCallback) {
+        subscribeCallback({
+          type: 'message_end',
+          message: {
+            role: 'assistant',
+            content: 'raw-string-not-array',
+            usage: { input: 0, output: 0, totalTokens: 0, cacheRead: 0, cacheWrite: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+            stopReason: 'stop',
+            api: 'anthropic-messages',
+            provider: 'anthropic',
+            model: 'test',
+            timestamp: Date.now()
+          }
+        } as AgentEvent)
+        subscribeCallback({ type: 'agent_end', messages: [] })
+      }
+    })
+
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+    const events: SessionRuntimeEvent[] = []
+
+    const runner = createAgentRunner({
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test',
+      systemPrompt: 'test',
+      onEvent: (event) => events.push(event)
+    })
+
+    await runner.execute('test')
+
+    // No message_appended event should be emitted since extractTextContent returns '' for non-array
+    const msgEvents = events.filter((e) => e.type === 'message_appended')
+    expect(msgEvents).toHaveLength(0)
+  })
+
+  it('skips message_appended for non-assistant messages', async () => {
+    mockPrompt.mockReset().mockImplementation(async () => {
+      if (subscribeCallback) {
+        subscribeCallback({
+          type: 'message_end',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: 'user echo' }],
+            usage: { input: 0, output: 0, totalTokens: 0, cacheRead: 0, cacheWrite: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+            stopReason: 'stop',
+            api: 'anthropic-messages',
+            provider: 'anthropic',
+            model: 'test',
+            timestamp: Date.now()
+          }
+        } as AgentEvent)
+        subscribeCallback({ type: 'agent_end', messages: [] })
+      }
+    })
+
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+    const events: SessionRuntimeEvent[] = []
+
+    const runner = createAgentRunner({
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test',
+      systemPrompt: 'test',
+      onEvent: (event) => events.push(event)
+    })
+
+    await runner.execute('test')
+
+    const msgEvents = events.filter((e) => e.type === 'message_appended')
+    expect(msgEvents).toHaveLength(0)
+  })
+
+  it('emits Unknown error for non-Error thrown objects', async () => {
+    mockPrompt.mockReset().mockRejectedValue('string-error')
+
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+    const events: SessionRuntimeEvent[] = []
+
+    const runner = createAgentRunner({
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test',
+      systemPrompt: 'test',
+      onEvent: (event) => events.push(event)
+    })
+
+    await runner.execute('fail')
+
+    const errorEvent = events.find(
+      (e) => e.type === 'run_state_changed' && e.runState === 'error'
+    )
+    expect(errorEvent).toBeDefined()
+    expect((errorEvent as { errorMessage: string }).errorMessage).toBe('Unknown error')
   })
 
   it('suppresses events after abort', async () => {

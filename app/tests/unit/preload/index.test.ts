@@ -179,6 +179,34 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith('model:list')
   })
 
+  it('onRunEvent handler forwards event data to callback', async () => {
+    await import('../../../src/preload/index')
+
+    const [, api] = exposeInMainWorld.mock.calls[0] as [
+      string,
+      {
+        onRunEvent: (callback: (event: unknown) => void) => () => void
+      }
+    ]
+
+    const callback = vi.fn()
+    api.onRunEvent(callback)
+
+    // Extract the handler that was registered via ipcRenderer.on
+    const registeredHandler = on.mock.calls.find(
+      (call: unknown[]) => call[0] === 'run:event'
+    )?.[1] as (event: unknown, data: unknown) => void
+
+    expect(registeredHandler).toBeDefined()
+
+    // Invoke the handler with mock IPC event and data
+    const mockEvent = {}
+    const mockData = { type: 'message_appended', message: { id: 'm1', role: 'agent', content: 'test', createdAt: 'now' } }
+    registeredHandler(mockEvent, mockData)
+
+    expect(callback).toHaveBeenCalledWith(mockData)
+  })
+
   it('exposes dialogOpenDirectory, gitListBranches, githubListRepos, and githubListBranches', async () => {
     await import('../../../src/preload/index')
 

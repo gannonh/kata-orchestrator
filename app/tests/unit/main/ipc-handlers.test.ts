@@ -773,6 +773,76 @@ describe('registerIpcHandlers', () => {
       expect(mockRunner.execute).toHaveBeenCalledWith('hello')
     })
 
+    it('onEvent callback forwards events and updates run state', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({ id: 'run-ev-1', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore()
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      const mockSend = vi.fn()
+      const mockEvent = { sender: { send: mockSend } }
+      await handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      // Extract the onEvent callback passed to createAgentRunner
+      const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
+
+      // Test pending -> running transition
+      onEvent({ type: 'run_state_changed', runState: 'pending' })
+      expect(mockUpdateRunStatus).toHaveBeenCalledWith(store, 'run-ev-1', 'running')
+      expect(mockSend).toHaveBeenCalledWith('run:event', expect.objectContaining({ type: 'run_state_changed', runState: 'pending' }))
+
+      // Test message_appended
+      onEvent({
+        type: 'message_appended',
+        message: { id: 'a1', role: 'agent', content: 'response text', createdAt: '2026-03-01T00:00:01Z' }
+      })
+      expect(mockAppendRunMessage).toHaveBeenCalledWith(store, 'run-ev-1', {
+        id: 'a1',
+        role: 'agent',
+        content: 'response text',
+        createdAt: '2026-03-01T00:00:01Z'
+      })
+
+      // Test idle -> completed transition (also removes from activeRunners)
+      onEvent({ type: 'run_state_changed', runState: 'idle' })
+      expect(mockUpdateRunStatus).toHaveBeenCalledWith(store, 'run-ev-1', 'completed')
+
+      // Verify runner was removed by checking abort returns false
+      const abortHandler = getHandlersByChannel().get('run:abort')!
+      const abortResult = await abortHandler(null, { runId: 'run-ev-1' })
+      expect(abortResult).toBe(false)
+    })
+
+    it('onEvent callback handles error state and sender.send failure', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({ id: 'run-ev-2', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore()
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      const mockSend = vi.fn().mockImplementation(() => {
+        throw new Error('sender destroyed')
+      })
+      const mockEvent = { sender: { send: mockSend } }
+      await handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
+
+      // Should not throw even when sender.send throws
+      expect(() => {
+        onEvent({ type: 'run_state_changed', runState: 'error', errorMessage: 'API rate limit' })
+      }).not.toThrow()
+
+      expect(mockUpdateRunStatus).toHaveBeenCalledWith(store, 'run-ev-2', 'failed', 'API rate limit')
+    })
+
     it('returns error when no credentials available', async () => {
       mockCredentialResolver.getApiKey.mockResolvedValue(undefined)
 
@@ -800,6 +870,54 @@ describe('registerIpcHandlers', () => {
 
       await expect(handler(mockEvent, null)).rejects.toThrow('run:submit input must be an object')
       await expect(handler(mockEvent, { sessionId: 123 })).rejects.toThrow('run:submit requires sessionId, prompt, model, provider strings')
+    })
+
+    it('cleans up activeRunners when execute rejects after fire-and-forget', async () => {
+      let executeReject: (reason: Error) => void = () => {}
+      const executePromise = new Promise<void>((_resolve, reject) => {
+        executeReject = reject
+      })
+      const mockRunner = { execute: vi.fn().mockReturnValue(executePromise), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({ id: 'run-cleanup-1', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore()
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handlers = getHandlersByChannel()
+      const submitHandler = handlers.get('run:submit')!
+      const abortHandler = handlers.get('run:abort')!
+      const mockEvent = { sender: { send: vi.fn() } }
+
+      await submitHandler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      // Runner is active at this point
+      const beforeAbort = await abortHandler(null, { runId: 'run-cleanup-1' })
+      // Re-register to get fresh activeRunners for a clean test
+      // Instead, just reject the execute and check that abort returns false after cleanup
+      mockCreateRun.mockReturnValue({ id: 'run-cleanup-2', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
+      const executeRejectPromise = new Promise<void>((_resolve, reject) => {
+        executeReject = reject
+      })
+      const mockRunner2 = { execute: vi.fn().mockReturnValue(executeRejectPromise), abort: vi.fn() }
+      mockCreateAgentRunner.mockReturnValue(mockRunner2)
+
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handlers2 = getHandlersByChannel()
+      const submitHandler2 = handlers2.get('run:submit')!
+      const abortHandler2 = handlers2.get('run:abort')!
+
+      await submitHandler2(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      // Reject the execute promise to trigger the catch cleanup
+      executeReject(new Error('agent crashed'))
+
+      // Allow microtask to process
+      await new Promise((resolve) => setTimeout(resolve, 10))
+
+      // After cleanup, abort should return false since runner was removed
+      const afterAbort = await abortHandler2(null, { runId: 'run-cleanup-2' })
+      expect(afterAbort).toBe(false)
     })
   })
 
@@ -911,6 +1029,22 @@ describe('registerIpcHandlers', () => {
       registerIpcHandlers(createMockStore())
       const handler = getHandlersByChannel().get('auth:status')!
       await expect(handler(null, null)).rejects.toThrow('auth:status requires a string provider')
+    })
+  })
+
+  describe('auth:login', () => {
+    it('returns false (stub) for valid provider input', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('auth:login')!
+      const result = await handler(null, { provider: 'anthropic' })
+      expect(result).toBe(false)
+    })
+
+    it('rejects malformed input', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('auth:login')!
+      await expect(handler(null, null)).rejects.toThrow('auth:login requires a string provider')
+      await expect(handler(null, { provider: 123 })).rejects.toThrow('auth:login requires a string provider')
     })
   })
 
