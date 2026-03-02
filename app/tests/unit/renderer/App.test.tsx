@@ -30,7 +30,8 @@ describe('App', () => {
 
   it('switches from home view to workspace shell and back, wiring activeSpaceId into the shell', async () => {
     const spaceList = vi.fn().mockResolvedValue([testSpace])
-    window.kata = { ...window.kata, spaceList }
+    const sessionCreate = vi.fn().mockResolvedValue({ id: 'session-1', spaceId: 'space-test-1', label: 'Chat', createdAt: '2026-01-01T00:00:00.000Z' })
+    window.kata = { ...window.kata, spaceList, sessionCreate }
 
     render(<App />)
 
@@ -50,7 +51,49 @@ describe('App', () => {
     expect(shell.getAttribute('data-active-space-id')).toBeTruthy()
     expect(shell.getAttribute('data-active-space-id')).not.toBe('')
 
+    // Session must be created for the opened space
+    expect(sessionCreate).toHaveBeenCalledWith({ spaceId: 'space-test-1', label: 'Chat' })
+
     fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
     expect(screen.getByRole('heading', { name: 'Home' })).toBeTruthy()
+  })
+
+  it('creates a session when opening a space and passes sessionId to AppShell', async () => {
+    const spaceList = vi.fn().mockResolvedValue([testSpace])
+    const sessionCreate = vi.fn().mockResolvedValue({ id: 'session-abc', spaceId: 'space-test-1', label: 'Chat', createdAt: '2026-01-01T00:00:00.000Z' })
+    window.kata = { ...window.kata, spaceList, sessionCreate }
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Space')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
+
+    // Wait for async sessionCreate to resolve and session ID to propagate
+    await waitFor(() => {
+      expect(sessionCreate).toHaveBeenCalledOnce()
+    })
+  })
+
+  it('handles sessionCreate failure gracefully without crashing', async () => {
+    const spaceList = vi.fn().mockResolvedValue([testSpace])
+    const sessionCreate = vi.fn().mockRejectedValue(new Error('IPC unavailable'))
+    window.kata = { ...window.kata, spaceList, sessionCreate }
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Space')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
+
+    // AppShell should still render despite session creation failure
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell-root')).toBeTruthy()
+    })
+    expect(sessionCreate).toHaveBeenCalledOnce()
   })
 })
