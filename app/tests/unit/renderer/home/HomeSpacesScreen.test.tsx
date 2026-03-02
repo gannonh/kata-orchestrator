@@ -110,6 +110,12 @@ describe('HomeSpacesScreen', () => {
     await waitFor(() => {
       expect(dialogOpenDirectory).toHaveBeenCalledTimes(1)
     })
+    await waitFor(() => {
+      const localRepoPathInput = screen.getByRole('textbox', { name: 'Local repo path' }) as HTMLInputElement
+      expect(localRepoPathInput.value).toBe('/Users/me/dev/my-repo')
+      const createSpaceButton = screen.getByRole('button', { name: 'Create space' }) as HTMLButtonElement
+      expect(createSpaceButton.disabled).toBe(false)
+    })
 
     fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
 
