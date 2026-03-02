@@ -15,6 +15,7 @@ import {
   WORKSPACE_MODES,
   createDefaultAppState
 } from '../shared/types/space'
+import { extractRepoLabel } from '../shared/repo-label'
 import { resolveSpaceName } from './space-name'
 import type { StateStore } from './state-store'
 import {
@@ -64,17 +65,6 @@ const SUPPORTED_MODELS = [
   { provider: 'openai', modelId: 'gpt-4.1-2025-04-14', name: 'GPT-4.1' },
   { provider: 'openai', modelId: 'gpt-4.1-mini-2025-04-14', name: 'GPT-4.1 Mini' }
 ]
-
-let inMemoryState = createDefaultAppState()
-
-function getFallbackStore(): StateStore {
-  return {
-    load: () => inMemoryState,
-    save: (nextState: AppState) => {
-      inMemoryState = nextState
-    }
-  }
-}
 
 function isExternalHttpUrl(url: unknown): url is string {
   if (typeof url !== 'string') {
@@ -236,12 +226,6 @@ function parseCreateSessionInput(input: unknown): CreateSessionInput {
   return { spaceId, label }
 }
 
-function extractRepoLabel(value: string): string {
-  const normalized = value.trim().replace(/\/+$/, '').replace(/\.git$/i, '')
-  const segments = normalized.split(/[/:]/)
-  return segments[segments.length - 1] || 'repo'
-}
-
 function deriveRepoLabel(input: ParsedCreateSpaceInput): string {
   if (input.workspaceMode === 'external') {
     return extractRepoLabel(input.repoUrl)
@@ -264,8 +248,9 @@ export type RegisterIpcOptions = {
   credentialResolver?: CredentialResolver
 }
 
-export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOptions): void {
-  const stateStore = store ?? getFallbackStore()
+export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOptions): void {
+  if (!store) throw new Error('registerIpcHandlers requires a StateStore')
+  const stateStore = store
   const workspaceBaseDir = options?.workspaceBaseDir ?? path.join(os.homedir(), '.kata', 'workspaces')
   const repoCacheBaseDir = options?.repoCacheBaseDir ?? path.join(os.homedir(), '.kata', 'repos')
 
@@ -476,8 +461,10 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
       onEvent: (runtimeEvent: SessionRuntimeEvent) => {
         try {
           event.sender.send(RUN_EVENT_CHANNEL, runtimeEvent)
-        } catch {
-          /* sender may be destroyed */
+        } catch (err) {
+          if (!event.sender.isDestroyed()) {
+            console.error('[IPC] Failed to send run event to renderer:', err)
+          }
         }
 
         if (runtimeEvent.type === 'message_appended') {
@@ -489,6 +476,10 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
             createdAt: msg.createdAt
           })
         }
+        // Map runtime ConversationRunState to persisted RunStatus:
+        // 'pending' (agent starting) -> 'running'
+        // 'idle' (agent done) -> 'completed'
+        // 'error' -> 'failed'
         if (runtimeEvent.type === 'run_state_changed') {
           if (runtimeEvent.runState === 'pending') {
             updateRunStatus(stateStore, run.id, 'running')
@@ -504,8 +495,9 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
     })
 
     activeRunners.set(run.id, runner)
-    runner.execute(prompt).catch(() => {
-      updateRunStatus(stateStore, run.id, 'failed', 'Run execution failed unexpectedly')
+    runner.execute(prompt).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : 'Run execution failed unexpectedly'
+      updateRunStatus(stateStore, run.id, 'failed', message)
       activeRunners.delete(run.id)
     })
 
@@ -521,6 +513,7 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
     if (runner) {
       runner.abort()
       activeRunners.delete(input.runId)
+      updateRunStatus(stateStore, input.runId, 'failed', 'Aborted by user')
       return true
     }
     return false
@@ -540,7 +533,7 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
       throw new Error('auth:status requires a string provider')
     }
     const credResolver = options?.credentialResolver
-    if (!credResolver) return 'none'
+    if (!credResolver) throw new Error('No credential resolver configured')
     return credResolver.getAuthStatus(input.provider)
   })
 
@@ -549,7 +542,7 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
     if (!isObjectRecord(input) || typeof input.provider !== 'string') {
       throw new Error('auth:login requires a string provider')
     }
-    // OAuth flow will be implemented in a later task
+    // TODO(KAT-XXX): implement OAuth flow
     return false
   })
 

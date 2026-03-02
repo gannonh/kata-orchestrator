@@ -122,4 +122,44 @@ describe('ModelSelector', () => {
     const items = screen.queryAllByText('GPT-4.1')
     expect(items.length).toBe(0)
   })
+
+  it('closes the dropdown on click outside', () => {
+    render(
+      <ModelSelector
+        currentModel={anthropicModel}
+        models={[anthropicModel, openaiAuthed]}
+        onModelChange={vi.fn()}
+      />
+    )
+
+    // Open dropdown
+    fireEvent.click(screen.getByText('Claude Sonnet 4.6'))
+    expect(screen.getByText('GPT-4.1')).toBeDefined()
+
+    // Click outside the dropdown
+    fireEvent.mouseDown(document.body)
+
+    // Dropdown should be closed
+    expect(screen.queryByText('GPT-4.1')).toBeNull()
+  })
+
+  it('closes the dropdown on Escape key', () => {
+    render(
+      <ModelSelector
+        currentModel={anthropicModel}
+        models={[anthropicModel, openaiAuthed]}
+        onModelChange={vi.fn()}
+      />
+    )
+
+    // Open dropdown
+    fireEvent.click(screen.getByText('Claude Sonnet 4.6'))
+    expect(screen.getByText('GPT-4.1')).toBeDefined()
+
+    // Press Escape
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    // Dropdown should be closed
+    expect(screen.queryByText('GPT-4.1')).toBeNull()
+  })
 })

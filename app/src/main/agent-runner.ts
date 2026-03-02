@@ -27,6 +27,8 @@ function extractTextContent(content: unknown): string {
 export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
   let aborted = false
   let runFailed = false
+  let executing = false
+  let unsubscribe: (() => void) | null = null
 
   const agent = new Agent({
     streamFn: (model, context, options) => {
@@ -36,12 +38,14 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
 
   return {
     async execute(prompt) {
+      if (executing) throw new Error('AgentRunner: execute already in progress')
+      executing = true
       aborted = false
       runFailed = false
 
-      // getModel is strongly typed with known provider/model combos.
-      // At runtime the user picks arbitrary strings, so we cast through
-      // the KnownProvider type and let getModel throw if invalid.
+      // getModel's generic signature constrains provider/model to known combos.
+      // At runtime the user picks arbitrary strings, so we widen the function
+      // signature to accept plain strings and let getModel throw if invalid.
       const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
         config.provider,
         config.model
@@ -62,7 +66,8 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
         })
       }
 
-      agent.subscribe((event: AgentEvent) => {
+      if (unsubscribe) unsubscribe()
+      unsubscribe = agent.subscribe((event: AgentEvent) => {
         if (aborted) return
 
         if (event.type === 'message_end' && event.message) {
@@ -96,6 +101,10 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
           if (!runFailed) {
             config.onEvent({ type: 'run_state_changed', runState: 'idle' })
           }
+          if (unsubscribe) {
+            unsubscribe()
+            unsubscribe = null
+          }
         }
       })
 
@@ -106,11 +115,18 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
           const message = error instanceof Error ? error.message : 'Unknown error'
           emitRunFailure(message)
         }
+      } finally {
+        executing = false
       }
     },
 
     abort() {
       aborted = true
+      executing = false
+      if (unsubscribe) {
+        unsubscribe()
+        unsubscribe = null
+      }
       agent.abort()
     }
   }

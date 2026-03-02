@@ -2,6 +2,13 @@ import { randomUUID } from 'node:crypto'
 import type { StateStore } from './state-store'
 import type { RunRecord, RunStatus, PersistedMessage } from '../shared/types/run'
 
+const VALID_TRANSITIONS: Record<RunStatus, RunStatus[]> = {
+  queued: ['running', 'failed'],
+  running: ['completed', 'failed'],
+  completed: [],
+  failed: []
+}
+
 export type CreateRunInput = {
   sessionId: string
   prompt: string
@@ -49,7 +56,15 @@ export function updateRunStatus(
 ): void {
   const state = store.load()
   const run = state.runs[runId]
-  if (!run) return
+  if (!run) {
+    console.error(`[Orchestrator] Cannot update status for unknown run: ${runId}`)
+    return
+  }
+
+  if (!VALID_TRANSITIONS[run.status].includes(status)) {
+    console.error(`[Orchestrator] Invalid transition: ${run.status} -> ${status} for run ${runId}`)
+    return
+  }
 
   const now = new Date().toISOString()
   const updates: Partial<RunRecord> = { status }
@@ -80,7 +95,10 @@ export function appendRunMessage(
 ): void {
   const state = store.load()
   const run = state.runs[runId]
-  if (!run) return
+  if (!run) {
+    console.error(`[Orchestrator] Cannot append message to unknown run: ${runId}`)
+    return
+  }
 
   store.save({
     ...state,

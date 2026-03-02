@@ -129,6 +129,7 @@ describe('Orchestrator', () => {
 
   it('updateRunStatus is a no-op for nonexistent runId', async () => {
     const { updateRunStatus } = await import('../../../src/main/orchestrator')
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const saveSpy = vi.fn()
     const noopStore = {
       load: () => ({ ...state }),
@@ -137,10 +138,15 @@ describe('Orchestrator', () => {
 
     updateRunStatus(noopStore, 'nonexistent-run-id', 'running')
     expect(saveSpy).not.toHaveBeenCalled()
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Cannot update status for unknown run')
+    )
+    consoleSpy.mockRestore()
   })
 
   it('appendRunMessage is a no-op for nonexistent runId', async () => {
     const { appendRunMessage } = await import('../../../src/main/orchestrator')
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const saveSpy = vi.fn()
     const noopStore = {
       load: () => ({ ...state }),
@@ -154,6 +160,39 @@ describe('Orchestrator', () => {
       createdAt: new Date().toISOString()
     })
     expect(saveSpy).not.toHaveBeenCalled()
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Cannot append message to unknown run')
+    )
+    consoleSpy.mockRestore()
+  })
+
+  it('updateRunStatus rejects invalid transitions', async () => {
+    const { createRun, updateRunStatus } = await import('../../../src/main/orchestrator')
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const run = createRun(store, {
+      sessionId: 's-1',
+      prompt: 'test',
+      model: 'm',
+      provider: 'p'
+    })
+
+    // queued -> completed is not valid (must go through running first)
+    updateRunStatus(store, run.id, 'completed')
+    expect(state.runs[run.id].status).toBe('queued')
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Invalid transition: queued -> completed')
+    )
+
+    // Valid: queued -> running -> completed
+    updateRunStatus(store, run.id, 'running')
+    expect(state.runs[run.id].status).toBe('running')
+
+    // running -> queued is not valid
+    updateRunStatus(store, run.id, 'queued')
+    expect(state.runs[run.id].status).toBe('running')
+
+    consoleSpy.mockRestore()
   })
 
   it('getRunsForSession returns runs filtered by sessionId', async () => {

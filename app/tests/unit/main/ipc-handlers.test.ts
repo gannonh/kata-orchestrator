@@ -139,22 +139,9 @@ describe('registerIpcHandlers', () => {
     expect(mockOpenExternal).toHaveBeenCalledWith('https://example.com')
   })
 
-  it('falls back to in-memory store when no store is injected', async () => {
-    vi.resetModules()
-    const { registerIpcHandlers: register } = await import('../../../src/main/ipc-handlers')
-    register()
-    const handlers = getHandlersByChannel()
-    const spaceCreate = handlers.get('space:create')
-    const spaceList = handlers.get('space:list')
-
-    const createdSpace = await spaceCreate?.({}, {
-      repoUrl: 'https://github.com/user/repo',
-      rootPath: '/Users/me/repo',
-      branch: 'main',
-      workspaceMode: 'external'
-    })
-
-    await expect(spaceList?.({})).resolves.toEqual([createdSpace])
+  it('requires a store argument', () => {
+    // @ts-expect-error -- verifying runtime behavior when called without store
+    expect(() => registerIpcHandlers(undefined)).toThrow()
   })
 
   it('space:create persists an external-mode space using provided rootPath', async () => {
@@ -830,7 +817,7 @@ describe('registerIpcHandlers', () => {
       const mockSend = vi.fn().mockImplementation(() => {
         throw new Error('sender destroyed')
       })
-      const mockEvent = { sender: { send: mockSend } }
+      const mockEvent = { sender: { send: mockSend, isDestroyed: () => true } }
       await handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
 
       const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
@@ -841,6 +828,34 @@ describe('registerIpcHandlers', () => {
       }).not.toThrow()
 
       expect(mockUpdateRunStatus).toHaveBeenCalledWith(store, 'run-ev-2', 'failed', 'API rate limit')
+    })
+
+    it('logs error when sender.send throws but sender is not destroyed', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({ id: 'run-ev-3', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore()
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      const mockSend = vi.fn().mockImplementation(() => {
+        throw new Error('serialization error')
+      })
+      const mockEvent = { sender: { send: mockSend, isDestroyed: () => false } }
+      await handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
+
+      onEvent({ type: 'run_state_changed', runState: 'pending' })
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[IPC] Failed to send run event to renderer:',
+        expect.any(Error)
+      )
+      consoleSpy.mockRestore()
     })
 
     it('returns error when no credentials available', async () => {
@@ -981,6 +996,7 @@ describe('registerIpcHandlers', () => {
 
       expect(result).toBe(true)
       expect(mockRunner.abort).toHaveBeenCalled()
+      expect(mockUpdateRunStatus).toHaveBeenCalledWith(store, 'run-abort-1', 'failed', 'Aborted by user')
     })
 
     it('returns false for unknown runId', async () => {
@@ -1018,11 +1034,10 @@ describe('registerIpcHandlers', () => {
       expect(mockCredentialResolver.getAuthStatus).toHaveBeenCalledWith('anthropic')
     })
 
-    it('returns none when no credential resolver configured', async () => {
+    it('rejects when no credential resolver configured', async () => {
       registerIpcHandlers(createMockStore())
       const handler = getHandlersByChannel().get('auth:status')!
-      const result = await handler(null, { provider: 'anthropic' })
-      expect(result).toBe('none')
+      await expect(handler(null, { provider: 'anthropic' })).rejects.toThrow('No credential resolver configured')
     })
 
     it('rejects malformed input', async () => {

@@ -60,8 +60,10 @@ export function useIpcSessionConversation(sessionId: string | null) {
           }
         }
       })
-      .catch(() => {
-        // Silently ignore replay errors on mount
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : 'Failed to load conversation history'
+        console.error('[useIpcSessionConversation] Failed to replay run history:', err)
+        dispatch({ type: 'RUN_FAILED', error: message })
       })
   }, [sessionId])
 

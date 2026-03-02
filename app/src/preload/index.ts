@@ -38,7 +38,8 @@ const kataApi = {
   openExternalUrl: async (url: string): Promise<boolean> => {
     try {
       return await ipcRenderer.invoke(OPEN_EXTERNAL_URL_CHANNEL, url) as boolean
-    } catch {
+    } catch (err) {
+      console.error('[preload] Failed to open external URL:', url, err)
       return false
     }
   },

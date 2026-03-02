@@ -456,6 +456,127 @@ describe('AgentRunner', () => {
     expect(msgEvents).toHaveLength(0)
   })
 
+  it('throws when execute is called while already executing', async () => {
+    let resolvePrompt: () => void = () => {}
+    mockPrompt.mockReset().mockImplementation(() => new Promise<void>((resolve) => {
+      resolvePrompt = resolve
+    }))
+
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+
+    const runner = createAgentRunner({
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test',
+      systemPrompt: 'test',
+      onEvent: () => {}
+    })
+
+    // Start first execution (will hang on prompt)
+    const firstExec = runner.execute('first')
+
+    // Second execution should throw
+    await expect(runner.execute('second')).rejects.toThrow('AgentRunner: execute already in progress')
+
+    // Clean up
+    resolvePrompt()
+    await firstExec
+  })
+
+  it('unsubscribes from agent events on agent_end', async () => {
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+
+    const runner = createAgentRunner({
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test',
+      systemPrompt: 'test',
+      onEvent: () => {}
+    })
+
+    await runner.execute('test')
+
+    // After execute completes (agent_end fires), the subscribe callback should have been cleaned up
+    // The mock's unsubscribe sets subscribeCallback to null
+    expect(subscribeCallback).toBeNull()
+  })
+
+  it('cleans up previous subscription when re-executing after error', async () => {
+    // First execution: prompt rejects without agent_end, leaving subscription active
+    mockPrompt.mockReset().mockRejectedValueOnce(new Error('transient failure'))
+
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+    const events: SessionRuntimeEvent[] = []
+
+    const runner = createAgentRunner({
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test',
+      systemPrompt: 'test',
+      onEvent: (event) => events.push(event)
+    })
+
+    await runner.execute('first')
+    expect(mockSubscribe).toHaveBeenCalledTimes(1)
+
+    // Second execution: should clean up previous subscription before subscribing again
+    mockPrompt.mockReset().mockImplementation(async () => {
+      if (subscribeCallback) {
+        subscribeCallback({ type: 'agent_end', messages: [] })
+      }
+    })
+
+    await runner.execute('second')
+    expect(mockSubscribe).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores events delivered to subscribe callback after abort', async () => {
+    let savedCallback: ((event: AgentEvent) => void) | null = null
+    mockSubscribe.mockImplementation((cb: (event: AgentEvent) => void) => {
+      subscribeCallback = cb
+      savedCallback = cb
+      return () => {
+        subscribeCallback = null
+      }
+    })
+
+    mockPrompt.mockReset().mockResolvedValue(undefined)
+
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+    const events: SessionRuntimeEvent[] = []
+
+    const runner = createAgentRunner({
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test',
+      systemPrompt: 'test',
+      onEvent: (event) => events.push(event)
+    })
+
+    await runner.execute('test')
+    runner.abort()
+
+    // Simulate a late event delivered through the saved callback reference
+    // (race condition: agent fires event after abort but before unsubscribe takes effect)
+    savedCallback!({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'stale message' }],
+        usage: { input: 0, output: 0, totalTokens: 0, cacheRead: 0, cacheWrite: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+        stopReason: 'stop',
+        api: 'anthropic-messages',
+        provider: 'anthropic',
+        model: 'test',
+        timestamp: Date.now()
+      }
+    } as AgentEvent)
+
+    // The stale message should be ignored because aborted=true
+    const msgEvents = events.filter((e) => e.type === 'message_appended')
+    expect(msgEvents).toHaveLength(0)
+  })
+
   it('does not emit error event when prompt rejects after abort during execution', async () => {
     let abortRunner: (() => void) | null = null
     mockPrompt.mockReset().mockImplementation(async () => {

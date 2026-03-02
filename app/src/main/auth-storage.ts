@@ -31,7 +31,7 @@ function writeData(filePath: string, data: AuthData): void {
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
   const tmpPath = path.join(dir, `.auth-${Date.now()}.tmp`)
-  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2))
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), { mode: 0o600 })
   fs.renameSync(tmpPath, filePath)
 }
 
@@ -39,7 +39,7 @@ function ensureFileExists(filePath: string): void {
   const dir = path.dirname(filePath)
   fs.mkdirSync(dir, { recursive: true })
   if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, '{}')
+    fs.writeFileSync(filePath, '{}', { mode: 0o600 })
   }
 }
 

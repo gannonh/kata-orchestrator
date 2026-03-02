@@ -9,8 +9,8 @@ export function AuthDialog({ open, onClose }: AuthDialogProps) {
   if (!open) return null
 
   const handleLogin = (provider: string) => {
-    window.kata?.authLogin?.(provider)?.catch(() => {
-      // Auth flow failed; keep UI stable.
+    window.kata?.authLogin?.(provider)?.catch((err: unknown) => {
+      console.error(`[AuthDialog] Login failed for ${provider}:`, err)
     })
   }
 

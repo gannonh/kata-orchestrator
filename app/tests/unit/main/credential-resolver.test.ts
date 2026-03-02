@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCredentialResolver } from '../../../src/main/credential-resolver'
 import type { AuthStorage } from '../../../src/main/auth-storage'
 
@@ -206,5 +206,44 @@ describe('CredentialResolver', () => {
 
     const status = await resolver.getAuthStatus('openai-codex')
     expect(status).toBe('oauth')
+  })
+
+  it('returns undefined when Codex auth file has a non-ENOENT read error', async () => {
+    delete process.env.OPENAI_API_KEY
+    // Create a directory where the file is expected — readFileSync will fail with EISDIR
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kata-cred-test-'))
+    tempDirs.push(dir)
+    const codexAuthPath = path.join(dir, 'auth-dir')
+    fs.mkdirSync(codexAuthPath)
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const resolver = createCredentialResolver(createMockAuthStorage(), { codexAuthPath })
+
+    const key = await resolver.getApiKey('openai')
+    expect(key).toBeUndefined()
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to read Codex auth file'),
+      expect.anything()
+    )
+    consoleSpy.mockRestore()
+  })
+
+  it('returns undefined when Codex auth file contains invalid JSON', async () => {
+    delete process.env.OPENAI_API_KEY
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kata-cred-test-'))
+    tempDirs.push(dir)
+    const codexAuthPath = path.join(dir, 'codex-auth.json')
+    fs.writeFileSync(codexAuthPath, '{not-valid-json', 'utf-8')
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const resolver = createCredentialResolver(createMockAuthStorage(), { codexAuthPath })
+
+    const key = await resolver.getApiKey('openai')
+    expect(key).toBeUndefined()
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to parse Codex auth file'),
+      expect.anything()
+    )
+    consoleSpy.mockRestore()
   })
 })

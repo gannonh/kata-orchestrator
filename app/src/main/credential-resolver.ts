@@ -28,15 +28,22 @@ type CodexAuthFile = {
 }
 
 function readCodexAccessToken(codexAuthPath: string): string | undefined {
+  let raw: string
   try {
-    const raw = fs.readFileSync(codexAuthPath, 'utf-8')
+    raw = fs.readFileSync(codexAuthPath, 'utf-8')
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    console.error(`[CredentialResolver] Failed to read Codex auth file at ${codexAuthPath}:`, err)
+    return undefined
+  }
+
+  try {
     const parsed = JSON.parse(raw) as CodexAuthFile
     const token = parsed.tokens?.access_token
-    if (typeof token !== 'string') {
-      return undefined
-    }
+    if (typeof token !== 'string') return undefined
     return token.trim() || undefined
-  } catch {
+  } catch (err) {
+    console.error(`[CredentialResolver] Failed to parse Codex auth file at ${codexAuthPath}:`, err)
     return undefined
   }
 }
