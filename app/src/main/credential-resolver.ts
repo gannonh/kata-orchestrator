@@ -1,3 +1,7 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
 import type { AuthStorage } from './auth-storage'
 
 export type AuthStatus = 'oauth' | 'api_key' | 'none'
@@ -9,10 +13,44 @@ export type CredentialResolver = {
 
 const ENV_MAP: Record<string, string> = {
   anthropic: 'ANTHROPIC_API_KEY',
-  openai: 'OPENAI_API_KEY'
+  openai: 'OPENAI_API_KEY',
+  'openai-codex': 'OPENAI_API_KEY'
 }
 
-export function createCredentialResolver(authStorage: AuthStorage): CredentialResolver {
+type CreateCredentialResolverOptions = {
+  codexAuthPath?: string
+}
+
+type CodexAuthFile = {
+  tokens?: {
+    access_token?: string
+  }
+}
+
+function readCodexAccessToken(codexAuthPath: string): string | undefined {
+  try {
+    const raw = fs.readFileSync(codexAuthPath, 'utf-8')
+    const parsed = JSON.parse(raw) as CodexAuthFile
+    const token = parsed.tokens?.access_token
+    if (typeof token !== 'string') {
+      return undefined
+    }
+    return token.trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
+function isCodexSessionProvider(provider: string): boolean {
+  return provider === 'openai' || provider === 'openai-codex'
+}
+
+export function createCredentialResolver(
+  authStorage: AuthStorage,
+  options?: CreateCredentialResolverOptions
+): CredentialResolver {
+  const codexAuthPath = options?.codexAuthPath ?? path.join(os.homedir(), '.codex', 'auth.json')
+
   return {
     async getApiKey(provider) {
       const stored = await authStorage.get(provider)
@@ -21,7 +59,16 @@ export function createCredentialResolver(authStorage: AuthStorage): CredentialRe
       }
 
       const envVar = ENV_MAP[provider]
-      return envVar ? process.env[envVar] : undefined
+      const envValue = envVar ? process.env[envVar] : undefined
+      if (envValue) {
+        return envValue
+      }
+
+      if (isCodexSessionProvider(provider)) {
+        return readCodexAccessToken(codexAuthPath)
+      }
+
+      return undefined
     },
 
     async getAuthStatus(provider) {
@@ -33,6 +80,10 @@ export function createCredentialResolver(authStorage: AuthStorage): CredentialRe
       const envVar = ENV_MAP[provider]
       if (envVar && process.env[envVar]) {
         return 'api_key'
+      }
+
+      if (isCodexSessionProvider(provider) && readCodexAccessToken(codexAuthPath)) {
+        return 'oauth'
       }
 
       return 'none'

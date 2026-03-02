@@ -55,8 +55,8 @@ describe('useIpcSessionConversation', () => {
     expect(mockRunSubmit).toHaveBeenCalledWith({
       sessionId: 's-1',
       prompt: 'Plan phase 2',
-      model: 'claude-sonnet-4-6-20250514',
-      provider: 'anthropic'
+      model: 'gpt-5.3-codex',
+      provider: 'openai-codex'
     })
   })
 
@@ -289,7 +289,7 @@ describe('useIpcSessionConversation', () => {
     expect(result.current.state.runState).toBe('empty')
   })
 
-  it('ignores non-error run_state_changed events (pending/idle)', async () => {
+  it('ignores pending run_state_changed and transitions to idle on idle run_state_changed', async () => {
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
     )
@@ -317,8 +317,7 @@ describe('useIpcSessionConversation', () => {
       })
     })
 
-    // Still pending - idle events from main process are ignored
-    expect(result.current.state.runState).toBe('pending')
+    expect(result.current.state.runState).toBe('idle')
   })
 
   it('retry is a no-op when not in error state', async () => {

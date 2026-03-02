@@ -173,6 +173,56 @@ describe('AgentRunner', () => {
     expect((errorEvent as { errorMessage: string }).errorMessage).toBe('API rate limit')
   })
 
+  it('treats assistant stopReason=error as run failure and does not emit idle', async () => {
+    mockPrompt.mockReset().mockImplementation(async () => {
+      if (subscribeCallback) {
+        subscribeCallback({
+          type: 'message_end',
+          message: {
+            role: 'assistant',
+            content: [],
+            usage: {
+              input: 0,
+              output: 0,
+              totalTokens: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+            },
+            stopReason: 'error',
+            errorMessage: 'Missing scopes: api.responses.write',
+            api: 'openai-codex-responses',
+            provider: 'openai-codex',
+            model: 'gpt-5.3-codex',
+            timestamp: Date.now()
+          }
+        } as AgentEvent)
+        subscribeCallback({ type: 'agent_end', messages: [] })
+      }
+    })
+
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+    const events: SessionRuntimeEvent[] = []
+
+    const runner = createAgentRunner({
+      model: 'gpt-5.3-codex',
+      provider: 'openai-codex',
+      apiKey: 'token',
+      systemPrompt: 'test',
+      onEvent: (event) => events.push(event)
+    })
+
+    await runner.execute('test')
+
+    const stateEvents = events.filter((e) => e.type === 'run_state_changed')
+    expect(stateEvents[0]).toEqual({ type: 'run_state_changed', runState: 'pending' })
+    expect(stateEvents[stateEvents.length - 1]).toEqual({
+      type: 'run_state_changed',
+      runState: 'error',
+      errorMessage: 'Missing scopes: api.responses.write'
+    })
+  })
+
   it('abort calls agent.abort', async () => {
     const { createAgentRunner } = await import('../../../src/main/agent-runner')
 

@@ -19,13 +19,14 @@ export type AgentRunner = {
 function extractTextContent(content: unknown): string {
   if (!Array.isArray(content)) return ''
   return content
-    .filter((block: { type: string }) => block.type === 'text')
-    .map((block: { text: string }) => block.text)
+    .map((block: { text?: string }) => block.text)
+    .filter((text): text is string => typeof text === 'string')
     .join('')
 }
 
 export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
   let aborted = false
+  let runFailed = false
 
   const agent = new Agent({
     streamFn: (model, context, options) => {
@@ -48,6 +49,16 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
 
       config.onEvent({ type: 'run_state_changed', runState: 'pending' })
 
+      const emitRunFailure = (errorMessage: string) => {
+        if (runFailed) return
+        runFailed = true
+        config.onEvent({
+          type: 'run_state_changed',
+          runState: 'error',
+          errorMessage
+        })
+      }
+
       agent.subscribe((event: AgentEvent) => {
         if (aborted) return
 
@@ -55,8 +66,14 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
           const msg = event.message as {
             role: string
             content: Array<{ type: string; text?: string }>
+            stopReason?: string
+            errorMessage?: string
           }
           if (msg.role === 'assistant') {
+            if (msg.stopReason === 'error') {
+              emitRunFailure(msg.errorMessage || 'Unknown error')
+              return
+            }
             const text = extractTextContent(msg.content)
             if (text) {
               config.onEvent({
@@ -73,7 +90,9 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
         }
 
         if (event.type === 'agent_end') {
-          config.onEvent({ type: 'run_state_changed', runState: 'idle' })
+          if (!runFailed) {
+            config.onEvent({ type: 'run_state_changed', runState: 'idle' })
+          }
         }
       })
 
@@ -82,11 +101,7 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
       } catch (error) {
         if (!aborted) {
           const message = error instanceof Error ? error.message : 'Unknown error'
-          config.onEvent({
-            type: 'run_state_changed',
-            runState: 'error',
-            errorMessage: message
-          })
+          emitRunFailure(message)
         }
       }
     },

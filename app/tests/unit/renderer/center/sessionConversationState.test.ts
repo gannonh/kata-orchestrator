@@ -55,6 +55,28 @@ describe('sessionConversationReducer', () => {
     ])
   })
 
+  it('pending -> idle without appending messages on RUN_COMPLETED', () => {
+    const pendingState = sessionConversationReducer(createInitialSessionConversationState(), {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+
+    const nextState = sessionConversationReducer(pendingState, {
+      type: 'RUN_COMPLETED'
+    })
+
+    expect(nextState.runState).toBe('idle')
+    expect(nextState.errorMessage).toBeUndefined()
+    expect(nextState.messages).toEqual([
+      {
+        id: 'user-1',
+        role: 'user',
+        content: 'Plan phase 2',
+        createdAt: '1970-01-01T00:00:01.000Z'
+      }
+    ])
+  })
+
   it('pending -> error and stores errorMessage on RUN_FAILED', () => {
     const pendingState = sessionConversationReducer(createInitialSessionConversationState(), {
       type: 'SUBMIT_PROMPT',

@@ -6,6 +6,9 @@ import {
 } from '../components/center/sessionConversationState'
 import type { SessionRuntimeEvent } from '../types/session-runtime-adapter'
 
+const DEFAULT_RUN_MODEL = 'gpt-5.3-codex'
+const DEFAULT_RUN_PROVIDER = 'openai-codex'
+
 export function useIpcSessionConversation(sessionId: string | null) {
   const [state, dispatch] = useReducer(
     sessionConversationReducer,
@@ -23,8 +26,10 @@ export function useIpcSessionConversation(sessionId: string | null) {
       if (event.type === 'run_state_changed') {
         if (event.runState === 'error') {
           dispatch({ type: 'RUN_FAILED', error: event.errorMessage })
+        } else if (event.runState === 'idle') {
+          dispatch({ type: 'RUN_COMPLETED' })
         }
-        // Ignore non-error run_state_changed events (pending/idle managed locally)
+        // Pending events are managed locally after submit/retry.
         return
       }
 
@@ -72,8 +77,8 @@ export function useIpcSessionConversation(sessionId: string | null) {
         .runSubmit({
           sessionId,
           prompt,
-          model: 'claude-sonnet-4-6-20250514',
-          provider: 'anthropic'
+          model: DEFAULT_RUN_MODEL,
+          provider: DEFAULT_RUN_PROVIDER
         })
         .catch((error: Error) => {
           dispatch({ type: 'RUN_FAILED', error: error.message })
@@ -95,8 +100,8 @@ export function useIpcSessionConversation(sessionId: string | null) {
       .runSubmit({
         sessionId,
         prompt,
-        model: 'claude-sonnet-4-6-20250514',
-        provider: 'anthropic'
+        model: DEFAULT_RUN_MODEL,
+        provider: DEFAULT_RUN_PROVIDER
       })
       .catch((error: Error) => {
         dispatch({ type: 'RUN_FAILED', error: error.message })
