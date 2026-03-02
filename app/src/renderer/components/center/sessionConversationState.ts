@@ -64,6 +64,8 @@ export function sessionConversationReducer(
         ...state,
         runState: 'idle'
       }
+    case 'RESET_CONVERSATION':
+      return createInitialSessionConversationState()
     default:
       return state
   }

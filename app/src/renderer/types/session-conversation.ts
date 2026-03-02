@@ -41,9 +41,14 @@ export type RunCompletedEvent = {
   type: 'RUN_COMPLETED'
 }
 
+export type ResetConversationEvent = {
+  type: 'RESET_CONVERSATION'
+}
+
 export type SessionConversationEvent =
   | SubmitPromptEvent
   | RunSucceededEvent
   | RunFailedEvent
   | RetryFromErrorEvent
   | RunCompletedEvent
+  | ResetConversationEvent

@@ -63,11 +63,18 @@ describe('useIpcSessionConversation', () => {
     })
   })
 
-  it('receiving message_appended event adds agent message and transitions to idle', async () => {
+  it('clears draft state when the active session changes', async () => {
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
     )
-    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+    const { result, rerender } = renderHook(
+      ({ sessionId }) => useIpcSessionConversation(sessionId),
+      {
+        initialProps: { sessionId: 's-1' }
+      }
+    )
+
+    const createdAt = '2026-03-01T00:00:01.000Z'
 
     act(() => {
       result.current.submitPrompt('test')
@@ -80,7 +87,99 @@ describe('useIpcSessionConversation', () => {
           id: 'agent-1',
           role: 'agent',
           content: 'Draft ready.',
-          createdAt: new Date().toISOString()
+          createdAt
+        }
+      })
+    })
+
+    expect(result.current.state.latestDraft?.runId).toBe('run-agent-1')
+
+    rerender({ sessionId: 's-2' })
+
+    expect(result.current.state.runState).toBe('empty')
+    expect(result.current.state.messages).toEqual([])
+    expect(result.current.state.latestDraft).toBeUndefined()
+  })
+
+  it('ignores stale replay results from the previous session after a session switch', async () => {
+    let resolveFirstReplay: ((runs: any[]) => void) | null = null
+
+    mockRunList.mockImplementation((sessionId: string) => {
+      if (sessionId === 's-1') {
+        return new Promise((resolve) => {
+          resolveFirstReplay = resolve
+        })
+      }
+
+      return Promise.resolve([])
+    })
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result, rerender } = renderHook(
+      ({ sessionId }) => useIpcSessionConversation(sessionId),
+      {
+        initialProps: { sessionId: 's-1' }
+      }
+    )
+
+    rerender({ sessionId: 's-2' })
+
+    await act(async () => {
+      resolveFirstReplay?.([
+        {
+          id: 'run-1',
+          sessionId: 's-1',
+          prompt: 'stale session prompt',
+          status: 'completed',
+          model: 'm',
+          provider: 'p',
+          createdAt: '2026-03-01T00:00:00Z',
+          messages: [
+            {
+              id: 'u1',
+              role: 'user',
+              content: 'stale session prompt',
+              createdAt: '2026-03-01T00:00:00Z'
+            },
+            {
+              id: 'a1',
+              role: 'agent',
+              content: 'stale response',
+              createdAt: '2026-03-01T00:00:01Z'
+            }
+          ]
+        }
+      ])
+      await Promise.resolve()
+    })
+
+    expect(result.current.state.runState).toBe('empty')
+    expect(result.current.state.messages).toEqual([])
+    expect(result.current.state.latestDraft).toBeUndefined()
+  })
+
+  it('receiving message_appended event adds agent message and transitions to idle', async () => {
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    act(() => {
+      result.current.submitPrompt('test')
+    })
+
+    const createdAt = '2026-03-01T00:00:01.000Z'
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'message_appended',
+        message: {
+          id: 'agent-1',
+          role: 'agent',
+          content: 'Draft ready.',
+          createdAt
         }
       })
     })
@@ -88,6 +187,35 @@ describe('useIpcSessionConversation', () => {
     expect(result.current.state.runState).toBe('idle')
     expect(result.current.state.messages).toHaveLength(2)
     expect(result.current.state.messages[1].role).toBe('agent')
+    expect(result.current.state.latestDraft).toEqual({
+      runId: 'run-agent-1',
+      generatedAt: createdAt,
+      content: [
+        '## Goal',
+        'test',
+        '',
+        '## Acceptance Criteria',
+        '1. Produce a structured spec draft from the latest run',
+        '2. Keep the shell behavior deterministic for renderer tests',
+        '',
+        '## Non-goals',
+        '- Do not call external services from the right panel',
+        '',
+        '## Assumptions',
+        '- The latest prompt is the source of truth for the draft',
+        '',
+        '## Verification Plan',
+        '1. Run the renderer unit tests',
+        '',
+        '## Rollback Plan',
+        '1. Clear the generated draft state',
+        '',
+        '## Tasks',
+        '- [ ] Review the latest prompt',
+        '- [/] Apply the structured draft',
+        '- [x] Keep the runtime wiring stable'
+      ].join('\n')
+    })
   })
 
   it('receiving error event transitions to error state', async () => {

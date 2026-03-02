@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
 import { mockProject } from '../../mock/project'
+import { useSpecDocument } from '../../hooks/useSpecDocument'
 import type { ProjectSpec } from '../../types/project'
+import type { LatestRunDraft } from '../../types/spec-document'
 import { cn } from '../../lib/cn'
 import { SpecTab } from '../right/SpecTab'
 import { DynamicPanelTabs } from '../shared/DynamicPanelTabs'
@@ -15,10 +17,33 @@ const BASE_TAB_ID = 'right-spec'
 
 type RightPanelProps = {
   project?: ProjectSpec
+  spaceId?: string | null
+  sessionId?: string | null
+  latestDraft?: LatestRunDraft
 }
 
-export function RightPanel({ project = mockProject }: RightPanelProps) {
+const COMMENT_STATUS_NOTE =
+  'Comment threads are intentionally deferred for KAT-160 so the structured spec draft and checkbox task state remain the current source of truth.'
+
+export function RightPanel({
+  project = mockProject,
+  spaceId,
+  sessionId,
+  latestDraft
+}: RightPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [draftMarkdown, setDraftMarkdown] = useState('')
+  const specDocument = useSpecDocument({
+    spaceId: spaceId ?? 'inactive-space',
+    sessionId: sessionId ?? 'inactive-session'
+  })
+  const hasStructuredSpec = Boolean(spaceId && sessionId)
+
+  useLayoutEffect(() => {
+    setIsEditing(false)
+    setDraftMarkdown('')
+  }, [sessionId, spaceId])
 
   const { tabs, activeTabId, setActiveTabId, activeTab, handleCreateNote, handleCloseTab, handleRenameTab } =
     useDynamicTabs({
@@ -33,8 +58,83 @@ export function RightPanel({ project = mockProject }: RightPanelProps) {
       return <NewNoteScaffold />
     }
 
-    return <SpecTab project={project} />
-  }, [activeTab?.kind, project])
+    if (!hasStructuredSpec) {
+      return <SpecTab project={project} />
+    }
+
+    if (isEditing) {
+      return (
+        <SpecTab
+          project={project}
+          specState={{
+            mode: 'editing',
+            document: specDocument.document,
+            draftMarkdown,
+            onDraftMarkdownChange: setDraftMarkdown,
+            onSaveMarkdown: () => {
+              specDocument.setMarkdown(draftMarkdown)
+              setIsEditing(false)
+            },
+            onCancelEditing: () => {
+              setDraftMarkdown(specDocument.document.markdown)
+              setIsEditing(false)
+            },
+            commentStatusNote: COMMENT_STATUS_NOTE
+          }}
+        />
+      )
+    }
+
+    if (latestDraft && specDocument.document.appliedRunId !== latestDraft.runId) {
+      return (
+        <SpecTab
+          project={project}
+          specState={{
+            mode: 'draft_ready',
+            latestDraft,
+            onApplyDraft: () => {
+              specDocument.applyDraft(latestDraft)
+              setIsEditing(false)
+            },
+            commentStatusNote: COMMENT_STATUS_NOTE
+          }}
+        />
+      )
+    }
+
+    if (!specDocument.document.markdown) {
+      return (
+        <SpecTab
+          project={project}
+          specState={{ mode: 'generating' }}
+        />
+      )
+    }
+
+    return (
+      <SpecTab
+        project={project}
+        specState={{
+          mode: 'structured_view',
+          document: specDocument.document,
+          onToggleTask: specDocument.toggleTask,
+          onEditMarkdown: () => {
+            setDraftMarkdown(specDocument.document.markdown)
+            setIsEditing(true)
+          },
+          commentStatusNote: COMMENT_STATUS_NOTE
+        }}
+      />
+    )
+  }, [
+    activeTab?.kind,
+    draftMarkdown,
+    hasStructuredSpec,
+    isEditing,
+    latestDraft,
+    project,
+    specDocument
+  ])
 
   return (
     <div className="flex h-full flex-col">
