@@ -48,6 +48,7 @@ export const test = base.extend<ElectronFixtures>({
         {
           spaces: {},
           sessions: {},
+          runs: {},
           activeSpaceId: null,
           activeSessionId: null
         },
