@@ -482,6 +482,36 @@ describe('registerIpcHandlers', () => {
     ])
   })
 
+  it('session:create wraps save failures with a descriptive error code', async () => {
+    const existingSpace = {
+      id: 'space-1',
+      name: 'Existing',
+      repoLabel: 'org/repo',
+      repoUrl: '',
+      branch: 'main',
+      rootPath: '/tmp/repo',
+      workspaceMode: 'managed' as const,
+      provisioningMethod: 'clone-github' as const,
+      orchestrationMode: 'team' as const,
+      createdAt: '2026-03-01T00:00:00.000Z',
+      status: 'active' as const
+    }
+
+    const saveErrorStore = createMockStore({
+      ...createDefaultAppState(),
+      spaces: { [existingSpace.id]: existingSpace }
+    })
+    saveErrorStore.save.mockImplementation(() => {
+      throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+    })
+    registerIpcHandlers(saveErrorStore)
+    const sessionCreate = getHandlersByChannel().get('session:create')
+
+    await expect(
+      sessionCreate?.({}, { spaceId: existingSpace.id, label: 'Session 1' })
+    ).rejects.toThrow('Session created but failed to save state (ENOSPC)')
+  })
+
   it('session-agent-roster:list returns sorted entries for a session and [] for unknown session ids', async () => {
     const roster: Record<string, SessionAgentRecord> = {
       late: {
