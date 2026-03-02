@@ -77,6 +77,16 @@ describe('sessionConversationReducer', () => {
     ])
   })
 
+  it('ignores RUN_COMPLETED when state is not pending', () => {
+    const initialState = createInitialSessionConversationState()
+
+    const nextState = sessionConversationReducer(initialState, {
+      type: 'RUN_COMPLETED'
+    })
+
+    expect(nextState).toBe(initialState)
+  })
+
   it('pending -> error and stores errorMessage on RUN_FAILED', () => {
     const pendingState = sessionConversationReducer(createInitialSessionConversationState(), {
       type: 'SUBMIT_PROMPT',

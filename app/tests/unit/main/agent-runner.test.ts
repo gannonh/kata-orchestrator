@@ -223,6 +223,55 @@ describe('AgentRunner', () => {
     })
   })
 
+  it('emits Unknown error once when assistant error has no message and prompt rejects', async () => {
+    mockPrompt.mockReset().mockImplementation(async () => {
+      if (subscribeCallback) {
+        subscribeCallback({
+          type: 'message_end',
+          message: {
+            role: 'assistant',
+            content: [],
+            usage: {
+              input: 0,
+              output: 0,
+              totalTokens: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+            },
+            stopReason: 'error',
+            api: 'openai-codex-responses',
+            provider: 'openai-codex',
+            model: 'gpt-5.3-codex',
+            timestamp: Date.now()
+          }
+        } as AgentEvent)
+      }
+      throw new Error('transport failed')
+    })
+
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+    const events: SessionRuntimeEvent[] = []
+
+    const runner = createAgentRunner({
+      model: 'gpt-5.3-codex',
+      provider: 'openai-codex',
+      apiKey: 'token',
+      systemPrompt: 'test',
+      onEvent: (event) => events.push(event)
+    })
+
+    await runner.execute('test')
+
+    const stateEvents = events.filter((e) => e.type === 'run_state_changed')
+    expect(stateEvents[0]).toEqual({ type: 'run_state_changed', runState: 'pending' })
+
+    const errorEvents = stateEvents.filter((e) => e.runState === 'error')
+    expect(errorEvents).toHaveLength(1)
+    expect((errorEvents[0] as { errorMessage: string }).errorMessage).toBe('Unknown error')
+    expect(stateEvents.some((e) => e.runState === 'idle')).toBe(false)
+  })
+
   it('abort calls agent.abort', async () => {
     const { createAgentRunner } = await import('../../../src/main/agent-runner')
 
@@ -404,5 +453,28 @@ describe('AgentRunner', () => {
 
     const msgEvents = events.filter((e) => e.type === 'message_appended')
     expect(msgEvents).toHaveLength(0)
+  })
+
+  it('does not emit error event when prompt rejects after abort', async () => {
+    mockPrompt.mockReset().mockRejectedValue(new Error('late failure'))
+
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+    const events: SessionRuntimeEvent[] = []
+
+    const runner = createAgentRunner({
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test',
+      systemPrompt: 'test',
+      onEvent: (event) => events.push(event)
+    })
+
+    runner.abort()
+    await runner.execute('test')
+
+    const errorEvent = events.find(
+      (e) => e.type === 'run_state_changed' && e.runState === 'error'
+    )
+    expect(errorEvent).toBeUndefined()
   })
 })

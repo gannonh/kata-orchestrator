@@ -27,15 +27,17 @@ describe('CredentialResolver', () => {
   const originalEnv = { ...process.env }
   const tempDirs: string[] = []
 
-  function createTempCodexAuthFile(accessToken?: string): string {
+  function createTempCodexAuthFileRaw(payload: unknown): string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kata-cred-test-'))
     tempDirs.push(dir)
     const filePath = path.join(dir, 'codex-auth.json')
-    const payload = accessToken
-      ? { tokens: { access_token: accessToken } }
-      : { tokens: {} }
     fs.writeFileSync(filePath, JSON.stringify(payload), 'utf-8')
     return filePath
+  }
+
+  function createTempCodexAuthFile(accessToken?: string): string {
+    const payload = accessToken ? { tokens: { access_token: accessToken } } : { tokens: {} }
+    return createTempCodexAuthFileRaw(payload)
   }
 
   afterEach(() => {
@@ -108,6 +110,26 @@ describe('CredentialResolver', () => {
 
     const key = await resolver.getApiKey('openai-codex')
     expect(key).toBe('codex-session-token')
+  })
+
+  it('returns undefined when Codex session token is non-string', async () => {
+    delete process.env.OPENAI_API_KEY
+    const codexAuthPath = createTempCodexAuthFileRaw({ tokens: { access_token: 123 } })
+    const resolver = createCredentialResolver(createMockAuthStorage(), { codexAuthPath })
+
+    const key = await resolver.getApiKey('openai')
+    expect(key).toBeUndefined()
+  })
+
+  it('returns undefined when Codex auth file is missing', async () => {
+    delete process.env.OPENAI_API_KEY
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kata-cred-test-'))
+    tempDirs.push(dir)
+    const codexAuthPath = path.join(dir, 'missing-auth.json')
+    const resolver = createCredentialResolver(createMockAuthStorage(), { codexAuthPath })
+
+    const key = await resolver.getApiKey('openai')
+    expect(key).toBeUndefined()
   })
 
   it('oauth takes priority over env var', async () => {
