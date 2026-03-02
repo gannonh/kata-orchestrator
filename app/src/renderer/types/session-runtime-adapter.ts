@@ -19,11 +19,13 @@ export type RunStateChangedEvent = ErrorRunStateChangedEvent | NonErrorRunStateC
 export type MessageAppendedEvent = {
   type: 'message_appended'
   message: ConversationMessage
+  runId?: string
 }
 
 export type MessageUpdatedEvent = {
   type: 'message_updated'
   message: ConversationMessage
+  runId?: string
 }
 
 export type SessionRuntimeEvent = RunStateChangedEvent | MessageAppendedEvent | MessageUpdatedEvent

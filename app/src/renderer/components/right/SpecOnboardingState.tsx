@@ -21,7 +21,7 @@ const steps: Step[] = [
   {
     title: 'Accept changes',
     description:
-      'Comments and threads are intentionally deferred in KAT-160; use the spec draft and task state as the current source of truth.'
+      'Comments and threads are intentionally deferred in this release; use the spec draft and task state as the current source of truth.'
   }
 ]
 

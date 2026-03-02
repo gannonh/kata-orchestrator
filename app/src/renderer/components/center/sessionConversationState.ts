@@ -58,6 +58,7 @@ export function sessionConversationReducer(
       const lastMessage = state.messages[state.messages.length - 1]
       if (lastMessage?.role === 'agent') {
         return {
+          ...state,
           runState: 'idle',
           messages: [
             ...state.messages.slice(0, -1),
@@ -70,6 +71,7 @@ export function sessionConversationReducer(
       }
 
       return {
+        ...state,
         runState: 'idle',
         messages: [...state.messages, createMessage(state, 'agent', event.response)]
       }

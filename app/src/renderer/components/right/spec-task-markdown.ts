@@ -30,7 +30,7 @@ export function updateTaskLineInMarkdown(
   next: SpecTaskStatus
 ): string {
   const lineEnding = markdown.includes('\r\n') ? '\r\n' : '\n'
-  const lines = markdown.split(lineEnding)
+  const lines = markdown.split(/\r?\n/)
   const targetLine = lines[lineIndex]
 
   if (targetLine === undefined) {

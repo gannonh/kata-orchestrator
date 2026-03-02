@@ -460,7 +460,11 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       systemPrompt: 'You are a helpful AI assistant.',
       onEvent: (runtimeEvent: SessionRuntimeEvent) => {
         try {
-          event.sender.send(RUN_EVENT_CHANNEL, runtimeEvent)
+          const enrichedEvent =
+            runtimeEvent.type === 'message_appended' || runtimeEvent.type === 'message_updated'
+              ? { ...runtimeEvent, runId: run.id }
+              : runtimeEvent
+          event.sender.send(RUN_EVENT_CHANNEL, enrichedEvent)
         } catch (err) {
           if (!event.sender.isDestroyed()) {
             console.error('[IPC] Failed to send run event to renderer:', err)

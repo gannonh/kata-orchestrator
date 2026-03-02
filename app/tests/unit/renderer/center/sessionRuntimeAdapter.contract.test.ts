@@ -79,6 +79,17 @@ describe('SessionRuntimeAdapter contract', () => {
       'message_appended'
     ])
 
+    const updatedEvent = receivedEvents.find((event) => event.type === 'message_updated')
+    expect(updatedEvent).toMatchObject({
+      type: 'message_updated',
+      message: {
+        id: 'agent-1',
+        role: 'agent',
+        content: 'hel',
+        createdAt: '1970-01-01T00:00:01.000Z'
+      }
+    })
+
     for (const event of receivedEvents) {
       if (event.type !== 'run_state_changed') {
         continue

@@ -18,7 +18,7 @@ describe('SpecTab structured states', () => {
     )
 
     expect(screen.getByText('Creating Spec')).toBeTruthy()
-    expect(screen.getByText(/intentionally deferred in KAT-160/i)).toBeTruthy()
+    expect(screen.getByText(/intentionally deferred in this release/i)).toBeTruthy()
   })
 
   it('renders a draft apply card when the latest draft is ready', () => {

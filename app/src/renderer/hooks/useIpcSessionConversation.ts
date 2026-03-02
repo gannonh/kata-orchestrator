@@ -46,7 +46,7 @@ export function useIpcSessionConversation(sessionId: string | null) {
         setLatestDraft(
           buildLatestDraft({
             prompt: lastPromptRef.current ?? '',
-            runId: `run-${event.message.id}`,
+            runId: event.runId ?? `run-${event.message.id}`,
             generatedAt: event.message.createdAt
           })
         )
@@ -161,6 +161,9 @@ export function useIpcSessionConversation(sessionId: string | null) {
   }
 }
 
+// Scaffolding: produces a fixed template until the spec generation pipeline
+// is connected. The actual agent message content will replace this template
+// once spec extraction is implemented.
 function buildLatestDraft({
   prompt,
   runId,

@@ -96,10 +96,14 @@ export function useSpecDocument({ spaceId, sessionId }: UseSpecDocumentParams) {
   documentRef.current = activeState.document
 
   useLayoutEffect(() => {
-    if (state.storageKey !== activeState.storageKey) {
-      setState(activeState)
+    if (state.storageKey !== storageKey) {
+      setState({
+        storageKey,
+        document: readStoredDocument(storageKey)
+      })
     }
-  }, [activeState, state.storageKey])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey])
 
   const persistDocument = useCallback(
     (nextDocument: StructuredSpecDocument) => {
@@ -148,10 +152,8 @@ export function useSpecDocument({ spaceId, sessionId }: UseSpecDocumentParams) {
     [persistDocument]
   )
 
-  return {
-    document: activeState.document,
-    setMarkdown,
-    applyDraft,
-    toggleTask
-  }
+  return useMemo(
+    () => ({ document: activeState.document, setMarkdown, applyDraft, toggleTask }),
+    [activeState.document, setMarkdown, applyDraft, toggleTask]
+  )
 }

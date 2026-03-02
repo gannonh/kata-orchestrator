@@ -23,7 +23,7 @@ type RightPanelProps = {
 }
 
 const COMMENT_STATUS_NOTE =
-  'Comment threads are intentionally deferred for KAT-160 so the structured spec draft and checkbox task state remain the current source of truth.'
+  'Comment threads are intentionally deferred in this release so the structured spec draft and checkbox task state remain the current source of truth.'
 
 export function RightPanel({
   project = mockProject,

@@ -32,8 +32,8 @@ function SectionList({ title, items, ordered = false }: SectionListProps) {
               ordered ? 'list-decimal' : 'list-disc'
             ].join(' ')}
           >
-            {items.map((item) => (
-              <li key={`${title}-${item}`}>{item}</li>
+            {items.map((item, index) => (
+              <li key={`${title}-${index}`}>{item}</li>
             ))}
           </ListTag>
         ) : (

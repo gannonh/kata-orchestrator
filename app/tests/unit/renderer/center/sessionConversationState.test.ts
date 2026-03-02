@@ -279,6 +279,29 @@ describe('sessionConversationReducer', () => {
     expect(nextState).toBe(errorState)
   })
 
+  it('resets to initial state on RESET_CONVERSATION', () => {
+    const errorState = sessionConversationReducer(
+      sessionConversationReducer(createInitialSessionConversationState(), {
+        type: 'SUBMIT_PROMPT',
+        prompt: 'Plan phase 2'
+      }),
+      {
+        type: 'RUN_FAILED',
+        error: 'Network timeout'
+      }
+    )
+
+    expect(errorState.runState).toBe('error')
+
+    const nextState = sessionConversationReducer(errorState, {
+      type: 'RESET_CONVERSATION'
+    })
+
+    expect(nextState.runState).toBe('empty')
+    expect(nextState.messages).toEqual([])
+    expect(nextState.errorMessage).toBeUndefined()
+  })
+
   it('returns current state for unknown events', () => {
     const initialState = createInitialSessionConversationState()
 
