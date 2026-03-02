@@ -168,6 +168,7 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
         />
 
         <LeftPanel
+          activeSpaceId={activeSpaceId}
           collapsed={leftCollapsed}
           onCollapsedChange={setLeftCollapsed}
           theme={theme}

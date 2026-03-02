@@ -7,15 +7,19 @@ import {
   ORCHESTRATION_MODES,
   WORKSPACE_MODES,
   PROVISIONING_METHODS,
+  SESSION_AGENT_STATUSES,
+  SESSION_AGENT_KINDS,
   createDefaultAppState
 } from '../../../../src/shared/types/space'
 
 import type {
   SpaceRecord,
   SessionRecord,
+  SessionAgentRecord,
   CreateSpaceInput,
   CreateSessionInput,
-  AppState
+  AppState,
+  OrchestrationMode
 } from '../../../../src/shared/types/space'
 
 describe('SPACE_STATUSES', () => {
@@ -42,12 +46,26 @@ describe('PROVISIONING_METHODS', () => {
   })
 })
 
+describe('SESSION_AGENT_STATUSES', () => {
+  it('contains idle, running, blocked, and complete', () => {
+    expect(SESSION_AGENT_STATUSES).toEqual(['idle', 'running', 'blocked', 'complete'])
+  })
+})
+
+describe('SESSION_AGENT_KINDS', () => {
+  it('contains system, coordinator, and specialist', () => {
+    expect(SESSION_AGENT_KINDS).toEqual(['system', 'coordinator', 'specialist'])
+  })
+})
+
 describe('createDefaultAppState', () => {
-  it('returns empty state with null selections', () => {
+  it('returns empty state with null selections and empty records', () => {
     const state = createDefaultAppState()
 
     expect(state.spaces).toEqual({})
     expect(state.sessions).toEqual({})
+    expect(state.runs).toEqual({})
+    expect(state.agentRoster).toEqual({})
     expect(state.activeSpaceId).toBeNull()
     expect(state.activeSessionId).toBeNull()
   })
@@ -58,6 +76,8 @@ describe('createDefaultAppState', () => {
     expect(a).not.toBe(b)
     expect(a.spaces).not.toBe(b.spaces)
     expect(a.sessions).not.toBe(b.sessions)
+    expect(a.runs).not.toBe(b.runs)
+    expect(a.agentRoster).not.toBe(b.agentRoster)
   })
 })
 
@@ -113,6 +133,38 @@ describe('SessionRecord type', () => {
   })
 })
 
+describe('SessionAgentRecord type', () => {
+  it('conforms to expected shape', () => {
+    const agent: SessionAgentRecord = {
+      id: 'agent-1',
+      sessionId: 'session-1',
+      name: 'Planner',
+      role: 'Coordinates the session',
+      kind: 'coordinator',
+      status: 'running',
+      avatarColor: '#0088cc',
+      delegatedBy: 'agent-0',
+      currentTask: 'Break down the next step',
+      sortOrder: 1,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:05:00Z'
+    }
+
+    expect(agent.id).toBe('agent-1')
+    expect(agent.sessionId).toBe('session-1')
+    expect(agent.name).toBe('Planner')
+    expect(agent.role).toBe('Coordinates the session')
+    expect(agent.kind).toBe('coordinator')
+    expect(agent.status).toBe('running')
+    expect(agent.avatarColor).toBe('#0088cc')
+    expect(agent.delegatedBy).toBe('agent-0')
+    expect(agent.currentTask).toBe('Break down the next step')
+    expect(agent.sortOrder).toBe(1)
+    expect(agent.createdAt).toBe('2026-01-01T00:00:00Z')
+    expect(agent.updatedAt).toBe('2026-01-01T00:05:00Z')
+  })
+})
+
 describe('CreateSpaceInput type', () => {
   it('supports managed provisioning payloads for copy-local, clone-github, and new-repo', () => {
     const copyLocal: CreateSpaceInput = {
@@ -144,8 +196,7 @@ describe('CreateSpaceInput type', () => {
   })
 
   it('supports external mode payloads without managed provisioning method', () => {
-    const input: CreateSpaceInput = {
-      name: 'External Space',
+    const input: Extract<CreateSpaceInput, { workspaceMode: 'external' }> = {
       repoUrl: 'https://github.com/user/repo',
       rootPath: '/Users/me/projects/repo',
       branch: 'main',
@@ -155,7 +206,7 @@ describe('CreateSpaceInput type', () => {
 
     expect(input.workspaceMode).toBe('external')
     expect(input.rootPath).toBe('/Users/me/projects/repo')
-    expect(input.orchestrationMode).toBe('team')
+    expect(input.orchestrationMode as OrchestrationMode).toBe('team')
   })
 })
 
@@ -173,7 +224,7 @@ describe('CreateSessionInput type', () => {
 })
 
 describe('AppState type', () => {
-  it('holds SpaceRecord and SessionRecord records with active selections', () => {
+  it('holds typed records and active selections', () => {
     const space: SpaceRecord = {
       id: 'space-1',
       name: 'Test',
@@ -193,15 +244,32 @@ describe('AppState type', () => {
       createdAt: '2026-01-01T00:00:00Z'
     }
 
+    const agent: SessionAgentRecord = {
+      id: 'agent-1',
+      sessionId: 'session-1',
+      name: 'Planner',
+      role: 'Coordinates the session',
+      kind: 'coordinator',
+      status: 'idle',
+      avatarColor: '#0088cc',
+      sortOrder: 0,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z'
+    }
+
     const state: AppState = {
       spaces: { 'space-1': space },
       sessions: { 'session-1': session },
+      runs: {},
+      agentRoster: { 'agent-1': agent },
       activeSpaceId: 'space-1',
       activeSessionId: 'session-1'
     }
 
     expect(Object.keys(state.spaces)).toHaveLength(1)
     expect(Object.keys(state.sessions)).toHaveLength(1)
+    expect(Object.keys(state.runs)).toHaveLength(0)
+    expect(Object.keys(state.agentRoster)).toHaveLength(1)
     expect(state.activeSpaceId).toBe('space-1')
     expect(state.activeSessionId).toBe('session-1')
   })

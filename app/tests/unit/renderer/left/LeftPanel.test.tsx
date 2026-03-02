@@ -1,12 +1,35 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LeftPanel } from '../../../../src/renderer/components/layout/LeftPanel'
+import { mockAgents } from '../../../../src/renderer/mock/agents'
 import { LEFT_STATUS_SCENARIO_KEY } from '../../../../src/renderer/mock/project'
 
+const mockUseSessionAgentRoster = vi.fn<
+  [string | null],
+  {
+    agents: typeof mockAgents
+    isLoading: boolean
+    error: string | null
+  }
+>()
+
+vi.mock('../../../../src/renderer/hooks/useSessionAgentRoster', () => ({
+  useSessionAgentRoster: (...args: [string | null]) => mockUseSessionAgentRoster(...args)
+}))
+
 describe('LeftPanel', () => {
+  beforeEach(() => {
+    mockUseSessionAgentRoster.mockReturnValue({
+      agents: mockAgents,
+      isLoading: false,
+      error: null
+    })
+  })
+
   afterEach(() => {
     window.localStorage.removeItem(LEFT_STATUS_SCENARIO_KEY)
+    vi.clearAllMocks()
     cleanup()
   })
 
@@ -22,6 +45,20 @@ describe('LeftPanel', () => {
     expect(screen.getByRole('heading', { name: 'Agents' })).toBeTruthy()
     expect(screen.queryByText('Model: gpt-5')).toBeNull()
     expect(screen.queryByText('Tokens: 5,356')).toBeNull()
+  })
+
+  it('uses session roster hook with activeSpaceId and derives the Agents tab count from loaded roster length', () => {
+    const roster = [mockAgents[0], ...(mockAgents[0].children ?? [])]
+    mockUseSessionAgentRoster.mockReturnValue({
+      agents: roster,
+      isLoading: false,
+      error: null
+    })
+
+    render(<LeftPanel activeSpaceId="space-42" />)
+
+    expect(mockUseSessionAgentRoster).toHaveBeenCalledWith('space-42')
+    expect(screen.getByRole('tab', { name: 'Agents' }).getAttribute('title')).toBe(`Agents (${roster.length})`)
   })
 
   it('renders status section above tab content', () => {
@@ -166,6 +203,32 @@ describe('LeftPanel', () => {
 
     expect(content.getAttribute('aria-hidden')).toBe('false')
     expect(content.className).toContain('opacity-100')
+  })
+
+  it('respects controlled collapsed state and only emits onCollapsedChange', () => {
+    const onCollapsedChange = vi.fn()
+    const { rerender } = render(
+      <LeftPanel
+        collapsed
+        onCollapsedChange={onCollapsedChange}
+      />
+    )
+
+    const content = screen.getByTestId('left-panel-content')
+    fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar navigation' }))
+
+    expect(onCollapsedChange).toHaveBeenCalledWith(false)
+    expect(content.getAttribute('aria-hidden')).toBe('true')
+
+    rerender(
+      <LeftPanel
+        collapsed={false}
+        onCollapsedChange={onCollapsedChange}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar navigation' }))
+    expect(onCollapsedChange).toHaveBeenCalledWith(true)
   })
 
   it('does not render the theme toggle when theme is provided without onToggleTheme', () => {

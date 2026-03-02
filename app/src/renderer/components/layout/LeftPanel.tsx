@@ -3,10 +3,10 @@ import { ChevronDown, Folder, GitBranch, House, Layers3, Moon, PanelLeftClose, P
 
 import logoDark from '../../assets/brand/icon-dark.svg'
 import logoLight from '../../assets/brand/icon-light.svg'
-import { mockAgents } from '../../mock/agents'
 import { mockFiles } from '../../mock/files'
 import { mockGit } from '../../mock/git'
 import { getMockProject } from '../../mock/project'
+import { useSessionAgentRoster } from '../../hooks/useSessionAgentRoster'
 import { AgentsTab } from '../left/AgentsTab'
 import { ChangesTab, getChangesTabCount } from '../left/ChangesTab'
 import { ContextTab, getContextTabCount } from '../left/ContextTab'
@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 type LeftPanelTab = 'agents' | 'context' | 'changes' | 'files'
 
 type LeftPanelProps = {
+  activeSpaceId?: string | null
   collapsed?: boolean
   onCollapsedChange?: (collapsed: boolean) => void
   theme?: 'dark' | 'light'
@@ -62,11 +63,19 @@ function nextPreviewState(current: PreviewState): PreviewState {
   return PREVIEW_CYCLE[current] ?? 0
 }
 
-export function LeftPanel({ collapsed, onCollapsedChange, theme, onToggleTheme, onOpenHome }: LeftPanelProps = {}) {
+export function LeftPanel({
+  activeSpaceId,
+  collapsed,
+  onCollapsedChange,
+  theme,
+  onToggleTheme,
+  onOpenHome
+}: LeftPanelProps = {}) {
   const [activeTab, setActiveTab] = useState<LeftPanelTab>('agents')
   const [internalCollapsed, setInternalCollapsed] = useState(false)
   const [previewState, setPreviewState] = useState<PreviewState>(0)
   const project = useMemo(() => getMockProject(), [])
+  const { agents, isLoading: isAgentsLoading, error: agentsError } = useSessionAgentRoster(activeSpaceId ?? null)
   const statusTasks = previewState === 0 ? project.tasks : previewTasks[previewState]
   const contextTabCount = getContextTabCount(previewState, project.tasks.length)
   const changesTabCount = getChangesTabCount(previewState, mockGit)
@@ -82,12 +91,12 @@ export function LeftPanel({ collapsed, onCollapsedChange, theme, onToggleTheme, 
 
   const tabs = useMemo(
     () => [
-      { id: 'agents', label: 'Agents', icon: Users, count: mockAgents.length },
+      { id: 'agents', label: 'Agents', icon: Users, count: agents.length },
       { id: 'context', label: 'Context', icon: Layers3, count: contextTabCount },
       { id: 'changes', label: 'Changes', icon: GitBranch, count: changesTabCount },
       { id: 'files', label: 'Files', icon: Folder, count: mockFiles.length }
     ] satisfies Array<{ id: LeftPanelTab; label: string; icon: ComponentType<{ className?: string }>; count: number }>,
-    [changesTabCount, contextTabCount]
+    [agents.length, changesTabCount, contextTabCount]
   )
 
   return (
@@ -222,7 +231,11 @@ export function LeftPanel({ collapsed, onCollapsedChange, theme, onToggleTheme, 
           <ScrollArea className="min-h-0 flex-1">
             <div className="py-4 pl-4 pr-2">
               {activeTab === 'agents' ? (
-                <AgentsTab agents={mockAgents} />
+                <AgentsTab
+                  agents={agents}
+                  isLoading={isAgentsLoading}
+                  error={agentsError}
+                />
               ) : null}
               {activeTab === 'context' ? (
                 <ContextTab

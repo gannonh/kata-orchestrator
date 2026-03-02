@@ -102,6 +102,63 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith('session:create', sessionInput)
   })
 
+  it('exposes sessionAgentRosterList and invokes the session-agent-roster:list channel', async () => {
+    const mockRoster = [
+      {
+        id: 'agent-1',
+        sessionId: 'session-1',
+        name: 'Coordinator',
+        role: 'Coordinate work',
+        kind: 'coordinator',
+        status: 'running',
+        avatarColor: '#123456',
+        currentTask: 'Dispatching',
+        sortOrder: 0,
+        createdAt: 'now',
+        updatedAt: 'now'
+      }
+    ]
+
+    await import('../../../src/preload/index')
+
+    const [, api] = exposeInMainWorld.mock.calls[0] as [
+      string,
+      {
+        sessionAgentRosterList: (input: { sessionId: string }) => Promise<unknown>
+      }
+    ]
+
+    invoke.mockResolvedValueOnce(mockRoster)
+
+    await expect(api.sessionAgentRosterList({ sessionId: 'session-1' })).resolves.toEqual(mockRoster)
+    expect(invoke).toHaveBeenCalledWith('session-agent-roster:list', { sessionId: 'session-1' })
+  })
+
+  it('exposes sessionListBySpace and invokes the session:listBySpace channel', async () => {
+    const mockSessions = [
+      {
+        id: 'session-1',
+        spaceId: 'space-1',
+        label: 'Build session',
+        createdAt: 'now'
+      }
+    ]
+
+    await import('../../../src/preload/index')
+
+    const [, api] = exposeInMainWorld.mock.calls[0] as [
+      string,
+      {
+        sessionListBySpace: (input: { spaceId: string }) => Promise<unknown>
+      }
+    ]
+
+    invoke.mockResolvedValueOnce(mockSessions)
+
+    await expect(api.sessionListBySpace({ spaceId: 'space-1' })).resolves.toEqual(mockSessions)
+    expect(invoke).toHaveBeenCalledWith('session:listBySpace', { spaceId: 'space-1' })
+  })
+
   it('returns false when external open invoke throws', async () => {
     invoke.mockRejectedValue(new Error('ipc unavailable'))
 
@@ -130,7 +187,7 @@ describe('preload bridge', () => {
         authStatus: (provider: string) => Promise<unknown>
         authLogin: (provider: string) => Promise<unknown>
         authLogout: (provider: string) => Promise<unknown>
-        modelList: () => Promise<unknown>
+        modelList: () => Promise<Array<{ provider: string; modelId: string; name: string; authStatus: 'oauth' | 'api_key' | 'none' }>>
       }
     ]
 
@@ -174,8 +231,9 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith('auth:logout', { provider: 'anthropic' })
 
     // modelList
-    invoke.mockResolvedValueOnce([{ provider: 'anthropic', modelId: 'm', name: 'Model', authStatus: 'api_key' }])
-    await expect(api.modelList()).resolves.toHaveLength(1)
+    const mockModels = [{ provider: 'anthropic', modelId: 'm', name: 'Model', authStatus: 'api_key' as const }]
+    invoke.mockResolvedValueOnce(mockModels)
+    await expect(api.modelList()).resolves.toEqual(mockModels)
     expect(invoke).toHaveBeenCalledWith('model:list')
   })
 

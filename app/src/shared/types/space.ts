@@ -32,6 +32,27 @@ export type SessionRecord = {
   activeModelId?: string
 }
 
+export const SESSION_AGENT_STATUSES = ['idle', 'running', 'blocked', 'complete'] as const
+export type SessionAgentStatus = (typeof SESSION_AGENT_STATUSES)[number]
+
+export const SESSION_AGENT_KINDS = ['system', 'coordinator', 'specialist'] as const
+export type SessionAgentKind = (typeof SESSION_AGENT_KINDS)[number]
+
+export type SessionAgentRecord = {
+  id: string
+  sessionId: string
+  name: string
+  role: string
+  kind: SessionAgentKind
+  status: SessionAgentStatus
+  avatarColor: string
+  delegatedBy?: string
+  currentTask?: string
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
 export type CreateSpaceInput = {
   repoUrl: string
   branch: string
@@ -70,6 +91,7 @@ export type AppState = {
   spaces: Record<string, SpaceRecord>
   sessions: Record<string, SessionRecord>
   runs: Record<string, RunRecord>
+  agentRoster: Record<string, SessionAgentRecord>
   activeSpaceId: string | null
   activeSessionId: string | null
 }
@@ -79,6 +101,7 @@ export function createDefaultAppState(): AppState {
     spaces: {},
     sessions: {},
     runs: {},
+    agentRoster: {},
     activeSpaceId: null,
     activeSessionId: null
   }

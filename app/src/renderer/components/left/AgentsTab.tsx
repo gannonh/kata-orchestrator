@@ -9,17 +9,34 @@ import { statusDotClassName } from './agentStatus'
 
 type AgentsTabProps = {
   agents: AgentSummary[]
+  isLoading?: boolean
+  error?: string | null
 }
 
-export function AgentsTab({ agents }: AgentsTabProps) {
+export function AgentsTab({ agents, isLoading = false, error = null }: AgentsTabProps) {
   const [backgroundExpanded, setBackgroundExpanded] = useState(false)
 
-  const coordinator = agents[0]
-  const backgroundAgents = useMemo(() => {
-    if (!coordinator) {
-      return []
+  const { primaryAgents, backgroundAgents } = useMemo(() => {
+    const delegatedTopLevel = agents.filter((agent) => Boolean(agent.delegatedBy))
+    const legacyChildren = agents.flatMap((agent) => agent.children ?? [])
+    const legacyChildIds = new Set(legacyChildren.map((agent) => agent.id))
+
+    const primary = agents.filter((agent) => !agent.delegatedBy && !legacyChildIds.has(agent.id))
+    const backgroundSource = legacyChildren.length ? [...legacyChildren, ...delegatedTopLevel] : delegatedTopLevel
+
+    const seenBackgroundIds = new Set<string>()
+    const background = backgroundSource.filter((agent) => {
+      if (seenBackgroundIds.has(agent.id)) {
+        return false
+      }
+      seenBackgroundIds.add(agent.id)
+      return true
+    })
+
+    return {
+      primaryAgents: primary,
+      backgroundAgents: background
     }
-    return coordinator.children ?? agents.slice(1)
   }, [agents])
   const runningCount = backgroundAgents.filter((agent) => agent.status === 'running').length
 
@@ -30,9 +47,22 @@ export function AgentsTab({ agents }: AgentsTabProps) {
       addActionLabel="Create new agent"
     >
       <div className="space-y-3 pr-0">
-        {coordinator ? (
-          <AgentCard agent={coordinator} />
+        {isLoading ? (
+          <p className="text-xs text-muted-foreground">Loading agents…</p>
         ) : null}
+        {error ? (
+          <p className="text-xs text-muted-foreground">Unable to refresh agents right now.</p>
+        ) : null}
+        {!isLoading && agents.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No agents in this space yet.</p>
+        ) : null}
+
+        {primaryAgents.map((agent) => (
+          <AgentCard
+            key={agent.id}
+            agent={agent}
+          />
+        ))}
 
         {backgroundAgents.length ? (
           <Collapsible

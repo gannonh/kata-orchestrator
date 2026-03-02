@@ -73,7 +73,7 @@ test.describe('Wave 1 desktop shell UAT @uat', () => {
     assertDefined(rightAfterLeft)
 
     await rightResizer.focus()
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 8; index += 1) {
       await rightResizer.press('ArrowRight')
     }
 
@@ -112,20 +112,10 @@ test.describe('Wave 1 desktop shell UAT @uat', () => {
     const centerPanel = appWindow.getByTestId('center-panel')
     const rightPanel = appWindow.getByTestId('right-panel')
     const rightResizer = appWindow.getByTestId('right-resizer')
-    const rightResizerBox = await rightResizer.boundingBox()
-    assertDefined(rightResizerBox)
-
-    await appWindow.mouse.move(
-      rightResizerBox.x + rightResizerBox.width / 2,
-      rightResizerBox.y + rightResizerBox.height / 2
-    )
-    await appWindow.mouse.down()
-    await appWindow.mouse.move(
-      rightResizerBox.x + rightResizerBox.width / 2 - 120,
-      rightResizerBox.y + rightResizerBox.height / 2,
-      { steps: 12 }
-    )
-    await appWindow.mouse.up()
+    await rightResizer.focus()
+    for (let index = 0; index < 4; index += 1) {
+      await rightResizer.press('ArrowRight')
+    }
 
     await expect.poll(async () => {
       const center = await centerPanel.boundingBox()

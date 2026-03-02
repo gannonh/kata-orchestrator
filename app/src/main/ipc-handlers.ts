@@ -35,6 +35,7 @@ import type {
   CreateSpaceInput,
   OrchestrationMode,
   ProvisioningMethod,
+  SessionAgentRecord,
   SessionRecord,
   SpaceRecord,
   WorkspaceMode
@@ -45,6 +46,8 @@ const SPACE_CREATE_CHANNEL = 'space:create'
 const SPACE_LIST_CHANNEL = 'space:list'
 const SPACE_GET_CHANNEL = 'space:get'
 const SESSION_CREATE_CHANNEL = 'session:create'
+const SESSION_AGENT_ROSTER_LIST_CHANNEL = 'session-agent-roster:list'
+const SESSION_LIST_BY_SPACE_CHANNEL = 'session:listBySpace'
 const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
 const GIT_LIST_BRANCHES_CHANNEL = 'git:listBranches'
 const GITHUB_LIST_REPOS_CHANNEL = 'github:listRepos'
@@ -226,6 +229,51 @@ function parseCreateSessionInput(input: unknown): CreateSessionInput {
   return { spaceId, label }
 }
 
+function parseSessionAgentRosterListInput(input: unknown): { sessionId: string } {
+  if (!isObjectRecord(input) || typeof input.sessionId !== 'string') {
+    throw new Error('session-agent-roster:list input must be an object with string sessionId')
+  }
+
+  return { sessionId: input.sessionId }
+}
+
+function parseSessionListBySpaceInput(input: unknown): { spaceId: string } {
+  if (!isObjectRecord(input) || typeof input.spaceId !== 'string') {
+    throw new Error('session:listBySpace input must be an object with string spaceId')
+  }
+
+  return { spaceId: input.spaceId }
+}
+
+function createBaselineSessionAgentRoster(sessionId: string, createdAt: string): SessionAgentRecord[] {
+  return [
+    {
+      id: randomUUID(),
+      sessionId,
+      name: 'Kata Agents',
+      role: 'System-managed agent group',
+      kind: 'system',
+      status: 'idle',
+      avatarColor: '#334155',
+      sortOrder: 0,
+      createdAt,
+      updatedAt: createdAt
+    },
+    {
+      id: randomUUID(),
+      sessionId,
+      name: 'MVP Planning Coordinator',
+      role: 'Coordinates MVP planning tasks',
+      kind: 'coordinator',
+      status: 'idle',
+      avatarColor: '#0f766e',
+      sortOrder: 1,
+      createdAt,
+      updatedAt: createdAt
+    }
+  ]
+}
+
 function deriveRepoLabel(input: ParsedCreateSpaceInput): string {
   if (input.workspaceMode === 'external') {
     return extractRepoLabel(input.repoUrl)
@@ -259,6 +307,8 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
   ipcMain.removeHandler(SPACE_LIST_CHANNEL)
   ipcMain.removeHandler(SPACE_GET_CHANNEL)
   ipcMain.removeHandler(SESSION_CREATE_CHANNEL)
+  ipcMain.removeHandler(SESSION_AGENT_ROSTER_LIST_CHANNEL)
+  ipcMain.removeHandler(SESSION_LIST_BY_SPACE_CHANNEL)
 
   ipcMain.handle(OPEN_EXTERNAL_URL_CHANNEL, async (_event, url: unknown) => {
     if (!isExternalHttpUrl(url)) {
@@ -357,15 +407,45 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       label: parsedInput.label,
       createdAt: new Date().toISOString()
     }
+    const baselineRosterEntries = createBaselineSessionAgentRoster(
+      createdSession.id,
+      createdSession.createdAt
+    )
 
     stateStore.save({
       ...state,
       sessions: { ...state.sessions, [createdSession.id]: createdSession },
+      agentRoster: {
+        ...state.agentRoster,
+        ...Object.fromEntries(baselineRosterEntries.map((entry) => [entry.id, entry]))
+      },
       activeSpaceId: parsedInput.spaceId,
       activeSessionId: createdSession.id
     })
 
     return createdSession
+  })
+
+  ipcMain.handle(SESSION_AGENT_ROSTER_LIST_CHANNEL, async (_event, input: unknown) => {
+    const { sessionId } = parseSessionAgentRosterListInput(input)
+
+    return Object.values(stateStore.load().agentRoster)
+      .filter((entry) => entry.sessionId === sessionId)
+      .sort((left, right) => {
+        if (left.sortOrder !== right.sortOrder) {
+          return left.sortOrder - right.sortOrder
+        }
+
+        return left.createdAt.localeCompare(right.createdAt)
+      })
+  })
+
+  ipcMain.handle(SESSION_LIST_BY_SPACE_CHANNEL, async (_event, input: unknown) => {
+    const { spaceId } = parseSessionListBySpaceInput(input)
+
+    return Object.values(stateStore.load().sessions)
+      .filter((session) => session.spaceId === spaceId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   })
 
   ipcMain.removeHandler(DIALOG_OPEN_DIR_CHANNEL)

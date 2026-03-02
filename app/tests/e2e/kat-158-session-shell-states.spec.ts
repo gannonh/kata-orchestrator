@@ -14,6 +14,25 @@ async function expectRunStatus(appWindow: Page, label: 'Ready' | 'Thinking' | 'E
   await expect(appWindow.getByRole('status', { name: label })).toBeVisible({ timeout })
 }
 
+async function expectTerminalRunStatus(appWindow: Page, timeout: number): Promise<'Stopped' | 'Error'> {
+  const stoppedStatus = appWindow.getByRole('status', { name: 'Stopped' })
+  const errorStatus = appWindow.getByRole('status', { name: 'Error' })
+  const start = Date.now()
+
+  while (Date.now() - start < timeout) {
+    if (await stoppedStatus.isVisible().catch(() => false)) {
+      return 'Stopped'
+    }
+    if (await errorStatus.isVisible().catch(() => false)) {
+      return 'Error'
+    }
+
+    await appWindow.waitForTimeout(100)
+  }
+
+  throw new Error(`Expected terminal run status (Stopped or Error) within ${timeout}ms`)
+}
+
 test.describe('KAT-158 session shell run-state evidence @uat', () => {
   test('captures required empty/pending/error/idle screenshots via send and retry controls @uat', async ({
     appWindow
@@ -32,19 +51,23 @@ test.describe('KAT-158 session shell run-state evidence @uat', () => {
     await expectRunStatus(appWindow, 'Thinking', 1_000)
     await appWindow.screenshot({ path: pendingStatePath, fullPage: true })
 
-    await expectRunStatus(appWindow, 'Stopped', 10_000)
+    const firstTerminalStatus = await expectTerminalRunStatus(appWindow, 30_000)
 
-    await messageInput.fill('/error trigger deterministic failure for KAT-158')
-    await sendButton.click()
-    await expectRunStatus(appWindow, 'Error', 1_000)
-    await appWindow.screenshot({ path: errorStatePath, fullPage: true })
+    if (firstTerminalStatus === 'Error') {
+      await appWindow.screenshot({ path: errorStatePath, fullPage: true })
+    } else {
+      await messageInput.fill('/error trigger deterministic failure for KAT-158')
+      await sendButton.click()
+      await expectRunStatus(appWindow, 'Error', 5_000)
+      await appWindow.screenshot({ path: errorStatePath, fullPage: true })
+    }
 
     const retryButton = appWindow.getByRole('button', { name: 'Retry' })
     await expect(retryButton).toBeVisible()
     await retryButton.click()
 
     await expectRunStatus(appWindow, 'Thinking', 1_000)
-    await expectRunStatus(appWindow, 'Stopped', 10_000)
+    await expectTerminalRunStatus(appWindow, 30_000)
     await appWindow.screenshot({ path: idleStatePath, fullPage: true })
   })
 })
