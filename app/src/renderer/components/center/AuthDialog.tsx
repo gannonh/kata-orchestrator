@@ -9,7 +9,7 @@ export function AuthDialog({ open, onClose }: AuthDialogProps) {
   if (!open) return null
 
   const handleLogin = (provider: string) => {
-    window.kata?.authLogin(provider)
+    window.kata?.authLogin?.(provider)
   }
 
   return (
