@@ -58,6 +58,7 @@ const AUTH_LOGOUT_CHANNEL = 'auth:logout'
 const MODEL_LIST_CHANNEL = 'model:list'
 
 const SUPPORTED_MODELS = [
+  { provider: 'openai-codex', modelId: 'gpt-5.3-codex', name: 'GPT-5.3 Codex' },
   { provider: 'anthropic', modelId: 'claude-sonnet-4-6-20250514', name: 'Claude Sonnet 4.6' },
   { provider: 'anthropic', modelId: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
   { provider: 'openai', modelId: 'gpt-4.1-2025-04-14', name: 'GPT-4.1' },
@@ -504,6 +505,7 @@ export function registerIpcHandlers(store?: StateStore, options?: RegisterIpcOpt
 
     activeRunners.set(run.id, runner)
     runner.execute(prompt).catch(() => {
+      updateRunStatus(stateStore, run.id, 'failed', 'Run execution failed unexpectedly')
       activeRunners.delete(run.id)
     })
 

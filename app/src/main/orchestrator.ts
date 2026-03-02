@@ -11,6 +11,9 @@ export type CreateRunInput = {
 
 export function createRun(store: StateStore, input: CreateRunInput): RunRecord {
   const state = store.load()
+  if (!state.sessions[input.sessionId]) {
+    throw new Error(`Session not found: ${input.sessionId}`)
+  }
   const now = new Date().toISOString()
   const run: RunRecord = {
     id: randomUUID(),

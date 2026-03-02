@@ -74,7 +74,12 @@ function isAppState(value: unknown): value is AppState {
     return false
   }
 
-  if (!isRecord(value.spaces) || !isRecord(value.sessions) || !isRecord(value.runs)) {
+  if (!isRecord(value.spaces) || !isRecord(value.sessions)) {
+    return false
+  }
+
+  // Tolerate state files that predate the runs field (backward compat).
+  if (value.runs !== undefined && !isRecord(value.runs)) {
     return false
   }
 
@@ -82,10 +87,12 @@ function isAppState(value: unknown): value is AppState {
     return false
   }
 
+  const runs = value.runs ?? {}
+
   return (
     Object.values(value.spaces).every(isSpaceRecord) &&
     Object.values(value.sessions).every(isSessionRecord) &&
-    Object.values(value.runs).every(isRunRecord)
+    Object.values(runs).every(isRunRecord)
   )
 }
 
@@ -125,6 +132,11 @@ export function createStateStore(filePath: string): StateStore {
       if (!isAppState(parsed)) {
         console.warn('[StateStore] State file failed schema validation, returning default state:', filePath)
         return createDefaultAppState()
+      }
+
+      // Default runs for state files that predate the field
+      if (!parsed.runs) {
+        parsed.runs = {}
       }
 
       return parsed

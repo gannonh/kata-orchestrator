@@ -8,7 +8,7 @@ import type { RunRecord } from '@shared/types/run'
 import type { SessionRuntimeEvent } from './session-runtime-adapter'
 
 type Repo = { name: string; nameWithOwner: string; url: string }
-type ModelInfo = { provider: string; modelId: string; name: string; authStatus: string }
+type ModelInfo = { provider: string; modelId: string; name: string; authStatus: 'oauth' | 'api_key' | 'none' }
 
 declare global {
   interface Window {

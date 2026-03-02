@@ -1096,6 +1096,7 @@ describe('registerIpcHandlers', () => {
 
     it('returns supported models with auth status', async () => {
       mockCredentialResolver.getAuthStatus
+        .mockResolvedValueOnce('none')     // openai-codex
         .mockResolvedValueOnce('api_key')  // anthropic (first model)
         .mockResolvedValueOnce('api_key')  // anthropic (second model)
         .mockResolvedValueOnce('none')     // openai (first model)
@@ -1105,9 +1106,10 @@ describe('registerIpcHandlers', () => {
       const handler = getHandlersByChannel().get('model:list')!
       const result = await handler(null) as Array<{ provider: string; modelId: string; name: string; authStatus: string }>
 
-      expect(result).toHaveLength(4)
-      expect(result[0]).toMatchObject({ provider: 'anthropic', authStatus: 'api_key' })
-      expect(result[2]).toMatchObject({ provider: 'openai', authStatus: 'none' })
+      expect(result).toHaveLength(5)
+      expect(result[0]).toMatchObject({ provider: 'openai-codex', authStatus: 'none' })
+      expect(result[1]).toMatchObject({ provider: 'anthropic', authStatus: 'api_key' })
+      expect(result[3]).toMatchObject({ provider: 'openai', authStatus: 'none' })
     })
 
     it('returns all models with none status when no credential resolver', async () => {

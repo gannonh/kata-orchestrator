@@ -172,7 +172,7 @@ describe('createStateStore', () => {
     expect(state).toEqual(createDefaultAppState())
   })
 
-  test('returns default state when runs field is missing', () => {
+  test('loads state and defaults runs to {} when runs field is missing', () => {
     fs.writeFileSync(
       filePath,
       JSON.stringify({
@@ -185,7 +185,13 @@ describe('createStateStore', () => {
 
     const store = createStateStore(filePath)
     const state = store.load()
-    expect(state).toEqual(createDefaultAppState())
+    expect(state).toEqual({
+      spaces: {},
+      sessions: {},
+      runs: {},
+      activeSpaceId: null,
+      activeSessionId: null
+    })
   })
 
   test('rethrows non-ENOENT file system errors when loading', () => {

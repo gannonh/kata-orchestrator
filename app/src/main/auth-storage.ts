@@ -21,8 +21,9 @@ function readData(filePath: string): AuthData {
     return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
       ? (parsed as AuthData)
       : {}
-  } catch {
-    return {}
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
+    throw error
   }
 }
 
@@ -42,14 +43,22 @@ function ensureFileExists(filePath: string): void {
   }
 }
 
+function assertSafeKey(provider: string): void {
+  if (!provider || provider === '__proto__' || provider === 'constructor' || provider === 'prototype') {
+    throw new Error(`Invalid provider key: ${provider}`)
+  }
+}
+
 export function createAuthStorage(filePath: string): AuthStorage {
   return {
     async get(provider) {
+      assertSafeKey(provider)
       const data = readData(filePath)
       return data[provider] ?? null
     },
 
     async set(provider, credential) {
+      assertSafeKey(provider)
       ensureFileExists(filePath)
       const release = await lock(filePath, { retries: { retries: 3, minTimeout: 100 } })
       try {
@@ -62,6 +71,7 @@ export function createAuthStorage(filePath: string): AuthStorage {
     },
 
     async remove(provider) {
+      assertSafeKey(provider)
       ensureFileExists(filePath)
       const release = await lock(filePath, { retries: { retries: 3, minTimeout: 100 } })
       try {

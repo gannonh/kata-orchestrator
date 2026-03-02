@@ -36,6 +36,9 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
 
   return {
     async execute(prompt) {
+      aborted = false
+      runFailed = false
+
       // getModel is strongly typed with known provider/model combos.
       // At runtime the user picks arbitrary strings, so we cast through
       // the KnownProvider type and let getModel throw if invalid.

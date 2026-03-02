@@ -25,6 +25,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks()
+  // Reset implementations to defaults so rejection setups don't bleed across tests
+  mockRunSubmit.mockResolvedValue({ runId: 'run-1' })
+  mockRunList.mockResolvedValue([])
   delete (window as any).kata
 })
 

@@ -408,11 +408,13 @@ describe('AgentRunner', () => {
     expect((errorEvent as { errorMessage: string }).errorMessage).toBe('Unknown error')
   })
 
-  it('suppresses events after abort', async () => {
+  it('suppresses events after abort during execution', async () => {
+    let abortRunner: (() => void) | null = null
     mockPrompt.mockReset().mockImplementation(async () => {
+      // Abort mid-execution
+      abortRunner?.()
       if (subscribeCallback) {
         subscribeCallback({ type: 'agent_start' })
-        // These events arrive after abort
         subscribeCallback({
           type: 'message_end',
           message: {
@@ -447,16 +449,19 @@ describe('AgentRunner', () => {
       onEvent: (event) => events.push(event)
     })
 
-    // Abort before execute so events during execute are suppressed
-    runner.abort()
+    abortRunner = () => runner.abort()
     await runner.execute('test')
 
     const msgEvents = events.filter((e) => e.type === 'message_appended')
     expect(msgEvents).toHaveLength(0)
   })
 
-  it('does not emit error event when prompt rejects after abort', async () => {
-    mockPrompt.mockReset().mockRejectedValue(new Error('late failure'))
+  it('does not emit error event when prompt rejects after abort during execution', async () => {
+    let abortRunner: (() => void) | null = null
+    mockPrompt.mockReset().mockImplementation(async () => {
+      abortRunner?.()
+      throw new Error('late failure')
+    })
 
     const { createAgentRunner } = await import('../../../src/main/agent-runner')
     const events: SessionRuntimeEvent[] = []
@@ -469,7 +474,7 @@ describe('AgentRunner', () => {
       onEvent: (event) => events.push(event)
     })
 
-    runner.abort()
+    abortRunner = () => runner.abort()
     await runner.execute('test')
 
     const errorEvent = events.find(

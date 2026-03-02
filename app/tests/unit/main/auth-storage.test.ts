@@ -62,6 +62,20 @@ describe('AuthStorage', () => {
     expect(loaded).toEqual({ type: 'api_key', key: 'sk-ant-test' })
   })
 
+  it('rejects __proto__ as provider key', async () => {
+    await expect(storage.get('__proto__')).rejects.toThrow('Invalid provider key')
+    await expect(storage.set('__proto__', { type: 'api_key', key: 'k' })).rejects.toThrow('Invalid provider key')
+    await expect(storage.remove('__proto__')).rejects.toThrow('Invalid provider key')
+  })
+
+  it('rejects constructor as provider key', async () => {
+    await expect(storage.get('constructor')).rejects.toThrow('Invalid provider key')
+  })
+
+  it('rejects empty string as provider key', async () => {
+    await expect(storage.get('')).rejects.toThrow('Invalid provider key')
+  })
+
   it('handles concurrent access without corruption', async () => {
     const s1 = createAuthStorage(authPath)
     const s2 = createAuthStorage(authPath)

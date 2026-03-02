@@ -58,6 +58,19 @@ describe('Orchestrator', () => {
     expect(state.runs[run.id]).toBeDefined()
   })
 
+  it('createRun throws for unknown sessionId', async () => {
+    const { createRun } = await import('../../../src/main/orchestrator')
+
+    expect(() =>
+      createRun(store, {
+        sessionId: 'nonexistent',
+        prompt: 'test',
+        model: 'm',
+        provider: 'p'
+      })
+    ).toThrow('Session not found: nonexistent')
+  })
+
   it('updateRunStatus transitions and persists', async () => {
     const { createRun, updateRunStatus } = await import('../../../src/main/orchestrator')
 
@@ -146,6 +159,13 @@ describe('Orchestrator', () => {
   it('getRunsForSession returns runs filtered by sessionId', async () => {
     const { createRun, getRunsForSession } = await import('../../../src/main/orchestrator')
 
+    // Add a second session so the filter test is meaningful
+    state.sessions['s-other'] = {
+      id: 's-other',
+      spaceId: 'sp-1',
+      label: 'Other',
+      createdAt: '2026-03-01T00:00:00Z'
+    }
     createRun(store, { sessionId: 's-1', prompt: 'a', model: 'm', provider: 'p' })
     createRun(store, { sessionId: 's-1', prompt: 'b', model: 'm', provider: 'p' })
     createRun(store, { sessionId: 's-other', prompt: 'c', model: 'm', provider: 'p' })
