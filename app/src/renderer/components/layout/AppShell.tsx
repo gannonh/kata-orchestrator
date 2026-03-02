@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { LeftPanel } from './LeftPanel'
 import { CenterPanel } from '../center/CenterPanel'
-import { MockChatPanel } from '../center/MockChatPanel'
+import { ChatPanel } from '../center/ChatPanel'
 import { PanelResizer } from './PanelResizer'
 import { RightPanel } from './RightPanel'
 
@@ -18,6 +18,7 @@ type Theme = 'dark' | 'light'
 type DocumentSplit = { center: number; right: number }
 type AppShellProps = {
   activeSpaceId?: string | null
+  activeSessionId?: string | null
   onOpenHome?: () => void
 }
 
@@ -51,7 +52,7 @@ function getDocumentSplit(documentWidth: number, offset: number): DocumentSplit 
   }
 }
 
-export function AppShell({ activeSpaceId, onOpenHome }: AppShellProps = {}) {
+export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShellProps = {}) {
   const shellRef = useRef<HTMLDivElement | null>(null)
   const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT)
   const [centerRightOffset, setCenterRightOffset] = useState(0)
@@ -152,7 +153,6 @@ export function AppShell({ activeSpaceId, onOpenHome }: AppShellProps = {}) {
   return (
     <main
       data-testid="app-shell-root"
-      // TODO(KAT-65): Use activeSpaceId to load space data via IPC once persistence is wired.
       data-active-space-id={activeSpaceId ?? ''}
       className="h-screen w-screen overflow-hidden bg-background text-foreground"
     >
@@ -189,7 +189,7 @@ export function AppShell({ activeSpaceId, onOpenHome }: AppShellProps = {}) {
         )}
 
         <CenterPanel>
-          <MockChatPanel />
+          <ChatPanel sessionId={activeSessionId ?? null} />
         </CenterPanel>
 
         <PanelResizer

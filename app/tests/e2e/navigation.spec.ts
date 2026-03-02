@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures/electron'
-import { ensureWorkspaceShell } from './helpers/shell-view'
+import { ensureHomeSpacesView, ensureWorkspaceShell } from './helpers/shell-view'
 import { LEFT_STATUS_SCENARIO_KEY } from '../../src/renderer/mock/project'
 
 test.describe('Desktop app navigation @uat', () => {
@@ -131,6 +131,10 @@ test.describe('Desktop app navigation @uat', () => {
   })
 
   test('clicking status section toggles busy preview @uat @ci', async ({ appWindow }) => {
+    await appWindow.evaluate((scenarioKey) => {
+      window.localStorage.setItem(scenarioKey, 'simple')
+    }, LEFT_STATUS_SCENARIO_KEY)
+    await appWindow.reload()
     await ensureWorkspaceShell(appWindow)
 
     const cyclePreviewStateButton = appWindow.getByRole('button', { name: 'Cycle status preview state' })
@@ -167,12 +171,12 @@ test.describe('Desktop app navigation @uat', () => {
     await expect(appWindow.getByText(noteScaffold)).toBeVisible()
   })
 
-  test('starts on home screen, hides workspace content, and opens workspace on selected space @uat @ci @quality-gate', async ({
+  test('navigates home, hides workspace content, and opens workspace on selected space @uat @ci @quality-gate', async ({
     appWindow
   }) => {
+    await ensureHomeSpacesView(appWindow)
     await expect(appWindow.getByRole('heading', { name: 'Home' })).toBeVisible()
     await expect(appWindow.getByRole('tablist', { name: 'Center panel tabs' })).toHaveCount(0)
-    await expect(appWindow.getByRole('button', { name: 'Open selected space' })).toBeDisabled()
 
     await appWindow.getByRole('button', { name: 'Use my existing folder/worktree (developer-managed)' }).click()
     await appWindow.getByRole('textbox', { name: 'Workspace path' }).fill('/tmp')

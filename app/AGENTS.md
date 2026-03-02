@@ -266,3 +266,42 @@ About, Alert & Dialog, Avatar, Blog, Button, Card, Chart, Contact, Content, CTA,
 ## Validating Work
 
 - In addition to unit and e2e tests, validate your work using agent-browser and / or playwright cli. Use screenshots and video as proof when applicable.
+
+### Agent-browser (Electron) workflow
+
+Use this workflow when validating the desktop app with `agent-browser`.
+
+1. Start Electron with CDP in a dedicated terminal and keep it running:
+
+```bash
+cd app
+npm run dev -- --remote-debugging-port=9222
+```
+
+2. In a second terminal, attach `agent-browser` to that Electron instance:
+
+```bash
+npx agent-browser close
+npx agent-browser connect 9222
+npx agent-browser tab
+npx agent-browser tab 0
+npx agent-browser snapshot -i
+```
+
+3. Run interactions in the same attached session:
+
+```bash
+npx agent-browser fill @e19 "test prompt"
+npx agent-browser click @e21
+npx agent-browser wait 1500
+npx agent-browser get text body
+npx agent-browser screenshot /tmp/kata-uat.png
+```
+
+4. If refs become stale, re-run `snapshot -i` and use the new refs.
+
+Notes:
+- Prefer the default `agent-browser` session for this project. If a named session fails to start, use default and reconnect with `connect 9222`.
+- If no elements are interactable, check tab selection first (`tab`, then `tab 0` for the renderer window).
+- If the Agentation overlay blocks clicks, toggle its `Block page interactions` control off before continuing.
+- For run lifecycle verification, pair UI evidence with persisted state checks in `~/Library/Application Support/kata-orchestrator-desktop-ui/app-state.json`.

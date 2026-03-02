@@ -41,6 +41,7 @@ describe('createStateStore', () => {
         }
       },
       sessions: {},
+      runs: {},
       activeSpaceId: 's1',
       activeSessionId: null
     }
@@ -81,6 +82,7 @@ describe('createStateStore', () => {
       JSON.stringify({
         spaces: {},
         sessions: {},
+        runs: {},
         activeSpaceId: 123,
         activeSessionId: false
       })
@@ -97,6 +99,7 @@ describe('createStateStore', () => {
       JSON.stringify({
         spaces: { s1: 'invalid-space-record' },
         sessions: {},
+        runs: {},
         activeSpaceId: null,
         activeSessionId: null
       })
@@ -113,6 +116,7 @@ describe('createStateStore', () => {
       JSON.stringify({
         spaces: {},
         sessions: { sess1: 'invalid-session-record' },
+        runs: {},
         activeSpaceId: null,
         activeSessionId: null
       })
@@ -121,6 +125,90 @@ describe('createStateStore', () => {
     const store = createStateStore(filePath)
     const state = store.load()
     expect(state).toEqual(createDefaultAppState())
+  })
+
+  test('returns default state when a run record is not an object', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: { r1: 'invalid-run-record' },
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const store = createStateStore(filePath)
+    const state = store.load()
+    expect(state).toEqual(createDefaultAppState())
+  })
+
+  test('returns default state when a run record has invalid status', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {
+          r1: {
+            id: 'r1',
+            sessionId: 's1',
+            prompt: 'test',
+            status: 'invalid-status',
+            model: 'm',
+            provider: 'p',
+            createdAt: '2026-01-01T00:00:00Z',
+            messages: []
+          }
+        },
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const store = createStateStore(filePath)
+    const state = store.load()
+    expect(state).toEqual(createDefaultAppState())
+  })
+
+  test('returns default state when runs is defined but not an object', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: 'not-an-object',
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const store = createStateStore(filePath)
+    const state = store.load()
+    expect(state).toEqual(createDefaultAppState())
+  })
+
+  test('loads state and defaults runs to {} when runs field is missing', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const store = createStateStore(filePath)
+    const state = store.load()
+    expect(state).toEqual({
+      spaces: {},
+      sessions: {},
+      runs: {},
+      activeSpaceId: null,
+      activeSessionId: null
+    })
   })
 
   test('rethrows non-ENOENT file system errors when loading', () => {
@@ -150,6 +238,7 @@ describe('createStateStore', () => {
           createdAt: '2026-02-25T00:00:00Z'
         }
       },
+      runs: {},
       activeSpaceId: null,
       activeSessionId: 'sess1'
     }

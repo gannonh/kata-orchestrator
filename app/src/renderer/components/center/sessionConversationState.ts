@@ -55,6 +55,15 @@ export function sessionConversationReducer(
         runState: 'pending',
         errorMessage: undefined
       }
+    case 'RUN_COMPLETED':
+      if (state.runState !== 'pending') {
+        return state
+      }
+
+      return {
+        ...state,
+        runState: 'idle'
+      }
     default:
       return state
   }

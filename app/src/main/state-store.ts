@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { ORCHESTRATION_MODES, SPACE_STATUSES, WORKSPACE_MODES, createDefaultAppState } from '../shared/types/space'
 import type { AppState } from '../shared/types/space'
+import { RUN_STATUSES } from '../shared/types/run'
 
 export type StateStore = {
   load(): AppState
@@ -49,6 +50,21 @@ function isSessionRecord(value: unknown): boolean {
   )
 }
 
+function isRunRecord(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.id === 'string' &&
+    typeof value.sessionId === 'string' &&
+    typeof value.prompt === 'string' &&
+    typeof value.status === 'string' &&
+    RUN_STATUSES.includes(value.status as (typeof RUN_STATUSES)[number]) &&
+    typeof value.model === 'string' &&
+    typeof value.provider === 'string' &&
+    typeof value.createdAt === 'string' &&
+    Array.isArray(value.messages)
+  )
+}
+
 function isStringOrNull(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
 }
@@ -62,13 +78,21 @@ function isAppState(value: unknown): value is AppState {
     return false
   }
 
+  // Tolerate state files that predate the runs field (backward compat).
+  if (value.runs !== undefined && !isRecord(value.runs)) {
+    return false
+  }
+
   if (!isStringOrNull(value.activeSpaceId) || !isStringOrNull(value.activeSessionId)) {
     return false
   }
 
+  const runs = value.runs ?? {}
+
   return (
     Object.values(value.spaces).every(isSpaceRecord) &&
-    Object.values(value.sessions).every(isSessionRecord)
+    Object.values(value.sessions).every(isSessionRecord) &&
+    Object.values(runs).every(isRunRecord)
   )
 }
 
@@ -108,6 +132,11 @@ export function createStateStore(filePath: string): StateStore {
       if (!isAppState(parsed)) {
         console.warn('[StateStore] State file failed schema validation, returning default state:', filePath)
         return createDefaultAppState()
+      }
+
+      // Default runs for state files that predate the field
+      if (!parsed.runs) {
+        parsed.runs = {}
       }
 
       return parsed

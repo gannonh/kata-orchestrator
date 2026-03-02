@@ -1,8 +1,12 @@
 import { expect, test } from './fixtures/electron'
 import { ensureWorkspaceShell } from './helpers/shell-view'
 
+// KAT-159: MockChatPanel was replaced by ChatPanel wired to useIpcSessionConversation.
+// With sessionId=null (hardcoded in AppShell), submitPrompt early-returns without
+// doing anything. These mock chat tests are superseded by the real run lifecycle
+// tests in kat-159-run-lifecycle.spec.ts.
 test.describe('Desktop mock chat @uat', () => {
-  test('sends a message and receives a streamed assistant reply @uat @ci @quality-gate', async ({ appWindow }) => {
+  test.skip('sends a message and receives a streamed assistant reply @uat @ci @quality-gate', async ({ appWindow }) => {
     await ensureWorkspaceShell(appWindow)
 
     const prompt = 'Please summarize merged wave status.'

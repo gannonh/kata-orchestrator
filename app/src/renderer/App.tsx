@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import { HomeSpacesScreen } from './components/home/HomeSpacesScreen'
 import { AppShell } from './components/layout/AppShell'
@@ -6,18 +6,24 @@ import { ErrorBoundary } from './components/shared/ErrorBoundary'
 
 export function App() {
   const [appView, setAppView] = useState<'workspace' | 'home'>('home')
-  // TODO(KAT-65): activeSpaceId will be used to load space data via IPC. Currently stub-only.
-  // When wiring: add loading state and error handling if the space cannot be found.
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null)
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
 
-  function handleOpenSpace(spaceId: string) {
+  const handleOpenSpace = useCallback((spaceId: string) => {
     setActiveSpaceId(spaceId)
+    setActiveSessionId(null)
     setAppView('workspace')
-  }
 
-  function handleOpenHome() {
+    window.kata?.sessionCreate?.({ spaceId, label: 'Chat' })
+      .then((session) => setActiveSessionId(session.id))
+      .catch(() => {
+        // Session creation failed — ChatPanel stays inert until retry
+      })
+  }, [])
+
+  const handleOpenHome = useCallback(() => {
     setAppView('home')
-  }
+  }, [])
 
   if (appView === 'home') {
     return (
@@ -30,6 +36,7 @@ export function App() {
   return (
     <AppShell
       activeSpaceId={activeSpaceId}
+      activeSessionId={activeSessionId}
       onOpenHome={handleOpenHome}
     />
   )

@@ -24,23 +24,35 @@ type ElectronFixtures = {
   managedStateFilePath: string
 }
 
-export const test = base.extend<ElectronFixtures>({
-  managedTestRootDir: async ({}, use) => {
+type WorkerFixtures = {
+  managedTestRootDir: string
+  managedWorkspaceBaseDir: string
+  managedRepoCacheBaseDir: string
+  managedStateFilePath: string
+  electronApp: ElectronApplication
+}
+
+type TestFixtures = {
+  appWindow: Page
+}
+
+export const test = base.extend<TestFixtures, WorkerFixtures>({
+  managedTestRootDir: [async ({}, use) => {
     const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kata-managed-provisioning-e2e-'))
     await use(rootDir)
     await fs.rm(rootDir, { recursive: true, force: true })
-  },
-  managedWorkspaceBaseDir: async ({ managedTestRootDir }, use) => {
+  }, { scope: 'worker' }],
+  managedWorkspaceBaseDir: [async ({ managedTestRootDir }, use) => {
     const workspaceBaseDir = path.join(managedTestRootDir, 'workspaces')
     await fs.mkdir(workspaceBaseDir, { recursive: true })
     await use(workspaceBaseDir)
-  },
-  managedRepoCacheBaseDir: async ({ managedTestRootDir }, use) => {
+  }, { scope: 'worker' }],
+  managedRepoCacheBaseDir: [async ({ managedTestRootDir }, use) => {
     const repoCacheBaseDir = path.join(managedTestRootDir, 'repos')
     await fs.mkdir(repoCacheBaseDir, { recursive: true })
     await use(repoCacheBaseDir)
-  },
-  managedStateFilePath: async ({ managedTestRootDir }, use) => {
+  }, { scope: 'worker' }],
+  managedStateFilePath: [async ({ managedTestRootDir }, use) => {
     const stateFilePath = path.join(managedTestRootDir, 'state.json')
     await fs.writeFile(
       stateFilePath,
@@ -48,6 +60,7 @@ export const test = base.extend<ElectronFixtures>({
         {
           spaces: {},
           sessions: {},
+          runs: {},
           activeSpaceId: null,
           activeSessionId: null
         },
@@ -57,11 +70,12 @@ export const test = base.extend<ElectronFixtures>({
       'utf8'
     )
     await use(stateFilePath)
-  },
-  electronApp: async (
+  }, { scope: 'worker' }],
+  electronApp: [async (
     { managedTestRootDir, managedWorkspaceBaseDir, managedRepoCacheBaseDir, managedStateFilePath },
     use
   ) => {
+    const headless = process.env.CI || process.env.KATA_E2E_HEADLESS
     const launchArgs = process.env.CI
       ? ['--no-sandbox', '--disable-setuid-sandbox', mainEntry]
       : [mainEntry]
@@ -72,7 +86,8 @@ export const test = base.extend<ElectronFixtures>({
         HOME: managedTestRootDir,
         KATA_WORKSPACE_BASE_DIR: managedWorkspaceBaseDir,
         KATA_REPO_CACHE_BASE_DIR: managedRepoCacheBaseDir,
-        KATA_STATE_FILE: managedStateFilePath
+        KATA_STATE_FILE: managedStateFilePath,
+        ...(headless ? { KATA_E2E_HEADLESS: '1' } : {})
       }
     })
 
@@ -81,7 +96,7 @@ export const test = base.extend<ElectronFixtures>({
     await electronApp.close().catch((error) => {
       console.warn('[fixture teardown] electronApp.close() failed:', error)
     })
-  },
+  }, { scope: 'worker' }],
   appWindow: async ({ electronApp }, use) => {
     const appWindow = await electronApp.firstWindow()
     await appWindow.waitForLoadState('load')

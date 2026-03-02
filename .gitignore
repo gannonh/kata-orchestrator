@@ -20,3 +20,4 @@ app/.env*
 !app/.env.example
 .env
 test-results/.last-run.json
+coverage/coverage-final.json

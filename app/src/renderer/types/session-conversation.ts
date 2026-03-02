@@ -34,8 +34,13 @@ export type RetryFromErrorEvent = {
   type: 'RETRY_FROM_ERROR'
 }
 
+export type RunCompletedEvent = {
+  type: 'RUN_COMPLETED'
+}
+
 export type SessionConversationEvent =
   | SubmitPromptEvent
   | RunSucceededEvent
   | RunFailedEvent
   | RetryFromErrorEvent
+  | RunCompletedEvent

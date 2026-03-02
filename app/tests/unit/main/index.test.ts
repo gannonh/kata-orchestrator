@@ -93,6 +93,19 @@ async function loadMainModule(options: LoadMainOptions = {}) {
   }
   const createStateStore = vi.fn(() => mockStateStore)
 
+  const mockAuthStorage = {
+    get: vi.fn(),
+    set: vi.fn(),
+    remove: vi.fn()
+  }
+  const createAuthStorage = vi.fn(() => mockAuthStorage)
+
+  const mockCredentialResolver = {
+    getApiKey: vi.fn(),
+    getAuthStatus: vi.fn()
+  }
+  const createCredentialResolver = vi.fn(() => mockCredentialResolver)
+
   const effectiveStateFile = options.kataStateFile?.trim() || undefined
   const newStatePath = effectiveStateFile ?? `${userDataPath}/app-state.json`
   const legacyStatePath = `${homePath}/.kata/state.json`
@@ -121,6 +134,12 @@ async function loadMainModule(options: LoadMainOptions = {}) {
   vi.doMock('electron', () => ({
     app: appMock,
     BrowserWindow: MockBrowserWindow
+  }))
+  vi.doMock('../../../src/main/auth-storage', () => ({
+    createAuthStorage
+  }))
+  vi.doMock('../../../src/main/credential-resolver', () => ({
+    createCredentialResolver
   }))
   vi.doMock('../../../src/main/ipc-handlers', () => ({
     registerIpcHandlers
@@ -173,6 +192,8 @@ async function loadMainModule(options: LoadMainOptions = {}) {
     consoleErrorSpy.mockRestore()
     vi.unmock('node:fs')
     vi.unmock('electron')
+    vi.unmock('../../../src/main/auth-storage')
+    vi.unmock('../../../src/main/credential-resolver')
     vi.unmock('../../../src/main/ipc-handlers')
     vi.unmock('../../../src/main/state-store')
   }
@@ -182,6 +203,10 @@ async function loadMainModule(options: LoadMainOptions = {}) {
     registerIpcHandlers,
     createStateStore,
     mockStateStore,
+    createAuthStorage,
+    mockAuthStorage,
+    createCredentialResolver,
+    mockCredentialResolver,
     listeners,
     instances,
     setVisibleWindows(next: WindowInstance[]) {
@@ -214,7 +239,9 @@ describe('main process startup', () => {
       expect(harness.registerIpcHandlers).toHaveBeenCalledTimes(1)
       expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
         workspaceBaseDir: undefined,
-        repoCacheBaseDir: undefined
+        repoCacheBaseDir: undefined,
+        authStorage: harness.mockAuthStorage,
+        credentialResolver: harness.mockCredentialResolver
       })
       expect(harness.instances).toHaveLength(1)
 
@@ -274,7 +301,9 @@ describe('main process startup', () => {
       expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/custom-user-data/app-state.json')
       expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
         workspaceBaseDir: undefined,
-        repoCacheBaseDir: undefined
+        repoCacheBaseDir: undefined,
+        authStorage: harness.mockAuthStorage,
+        credentialResolver: harness.mockCredentialResolver
       })
     } finally {
       harness.restore()
@@ -292,7 +321,9 @@ describe('main process startup', () => {
       expect(harness.createStateStore).toHaveBeenCalledWith('/tmp/custom-state/state.json')
       expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
         workspaceBaseDir: '/tmp/custom-workspaces',
-        repoCacheBaseDir: '/tmp/custom-repos'
+        repoCacheBaseDir: '/tmp/custom-repos',
+        authStorage: harness.mockAuthStorage,
+        credentialResolver: harness.mockCredentialResolver
       })
     } finally {
       harness.restore()
@@ -307,7 +338,9 @@ describe('main process startup', () => {
     try {
       expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
         workspaceBaseDir: '/tmp/custom-workspaces',
-        repoCacheBaseDir: undefined
+        repoCacheBaseDir: undefined,
+        authStorage: harness.mockAuthStorage,
+        credentialResolver: harness.mockCredentialResolver
       })
     } finally {
       harness.restore()
@@ -399,7 +432,9 @@ describe('main process startup', () => {
     try {
       expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
         workspaceBaseDir: undefined,
-        repoCacheBaseDir: undefined
+        repoCacheBaseDir: undefined,
+        authStorage: harness.mockAuthStorage,
+        credentialResolver: harness.mockCredentialResolver
       })
     } finally {
       harness.restore()
@@ -414,7 +449,9 @@ describe('main process startup', () => {
     try {
       expect(harness.registerIpcHandlers).toHaveBeenCalledWith(harness.mockStateStore, {
         workspaceBaseDir: undefined,
-        repoCacheBaseDir: '/tmp/custom-repos'
+        repoCacheBaseDir: '/tmp/custom-repos',
+        authStorage: harness.mockAuthStorage,
+        credentialResolver: harness.mockCredentialResolver
       })
     } finally {
       harness.restore()
@@ -433,6 +470,19 @@ describe('main process startup', () => {
       expect(harness.instances).toHaveLength(0)
       expect(harness.consoleErrorSpy).toHaveBeenCalledWith('Kata desktop failed to start:', startupError)
       expect(harness.appMock.quit).toHaveBeenCalledTimes(1)
+    } finally {
+      harness.restore()
+    }
+  })
+
+  it('creates auth storage with ~/.kata/auth.json path', async () => {
+    const harness = await loadMainModule({
+      homePath: '/tmp/test-home'
+    })
+
+    try {
+      expect(harness.createAuthStorage).toHaveBeenCalledWith('/tmp/test-home/.kata/auth.json')
+      expect(harness.createCredentialResolver).toHaveBeenCalledWith(harness.mockAuthStorage)
     } finally {
       harness.restore()
     }
