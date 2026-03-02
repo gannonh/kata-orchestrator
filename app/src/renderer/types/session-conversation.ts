@@ -1,3 +1,5 @@
+import type { LatestRunDraft } from './spec-document'
+
 export type ConversationRunState = 'empty' | 'pending' | 'error' | 'idle'
 
 export type ConversationMessageRole = 'user' | 'agent'
@@ -13,6 +15,7 @@ export interface SessionConversationState {
   runState: ConversationRunState
   messages: ConversationMessage[]
   errorMessage?: string
+  latestDraft?: LatestRunDraft
 }
 
 export type SubmitPromptEvent = {
