@@ -1,4 +1,4 @@
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthDialog } from '../../../../src/renderer/components/center/AuthDialog'
@@ -86,10 +86,9 @@ describe('AuthDialog', () => {
 
     fireEvent.click(screen.getByText(/anthropic/i))
 
-    // Give the rejection time to propagate — should not throw
-    await new Promise((resolve) => setTimeout(resolve, 10))
-
-    expect(mockAuthLogin).toHaveBeenCalledWith('anthropic')
+    await waitFor(() => {
+      expect(mockAuthLogin).toHaveBeenCalledWith('anthropic')
+    })
   })
 
   it('does not render when open is false', () => {
