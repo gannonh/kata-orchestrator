@@ -302,6 +302,84 @@ describe('sessionConversationReducer', () => {
     expect(nextState.errorMessage).toBeUndefined()
   })
 
+  it('appends externally supplied messages without rewriting id or timestamp', () => {
+    const initialState = createInitialSessionConversationState()
+
+    const withUserPrompt = sessionConversationReducer(initialState, {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+
+    const persistedMessage = {
+      id: 'agent-msg-42',
+      role: 'agent' as const,
+      content: 'Spec Updated',
+      createdAt: '2026-03-03T10:00:00.000Z'
+    }
+
+    const nextState = sessionConversationReducer(withUserPrompt, {
+      type: 'APPEND_MESSAGE',
+      message: persistedMessage
+    })
+
+    expect(nextState.messages[nextState.messages.length - 1]).toEqual(persistedMessage)
+  })
+
+  it('ignores APPEND_MESSAGE when the message id already exists', () => {
+    const withUserPrompt = sessionConversationReducer(createInitialSessionConversationState(), {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+
+    const persistedMessage = {
+      id: 'agent-msg-42',
+      role: 'agent' as const,
+      content: 'Spec Updated',
+      createdAt: '2026-03-03T10:00:00.000Z'
+    }
+
+    const withMessage = sessionConversationReducer(withUserPrompt, {
+      type: 'APPEND_MESSAGE',
+      message: persistedMessage
+    })
+
+    const duplicateAttempt = sessionConversationReducer(withMessage, {
+      type: 'APPEND_MESSAGE',
+      message: persistedMessage
+    })
+
+    expect(duplicateAttempt.messages.filter((message) => message.id === persistedMessage.id)).toHaveLength(1)
+  })
+
+  it('updates an existing message by id on UPDATE_MESSAGE', () => {
+    const withUserPrompt = sessionConversationReducer(createInitialSessionConversationState(), {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+
+    const persistedMessage = {
+      id: 'agent-msg-42',
+      role: 'agent' as const,
+      content: 'Draft',
+      createdAt: '2026-03-03T10:00:00.000Z'
+    }
+
+    const withMessage = sessionConversationReducer(withUserPrompt, {
+      type: 'APPEND_MESSAGE',
+      message: persistedMessage
+    })
+
+    const updated = sessionConversationReducer(withMessage, {
+      type: 'UPDATE_MESSAGE',
+      message: {
+        ...persistedMessage,
+        content: 'Draft complete'
+      }
+    })
+
+    expect(updated.messages.find((message) => message.id === persistedMessage.id)?.content).toBe('Draft complete')
+  })
+
   it('returns current state for unknown events', () => {
     const initialState = createInitialSessionConversationState()
 
