@@ -1,3 +1,5 @@
+import type { LatestRunDraft } from './spec-document'
+
 export const RUN_STATUSES = ['queued', 'running', 'completed', 'failed'] as const
 export type RunStatus = (typeof RUN_STATUSES)[number]
 
@@ -19,5 +21,7 @@ export type RunRecord = {
   startedAt?: string
   completedAt?: string
   errorMessage?: string
+  draft?: LatestRunDraft
+  draftAppliedAt?: string
   messages: PersistedMessage[]
 }

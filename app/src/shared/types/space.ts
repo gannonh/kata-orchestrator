@@ -1,4 +1,5 @@
 import type { RunRecord } from './run'
+import type { PersistedSpecDocument } from './spec-document'
 
 export const SPACE_STATUSES = ['active', 'idle', 'archived'] as const
 export type SpaceStatus = (typeof SPACE_STATUSES)[number]
@@ -92,6 +93,7 @@ export type AppState = {
   sessions: Record<string, SessionRecord>
   runs: Record<string, RunRecord>
   agentRoster: Record<string, SessionAgentRecord>
+  specDocuments: Record<string, PersistedSpecDocument>
   activeSpaceId: string | null
   activeSessionId: string | null
 }
@@ -102,6 +104,7 @@ export function createDefaultAppState(): AppState {
     sessions: {},
     runs: {},
     agentRoster: {},
+    specDocuments: {},
     activeSpaceId: null,
     activeSessionId: null
   }
