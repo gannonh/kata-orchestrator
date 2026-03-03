@@ -578,8 +578,8 @@ describe('useIpcSessionConversation', () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
     })
 
-    expect(result.current.state.runState).toBe('empty')
-    expect(result.current.state.messages).toEqual([])
+    expect(result.current.state.runState).toBe('error')
+    expect(result.current.state.errorMessage).toBe('Failed to load conversation history')
   })
 
   it('transitions to error when submitPrompt IPC call rejects', async () => {

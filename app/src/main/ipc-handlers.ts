@@ -27,7 +27,6 @@ import {
   updateRunStatus,
   appendRunMessage,
   setRunDraft,
-  markRunDraftApplied,
   getRunsForSession
 } from './orchestrator'
 import { createAgentRunner } from './agent-runner'
@@ -69,7 +68,6 @@ const GITHUB_LIST_BRANCHES_CHANNEL = 'github:listBranches'
 const RUN_SUBMIT_CHANNEL = 'run:submit'
 const RUN_ABORT_CHANNEL = 'run:abort'
 const RUN_LIST_CHANNEL = 'run:list'
-const RUN_MARK_DRAFT_APPLIED_CHANNEL = 'run:markDraftApplied'
 const RUN_EVENT_CHANNEL = 'run:event'
 const AUTH_STATUS_CHANNEL = 'auth:status'
 const AUTH_LOGIN_CHANNEL = 'auth:login'
@@ -445,8 +443,14 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     return true
   })
 
+  let bootstrapCompleted = false
   ipcMain.handle(APP_BOOTSTRAP_CHANNEL, async () => {
-    const state = stateStore.load({ reconcileInterruptedRuns: true })
+    const needsReconcile = !bootstrapCompleted
+    const state = stateStore.load(needsReconcile ? { reconcileInterruptedRuns: true } : undefined)
+    if (needsReconcile) {
+      stateStore.save(state)
+      bootstrapCompleted = true
+    }
     return {
       spaces: state.spaces,
       sessions: state.sessions,
@@ -650,20 +654,11 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
 
     const specDocument: PersistedSpecDocument = {
       markdown: parsedInput.markdown,
-      updatedAt
-    }
-
-    if (existing?.appliedRunId !== undefined) {
-      specDocument.appliedRunId = existing.appliedRunId
-    }
-    if (existing?.appliedAt !== undefined) {
-      specDocument.appliedAt = existing.appliedAt
-    }
-    if (parsedInput.appliedRunId !== undefined) {
-      specDocument.appliedRunId = parsedInput.appliedRunId
-    }
-    if (parsedInput.appliedAt !== undefined) {
-      specDocument.appliedAt = parsedInput.appliedAt
+      updatedAt,
+      ...(existing?.appliedRunId !== undefined && { appliedRunId: existing.appliedRunId }),
+      ...(existing?.appliedAt !== undefined && { appliedAt: existing.appliedAt }),
+      ...(parsedInput.appliedRunId !== undefined && { appliedRunId: parsedInput.appliedRunId }),
+      ...(parsedInput.appliedAt !== undefined && { appliedAt: parsedInput.appliedAt })
     }
 
     stateStore.save({
@@ -697,15 +692,21 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       appliedAt
     }
 
+    const existingRun = state.runs[parsedInput.draft.runId]
     stateStore.save({
       ...state,
       specDocuments: {
         ...state.specDocuments,
         [key]: specDocument
-      }
+      },
+      ...(existingRun && {
+        runs: {
+          ...state.runs,
+          [parsedInput.draft.runId]: { ...existingRun, draftAppliedAt: appliedAt }
+        }
+      })
     })
 
-    markRunDraftApplied(stateStore, parsedInput.draft.runId, appliedAt)
     return specDocument
   })
 
@@ -827,11 +828,13 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
             content: msg.content,
             createdAt: msg.createdAt
           })
-          setRunDraft(stateStore, run.id, {
-            runId: run.id,
-            generatedAt: msg.createdAt,
-            content: msg.content
-          })
+          if (msg.role === 'agent') {
+            setRunDraft(stateStore, run.id, {
+              runId: run.id,
+              generatedAt: msg.createdAt,
+              content: msg.content
+            })
+          }
         }
         // Map runtime ConversationRunState to persisted RunStatus:
         // 'pending' (agent starting) -> 'running'
@@ -882,15 +885,6 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       throw new Error('run:list requires a string sessionId')
     }
     return getRunsForSession(stateStore, input.sessionId)
-  })
-
-  ipcMain.removeHandler(RUN_MARK_DRAFT_APPLIED_CHANNEL)
-  ipcMain.handle(RUN_MARK_DRAFT_APPLIED_CHANNEL, async (_event, input: unknown) => {
-    if (!isObjectRecord(input) || typeof input.runId !== 'string') {
-      throw new Error('run:markDraftApplied requires a string runId')
-    }
-    markRunDraftApplied(stateStore, input.runId, new Date().toISOString())
-    return { ok: true as const }
   })
 
   ipcMain.removeHandler(AUTH_STATUS_CHANNEL)

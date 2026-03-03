@@ -70,7 +70,6 @@ const mockCreateRun = vi.fn()
 const mockUpdateRunStatus = vi.fn()
 const mockAppendRunMessage = vi.fn()
 const mockSetRunDraft = vi.fn()
-const mockMarkRunDraftApplied = vi.fn()
 const mockGetRunsForSession = vi.fn()
 
 vi.mock('../../../src/main/orchestrator', () => ({
@@ -78,7 +77,6 @@ vi.mock('../../../src/main/orchestrator', () => ({
   updateRunStatus: (...args: unknown[]) => mockUpdateRunStatus(...args),
   appendRunMessage: (...args: unknown[]) => mockAppendRunMessage(...args),
   setRunDraft: (...args: unknown[]) => mockSetRunDraft(...args),
-  markRunDraftApplied: (...args: unknown[]) => mockMarkRunDraftApplied(...args),
   getRunsForSession: (...args: unknown[]) => mockGetRunsForSession(...args)
 }))
 
@@ -992,8 +990,7 @@ describe('registerIpcHandlers', () => {
       appliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
       updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
     }))
-    expect(store.save).toHaveBeenCalledWith({
-      ...state,
+    expect(store.save).toHaveBeenCalledWith(expect.objectContaining({
       specDocuments: {
         'space-1:session-1': expect.objectContaining({
           markdown: '## Applied draft',
@@ -1001,14 +998,13 @@ describe('registerIpcHandlers', () => {
           appliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
           updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
         })
-      }
-    })
-    expect(mockMarkRunDraftApplied).toHaveBeenCalledTimes(1)
-    expect(mockMarkRunDraftApplied).toHaveBeenCalledWith(
-      store,
-      'run-10',
-      expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
-    )
+      },
+      runs: expect.objectContaining({
+        'run-10': expect.objectContaining({
+          draftAppliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
+        })
+      })
+    }))
   })
 
   it('spec:applyDraft throws when run does not belong to session', async () => {
@@ -1657,39 +1653,6 @@ describe('registerIpcHandlers', () => {
       const handler = getHandlersByChannel().get('run:list')!
       await expect(handler(null, null)).rejects.toThrow('run:list requires a string sessionId')
       await expect(handler(null, { sessionId: 123 })).rejects.toThrow('run:list requires a string sessionId')
-    })
-  })
-
-  describe('run:markDraftApplied', () => {
-    beforeEach(() => {
-      mockMarkRunDraftApplied.mockReset()
-    })
-
-    it('stamps run draft-applied timestamp through main-process handler', async () => {
-      registerIpcHandlers(createMockStore())
-      const handler = getHandlersByChannel().get('run:markDraftApplied')!
-
-      const result = await handler(null, { runId: 'run-1' })
-
-      expect(result).toEqual({ ok: true })
-      expect(mockMarkRunDraftApplied).toHaveBeenCalledTimes(1)
-      expect(mockMarkRunDraftApplied).toHaveBeenCalledWith(
-        expect.anything(),
-        'run-1',
-        expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
-      )
-    })
-
-    it('rejects malformed input', async () => {
-      registerIpcHandlers(createMockStore())
-      const handler = getHandlersByChannel().get('run:markDraftApplied')!
-
-      await expect(handler(null, null)).rejects.toThrow(
-        'run:markDraftApplied requires a string runId'
-      )
-      await expect(handler(null, { runId: 123 })).rejects.toThrow(
-        'run:markDraftApplied requires a string runId'
-      )
     })
   })
 

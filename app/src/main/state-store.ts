@@ -11,6 +11,7 @@ import {
 import type { AppState, SessionAgentRecord } from '../shared/types/space'
 import { INTERRUPTED_RUN_ERROR_MESSAGE, RUN_STATUSES } from '../shared/types/run'
 import type { PersistedMessage } from '../shared/types/run'
+import { isPersistedSpecDocument } from '../shared/types/spec-document'
 import type { PersistedSpecDocument } from '../shared/types/spec-document'
 
 export type StateStoreLoadOptions = {
@@ -93,19 +94,6 @@ function isRunRecord(value: unknown): boolean {
     (value.errorMessage === undefined || typeof value.errorMessage === 'string') &&
     Array.isArray(value.messages) &&
     value.messages.every(isPersistedMessage)
-  )
-}
-
-function isPersistedSpecDocument(value: unknown): value is PersistedSpecDocument {
-  if (!isRecord(value)) {
-    return false
-  }
-
-  return (
-    typeof value.markdown === 'string' &&
-    typeof value.updatedAt === 'string' &&
-    (value.appliedRunId === undefined || typeof value.appliedRunId === 'string') &&
-    (value.appliedAt === undefined || typeof value.appliedAt === 'string')
   )
 }
 

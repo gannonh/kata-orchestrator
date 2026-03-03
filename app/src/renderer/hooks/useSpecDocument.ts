@@ -6,49 +6,18 @@ import {
   updateTaskLineInMarkdown
 } from '../components/right/spec-task-markdown'
 import type { LatestRunDraft, StructuredSpecDocument } from '../types/spec-document'
-
-const STORAGE_KEY_PREFIX = 'kata.spec-panel.v1'
+import { isPersistedSpecDocument } from '../../shared/types/spec-document'
+import type { PersistedSpecDocument } from '../../shared/types/spec-document'
 
 interface UseSpecDocumentParams {
   spaceId: string
   sessionId: string
 }
 
-type PersistedSpecDocument = {
-  markdown: string
-  updatedAt?: string
-  appliedRunId?: string
-  appliedAt?: string
-}
-
 const fallbackDocumentCache = new Map<string, PersistedSpecDocument>()
 
-function createStorageKey(spaceId: string, sessionId: string): string {
-  return `${STORAGE_KEY_PREFIX}:${spaceId}:${sessionId}`
-}
-
-function isPersistedSpecDocument(value: unknown): value is PersistedSpecDocument {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-
-  const candidate = value as {
-    markdown?: unknown
-    updatedAt?: unknown
-    appliedRunId?: unknown
-    appliedAt?: unknown
-  }
-
-  if (typeof candidate.markdown !== 'string') {
-    return false
-  }
-
-  return (
-    (candidate.updatedAt === undefined || typeof candidate.updatedAt === 'string') &&
-    (candidate.appliedRunId === undefined ||
-      typeof candidate.appliedRunId === 'string') &&
-    (candidate.appliedAt === undefined || typeof candidate.appliedAt === 'string')
-  )
+function buildCacheKey(spaceId: string, sessionId: string): string {
+  return `${spaceId}:${sessionId}`
 }
 
 function readFallbackDocument(storageKey: string): StructuredSpecDocument {
@@ -97,7 +66,7 @@ function buildDocument(
 
 export function useSpecDocument({ spaceId, sessionId }: UseSpecDocumentParams) {
   const storageKey = useMemo(
-    () => createStorageKey(spaceId, sessionId),
+    () => buildCacheKey(spaceId, sessionId),
     [sessionId, spaceId]
   )
   const [state, setState] = useState(() => ({
@@ -152,12 +121,7 @@ export function useSpecDocument({ spaceId, sessionId }: UseSpecDocumentParams) {
         return
       }
 
-      if (!persistedDocument) {
-        setDocumentState(readFallbackDocument(expectedStorageKey))
-        return
-      }
-
-      if (!isPersistedSpecDocument(persistedDocument)) {
+      if (!persistedDocument || !isPersistedSpecDocument(persistedDocument)) {
         setDocumentState(readFallbackDocument(expectedStorageKey))
         return
       }

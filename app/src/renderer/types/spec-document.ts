@@ -24,8 +24,4 @@ export interface StructuredSpecDocument {
   appliedRunId?: string
 }
 
-export interface LatestRunDraft {
-  runId: string
-  generatedAt: string
-  content: string
-}
+export type { LatestRunDraft } from '../../shared/types/spec-document'

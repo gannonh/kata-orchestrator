@@ -319,7 +319,7 @@ describe('useSpecDocument', () => {
     const first = createDeferred<{ markdown: string } | null>()
     mockSpecGet
       .mockImplementationOnce(() => first.promise)
-      .mockResolvedValueOnce({ markdown: '## Goal\nSession 2 persisted' })
+      .mockResolvedValueOnce({ markdown: '## Goal\nSession 2 persisted', updatedAt: '2026-03-03T00:00:00.000Z' })
 
     const useSpecDocument = await loadHook()
     const { result, rerender } = renderHook(
@@ -329,7 +329,7 @@ describe('useSpecDocument', () => {
     )
 
     rerender({ spaceId: 'space-1', sessionId: 'session-2' })
-    first.resolve({ markdown: '## Goal\nStale session 1 value' })
+    first.resolve({ markdown: '## Goal\nStale session 1 value', updatedAt: '2026-03-03T00:00:00.000Z' })
 
     await waitFor(() => {
       expect(result.current.document.sections.goal).toBe('Session 2 persisted')
@@ -341,7 +341,7 @@ describe('useSpecDocument', () => {
     mockSpecSave.mockImplementationOnce(() => saveDeferred.promise)
     mockSpecGet
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ markdown: '## Goal\nSession 2 canonical' })
+      .mockResolvedValueOnce({ markdown: '## Goal\nSession 2 canonical', updatedAt: '2026-03-03T00:00:00.000Z' })
 
     const useSpecDocument = await loadHook()
     const { result, rerender } = renderHook(
@@ -355,7 +355,7 @@ describe('useSpecDocument', () => {
     })
 
     rerender({ spaceId: 'space-1', sessionId: 'session-2' })
-    saveDeferred.resolve({ markdown: '## Goal\nSession 1 stale save response' })
+    saveDeferred.resolve({ markdown: '## Goal\nSession 1 stale save response', updatedAt: '2026-03-03T00:00:00.000Z' })
 
     await waitFor(() => {
       expect(result.current.document.sections.goal).toBe('Session 2 canonical')
