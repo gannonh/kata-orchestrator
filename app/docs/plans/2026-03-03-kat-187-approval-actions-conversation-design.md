@@ -1,213 +1,222 @@
 # KAT-187 Approval Actions in Conversation (Tech Stack / Plan Decisions) Design
 
 **Issue:** KAT-187  
+**Linear URL:** https://linear.app/kata-sh/issue/KAT-187/a8-approval-actions-in-conversation-tech-stackplan-decisions  
 **Parent:** KAT-157 (Slice A - Build Session / Spec 04)  
 **Branch target:** `feature/kat-187-a8-approval-actions-in-conversation-tech-stackplan-decisions`  
-**Specs:** `_plans/design/specs/04-build-session.md` (primary), `_plans/design/specs/02-coordinator-session.md`, `_plans/design/specs/03-spec-notes-panel.md`
+**Specs:** `_plans/design/specs/04-build-session.md` (primary), `_plans/design/specs/02-coordinator-session.md`, `_plans/design/specs/03-spec-notes-panel.md`  
+**Relevant mocks:** `12-build-session-tech-stack-a.png`, `13-build-session-tech-stack-b.png`
 
 ## Scope and Outcome
 
-Deliver inline decision actions in the center conversation thread for mock 12/13 style planning states.
+Implement inline approval/decision actions in the center conversation thread for the tech-stack proposal states represented by mocks 12 and 13.
 
-Required behavior:
+Required outcome:
 
-- Render decision/approval actions directly under qualifying agent messages in the conversation
-- Support the tech-stack/plan decision flow (approve, alternative choice, reorder/clarify path)
-- Keep decisions visible in conversation history and compatible with current run persistence/replay
-- Keep left-sidebar task parity work out of scope (KAT-188)
+- Agent tech-stack proposal messages render action buttons inline with the message content.
+- Action clicks send deterministic follow-up prompts through the existing run submission flow.
+- Decision actions are replay-safe across persisted run history.
+- The design preserves KAT-188 boundary (task tracking parity remains separate).
 
-## Current State Summary
+## Context Loaded
 
-From current app code:
+From Linear and specs:
 
-- Conversation messages are persisted as plain `RunRecord.messages` (`user`/`agent`, string content only).
-- `ChatPanel` renders `MessageBubble` entries and `ChatInput`; no inline message actions exist.
-- `useIpcSessionConversation` replays persisted runs and rehydrates conversation state.
-- Right panel structured spec flow already exists (KAT-160), including `latestDraft` apply and task toggles.
-- KAT-186 is marked `Done` in Linear (conversation index/jump behavior), but this design does not require coupling to that feature to ship KAT-187.
+- KAT-187 blockers KAT-160 and KAT-186 are `Done` as of March 3, 2026.
+- Spec 04 explicitly calls out mock-12/13 behavior: proposal content includes `Why`, `How to keep Tech stable later`, and `Revised views`, followed by inline approvals (`Approve the plan...`, `Keep the last switch...`).
+- Parent epic KAT-157 defines Spec 04 as authority and requires hard-gate evidence before `Done`.
+- Desktop workflow contract requires tests + screenshot/video evidence for state/interaction coverage.
+
+From current code:
+
+- Conversation surface is `ChatPanel` + `MessageList` + `MessageBubble`.
+- Conversation state shape is `SessionConversationState` with `messages: ConversationMessage[]`; message payloads are plain markdown strings.
+- `useIpcSessionConversation` already handles submit/replay events and keeps run lifecycle semantics (`empty/pending/error/idle`).
+- No inline message action model currently exists in `ConversationMessage` or rendering components.
 
 ## Constraints and Assumptions
 
-- KAT-160 and KAT-186 are complete dependencies for KAT-187 in Linear as of **March 3, 2026**.
-- KAT-187 should not introduce a broad orchestrator protocol rewrite; it should fit the existing run/message pipeline.
-- Action click behavior should not bypass the existing message-submit lifecycle; decisions should remain auditable in conversation history.
-- The design should preserve a migration path to richer structured decision payloads later.
+- This ticket is treated as an **Enabler** for conversation decision UX in the Build Session flow; full fidelity for downstream task-tracking progression remains in KAT-188.
+- KAT-187 should avoid a full main/preload schema migration unless required by reliability.
+- Inline actions must remain auditable in the same conversation history rather than hidden side effects.
+- Existing chat input/run status behavior should remain stable.
 
 ## Approaches Considered
 
-### Approach 1: Renderer-Only Action Inference from Agent Message Content (Recommended)
+### Approach 1 (Recommended): Renderer decision-card extraction + deterministic follow-up prompts
 
-Parse agent message markdown for decision markers and render inline action buttons beneath that message. Clicking a button submits a deterministic follow-up user message through the existing `run:submit` path.
-
-Pros:
-
-- Minimal architecture change; no new IPC contracts required for v1
-- Works with current persisted message model and replay semantics
-- Keeps decisions auditable because choice is emitted as a real user message
-
-Cons:
-
-- Requires robust but heuristic parsing of agent text patterns
-- Action availability depends on message shape consistency
-
-### Approach 2: Structured Decision Payload from Main Process Runtime
-
-Extend runtime events so agent messages can carry typed `decisionCard` metadata (prompt, options, intent IDs) separate from raw markdown.
+Detect decision prompts from agent markdown in renderer, render inline buttons, and map each button to a canonical follow-up prompt submitted through existing `submitPrompt`.
 
 Pros:
 
-- Clean contract, deterministic rendering, no text heuristics
-- Better long-term foundation for advanced orchestration actions
+- Small scope and fast delivery inside current architecture.
+- No new IPC/state schema required to deliver mock-12/13 behavior.
+- Replay compatibility stays straightforward because selected action becomes a normal user message.
 
 Cons:
 
-- Larger scope: IPC/event/state schema changes across main/preload/renderer
-- Not necessary to deliver KAT-187 UI slice quickly
+- Decision card detection is heuristic and tied to message shape.
+- Needs strict parser tests to avoid false positives.
 
-### Approach 3: Right-Panel Decision Queue (Non-inline)
+### Approach 2: Add typed decision payloads to runtime events
 
-Show decision actions in the right panel only, not in conversation bubbles.
+Extend main/preload runtime events so agent messages include structured `decisionCard` metadata.
 
 Pros:
 
-- Reuses right-panel interaction patterns
+- Deterministic rendering contract and less text parsing risk.
+- Better long-term basis for broader decision interactions.
 
 Cons:
 
-- Violates mock intent (actions are inline in conversation)
-- Creates split mental model between message context and decision controls
+- Expands scope across shared/main/preload/renderer.
+- Delays delivery for this ticket despite current need being narrow.
+
+### Approach 3: Render decision actions in right panel only
+
+Move decision affordances to spec panel while leaving center conversation read-only.
+
+Pros:
+
+- Reuses right-panel interaction scaffolding.
+
+Cons:
+
+- Conflicts with spec 04 mock behavior where actions are inline in conversation.
+- Breaks local context: user reads proposal in center and must switch panels to act.
 
 ## Recommendation
 
-Proceed with **Approach 1**.
-
-It is the best fit for current code and ticket scope: fast to ship, testable, and preserves message-history truth without introducing high-risk state/IPC migrations.
+Use **Approach 1** for KAT-187. It gives mock-12/13 parity quickly, keeps action handling auditable, and avoids premature runtime contract expansion.
 
 ## Proposed Design
 
-## 1) Decision Card Detection Contract
+## 1) Inline Decision Model (Renderer-only)
 
-Add a renderer parser that extracts an `InlineDecisionCard` from an agent message when the message includes a recognized decision prompt block.
-
-Proposed model:
+Introduce a local model for decision cards extracted from agent messages:
 
 ```ts
+type InlineDecisionActionId =
+  | 'approve_tech_stack_plan'
+  | 'keep_last_stack_switch'
+  | 'ask_for_clarification'
+
 type InlineDecisionAction = {
-  id: 'approve_plan' | 'switch_to_tauri' | 'adjust_wave_order'
+  id: InlineDecisionActionId
   label: string
   followUpPrompt: string
-  tone: 'primary' | 'secondary' | 'ghost'
+  variant: 'default' | 'secondary' | 'outline'
 }
 
 type InlineDecisionCard = {
-  messageId: string
-  title: string
+  sourceMessageId: string
+  promptLabel: string
   actions: InlineDecisionAction[]
 }
 ```
 
-Detection strategy:
+Detection contract:
 
-- Parse message markdown paragraphs/lists.
-- Match decision-trigger text near the tail of agent output (e.g., “Please review and approve the plan above”).
-- Read immediate bullet/action lines as candidate options.
-- If a full card cannot be inferred, render message normally (no actions).
+- Only agent messages are eligible.
+- Require an approval prompt pattern near message tail (e.g. `Approve this plan...` and `Clarifications` token).
+- Normalize known mock labels:
+  - `Approve the plan...`
+  - `Keep the last switch...`
+- Unknown/partial shapes fail closed (no action row rendered).
 
-## 2) UI Rendering in Center Conversation
+## 2) Center Panel Rendering
 
-Extend `MessageBubble` (agent variant) to optionally render a compact action row below markdown content.
+Extend the center conversation render path so each agent `MessageBubble` can display an optional action row under markdown content.
 
-- Use existing `Button` variants for primary/secondary affordances.
-- Ensure actions are keyboard reachable and screen-reader labeled.
-- Preserve existing message rendering for all non-decision messages.
+Implementation boundary:
 
-New/updated components:
+- `MessageBubble` receives optional `decisionCard` and `onDecisionAction`.
+- `ChatPanel` resolves decision cards from `state.messages` and wires action callbacks to `submitPrompt`.
+- Styling uses existing shadcn button primitives to match current center panel visual language.
 
-- `src/renderer/components/center/MessageBubble.tsx` (action row slot)
-- `src/renderer/components/center/MessageActionRow.tsx` (new)
-- `src/renderer/components/center/message-decision-parser.ts` (new)
+## 3) Action Execution and Replay Semantics
 
-## 3) Action Click Behavior
+Action click behavior:
 
-Clicking an inline action should:
+1. Disable action row while run is `pending`.
+2. Submit the action's canonical `followUpPrompt` via `submitPrompt`.
+3. Let existing runtime pipeline append the user message and subsequent agent response.
 
-1. Submit `followUpPrompt` via existing `submitPrompt` flow from `useIpcSessionConversation`.
-2. Append user message through normal reducer/event path (already persisted).
-3. Trigger orchestrator response naturally (pending -> idle/error lifecycle unchanged).
+Replay/resolution:
 
-This keeps decision traceability in run history without new persistence primitives.
+- A decision card is considered resolved once a subsequent user message matches one of the action prompts.
+- Resolved cards render as non-interactive (`Decision sent`) after replay as well.
+- No additional persistence field is required for v1.
 
-## 4) Replay and Resolved-State Behavior
+## 4) Error Handling and Safety
 
-Resolved state is derived, not separately persisted:
+- Parser errors do not break message rendering.
+- If `runSubmit` fails, existing error handling path (`RUN_FAILED` + retry) remains authoritative.
+- Rapid repeat-click protection: action row disabled for `pending` state and for resolved cards.
 
-- A decision card is considered “resolved” if the next user message equals one of the card action prompts.
-- Resolved cards render as disabled with a lightweight “Decision sent” treatment.
-- On session replay, the same derivation restores resolution without schema changes.
+## 5) Accessibility and UX
 
-## 5) Integration with Existing Spec Flow
+- Buttons use semantic `button` elements with explicit accessible names.
+- Keyboard navigation (`Tab`, `Enter`, `Space`) must work end-to-end.
+- Action row remains visually attached to originating message bubble to preserve conversational context.
 
-KAT-187 should not directly mutate right-panel task state.
+## Data Flow
 
-Interaction boundary:
-
-- Decision action triggers next run turn.
-- Any spec changes continue to flow through existing run/draft behavior (`latestDraft` -> right panel apply path).
-- Task parity and left-panel checklist synchronization remain KAT-188 scope.
-
-## 6) Error Handling
-
-- If action submit fails, keep the action row enabled and surface existing run error UI (`RunStatusBadge` / retry path).
-- If parser fails or content is ambiguous, fail closed (no action row).
-- Never block normal message rendering because of decision parsing errors.
-
-## 7) Accessibility and UX Fidelity
-
-- Action buttons use semantic `<button>` with clear text labels.
-- Preserve contrast and sizing consistent with current center panel.
-- Keep action cluster visually attached to the originating agent message.
-- Do not auto-scroll away from clicked message beyond existing list behavior.
+1. `useIpcSessionConversation` provides `SessionConversationState.messages` and `runState`.
+2. `ChatPanel` maps eligible agent messages through `extractInlineDecisionCard`.
+3. `MessageBubble` renders markdown plus optional action row.
+4. User click invokes `submitPrompt(followUpPrompt)`.
+5. Existing message/run pipeline persists and replays the decision as normal conversation turns.
 
 ## Testing Strategy (TDD)
 
 Unit tests:
 
-- `message-decision-parser.test.ts`: detects valid decision cards, ignores non-matching messages, handles malformed input.
-- `MessageBubble.test.tsx`: renders action row only for matched cards, preserves existing markdown rendering.
-- `sessionConversationState` / hook tests: action click submits correct prompt and keeps run lifecycle semantics.
+- `tests/unit/renderer/center/message-decision-parser.test.ts`
+  - detects mock-12/13 shaped prompts
+  - ignores normal agent messages
+  - fails closed on malformed input
+- `tests/unit/renderer/center/MessageBubble.test.tsx`
+  - renders action row for decision cards only
+  - respects disabled/resolved states
+- `tests/unit/renderer/hooks/useIpcSessionConversation.test.ts`
+  - action-submitted prompt follows standard pending/idle/error lifecycle
 
 Integration tests:
 
-- `ChatPanel.test.tsx`: clicking action button sends prompt via mocked hook adapter and shows pending/idle transitions.
-- Replay test in `useIpcSessionConversation.test.ts`: resolved action state is re-derived from persisted message order.
+- `tests/unit/renderer/center/ChatPanel.test.tsx`
+  - clicking inline action triggers `submitPrompt` with canonical follow-up text
+  - pending state disables action row
+- Replay contract test:
+  - action resolves from message history ordering without extra stored flags
 
-E2E evidence:
+Evidence for completion gate:
 
-- Add/extend `tests/e2e` scenario to capture mock-12/13 style state with visible inline actions.
-- Capture evidence screenshots under `test-results/kat-187/`:
-  - `tech-stack-decision-actions-visible.png`
-  - `tech-stack-decision-after-click.png`
+- Unit/integration test outputs linked in ticket/PR.
+- Screenshots in `test-results/kat-187/`:
+  - `mock12-actions-visible.png`
+  - `mock13-actions-post-click.png`
 
 ## Non-Goals
 
-- Left-sidebar task tracking parity and cross-panel task state sync (KAT-188)
-- New orchestration IPC protocol for typed decision payloads
-- New model/provider routing behavior
-- Full redesign of message markdown semantics beyond decision blocks
+- KAT-188 task panel parity and cross-panel task state synchronization.
+- Introducing new runtime IPC schema for typed decision cards.
+- Reworking model/provider selection behavior.
+- Full conversation protocol redesign beyond inline decision actions.
 
 ## Risks and Mitigations
 
-- **Risk:** fragile parsing for future message text variations.  
-  **Mitigation:** centralize parser patterns, unit-test representative variants, fail closed.
+- **Risk:** prompt pattern drift from future orchestrator copy changes.  
+  **Mitigation:** centralize patterns/constants and back with focused parser fixtures.
 
-- **Risk:** duplicate submissions from repeated clicks.  
-  **Mitigation:** disable action row while run state is `pending`; treat resolved cards as non-interactive.
+- **Risk:** duplicate action submissions due to repeated clicks.  
+  **Mitigation:** disable actions during pending runs and after resolution.
 
-- **Risk:** drift between mock labels and prompt payload text.  
-  **Mitigation:** define canonical action IDs + labels in one mapping module and verify in tests.
+- **Risk:** UX mismatch with exact mock labels.  
+  **Mitigation:** enforce explicit label mapping and snapshot assertions for mock-12/13 states.
 
 ## Approval Gate
 
-If approved, next step is `writing-plans` to produce:
+If this design is accepted, the next artifact is:
 
 - `docs/plans/2026-03-03-kat-187-approval-actions-conversation-implementation-plan.md`
