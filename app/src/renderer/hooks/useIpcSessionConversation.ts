@@ -62,7 +62,7 @@ export function useIpcSessionConversation(sessionId: string | null) {
     return unsubscribe
   }, [])
 
-  // Replay persisted runs on mount
+  // Replay persisted runs when sessionId changes
   useEffect(() => {
     if (!sessionId) return
     const kata = window.kata
@@ -161,9 +161,9 @@ export function useIpcSessionConversation(sessionId: string | null) {
   }
 }
 
-// Scaffolding: produces a fixed template until the spec generation pipeline
-// is connected. The actual agent message content will replace this template
-// once spec extraction is implemented.
+// TODO: replace with spec extraction pipeline output once connected.
+// Scaffolding: produces a fixed template from the latest prompt until the
+// spec generation pipeline is wired in.
 function buildLatestDraft({
   prompt,
   runId,

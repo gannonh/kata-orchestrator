@@ -58,7 +58,8 @@ function readStoredDocument(storageKey: string): StructuredSpecDocument {
     }
 
     return buildDocument(parsed.markdown, parsed.appliedRunId)
-  } catch {
+  } catch (err) {
+    console.warn('[useSpecDocument] Failed to parse stored document:', err)
     return parseStructuredSpec('')
   }
 }
@@ -102,13 +103,24 @@ export function useSpecDocument({ spaceId, sessionId }: UseSpecDocumentParams) {
         document: readStoredDocument(storageKey)
       })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- state.storageKey is read but intentionally excluded to avoid re-running on every setState
   }, [storageKey])
 
   const persistDocument = useCallback(
     (nextDocument: StructuredSpecDocument) => {
+      const payload: PersistedSpecDocument = {
+        markdown: nextDocument.markdown,
+        appliedRunId: nextDocument.appliedRunId
+      }
+
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(payload))
+      } catch (err) {
+        console.error('[useSpecDocument] Failed to persist document:', err)
+        return
+      }
+
       documentRef.current = nextDocument
-      window.localStorage.setItem(storageKey, JSON.stringify(nextDocument))
       setState({
         storageKey,
         document: nextDocument

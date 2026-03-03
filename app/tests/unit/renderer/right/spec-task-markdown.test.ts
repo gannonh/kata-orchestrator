@@ -36,6 +36,14 @@ describe('spec-task-markdown', () => {
     expect(updated).toContain('\r\n')
   })
 
+  it('returns original markdown unchanged when target line has no checkbox marker', () => {
+    const markdown = ['## Tasks', '- [ ] Task A', 'Some plain text'].join('\n')
+
+    const updated = updateTaskLineInMarkdown(markdown, 2, 'complete')
+
+    expect(updated).toBe(markdown)
+  })
+
   it('returns original markdown when the target line does not exist', () => {
     const markdown = ['## Tasks', '- [ ] Task A'].join('\n')
 

@@ -69,22 +69,12 @@ describe('useSpecDocument', () => {
         markdownLineIndex: 7
       }
     ])
-    expect(
-      JSON.parse(
-        window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1') ?? 'null'
-      )
-    ).toMatchObject({
-      markdown,
-      sections: {
-        goal: 'Ship panel parity.'
-      },
-      tasks: [
-        {
-          id: 'task-1',
-          status: 'not_started'
-        }
-      ]
-    })
+    const persisted = JSON.parse(
+      window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1') ?? 'null'
+    )
+    expect(persisted).toEqual({ markdown })
+    expect(persisted).not.toHaveProperty('sections')
+    expect(persisted).not.toHaveProperty('tasks')
   })
 
   it('applies a draft, records the run id, and persists toggled task changes', () => {
@@ -120,11 +110,10 @@ describe('useSpecDocument', () => {
         '\n'
       )
     )
-    expect(
-      JSON.parse(
-        window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1') ?? 'null'
-      )
-    ).toMatchObject({
+    const persisted = JSON.parse(
+      window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1') ?? 'null'
+    )
+    expect(persisted).toEqual({
       appliedRunId: 'run-456',
       markdown: [
         '## Goal',
@@ -132,14 +121,10 @@ describe('useSpecDocument', () => {
         '',
         '## Tasks',
         '- [/] Review the draft'
-      ].join('\n'),
-      tasks: [
-        {
-          id: 'task-1',
-          status: 'in_progress'
-        }
-      ]
+      ].join('\n')
     })
+    expect(persisted).not.toHaveProperty('sections')
+    expect(persisted).not.toHaveProperty('tasks')
   })
 
   it('keeps documents isolated by session key', () => {

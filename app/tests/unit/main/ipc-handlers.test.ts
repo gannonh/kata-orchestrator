@@ -804,7 +804,7 @@ describe('registerIpcHandlers', () => {
       expect(abortResult).toBe(false)
     })
 
-    it('onEvent callback handles error state and sender.send failure', async () => {
+    it('aborts orphaned runner and marks run failed when sender is destroyed', async () => {
       const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
       mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
       mockCreateRun.mockReturnValue({ id: 'run-ev-2', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
@@ -822,12 +822,12 @@ describe('registerIpcHandlers', () => {
 
       const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
 
-      // Should not throw even when sender.send throws
       expect(() => {
         onEvent({ type: 'run_state_changed', runState: 'error', errorMessage: 'API rate limit' })
       }).not.toThrow()
 
-      expect(mockUpdateRunStatus).toHaveBeenCalledWith(store, 'run-ev-2', 'failed', 'API rate limit')
+      expect(mockRunner.abort).toHaveBeenCalledTimes(1)
+      expect(mockUpdateRunStatus).toHaveBeenCalledWith(store, 'run-ev-2', 'failed', 'Renderer window closed')
     })
 
     it('logs error when sender.send throws but sender is not destroyed', async () => {
