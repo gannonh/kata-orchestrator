@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KAT-187 Inline Approval Actions in Conversation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ============ THEME — Blueprint (dark-first) ============ */
+  :root {
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'Fira Code', 'SF Mono', Consolas, monospace;
+
+    --bg: #0c1220;
+    --bg-grid: rgba(56, 110, 160, 0.04);
+    --surface: #131d2e;
+    --surface2: #192638;
+    --surface-elevated: #1b2a40;
+    --border: rgba(100, 160, 220, 0.10);
+    --border-bright: rgba(100, 160, 220, 0.22);
+    --text: #d4dce8;
+    --text-dim: #7a8fa6;
+
+    --gold: #d4a73a;
+    --gold-dim: rgba(212, 167, 58, 0.10);
+    --teal: #2fb8a0;
+    --teal-dim: rgba(47, 184, 160, 0.10);
+    --blue: #4a9edd;
+    --blue-dim: rgba(74, 158, 221, 0.10);
+    --coral: #e07455;
+    --coral-dim: rgba(224, 116, 85, 0.10);
+    --slate: #5e7a94;
+    --slate-dim: rgba(94, 122, 148, 0.10);
+    --green: #4aba7a;
+    --green-dim: rgba(74, 186, 122, 0.10);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f0f4f8;
+      --bg-grid: rgba(30, 58, 95, 0.03);
+      --surface: #ffffff;
+      --surface2: #e8eef4;
+      --surface-elevated: #f7fafc;
+      --border: rgba(30, 58, 95, 0.10);
+      --border-bright: rgba(30, 58, 95, 0.20);
+      --text: #1a2a3a;
+      --text-dim: #5a7088;
+
+      --gold: #b08520;
+      --gold-dim: rgba(176, 133, 32, 0.08);
+      --teal: #0e8a75;
+      --teal-dim: rgba(14, 138, 117, 0.08);
+      --blue: #2874aa;
+      --blue-dim: rgba(40, 116, 170, 0.08);
+      --coral: #c25a38;
+      --coral-dim: rgba(194, 90, 56, 0.08);
+      --slate: #4a6478;
+      --slate-dim: rgba(74, 100, 120, 0.08);
+      --green: #2e8a55;
+      --green-dim: rgba(46, 138, 85, 0.08);
+    }
+  }
+
+  /* ============ RESET ============ */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      repeating-linear-gradient(0deg, var(--bg-grid) 0px, var(--bg-grid) 1px, transparent 1px, transparent 40px),
+      repeating-linear-gradient(90deg, var(--bg-grid) 0px, var(--bg-grid) 1px, transparent 1px, transparent 40px),
+      radial-gradient(ellipse at 30% 0%, var(--blue-dim) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 100%, var(--gold-dim) 0%, transparent 40%);
+    color: var(--text);
+    font-family: var(--font-body);
+    padding: 40px;
+    min-height: 100vh;
+  }
+
+  /* ============ ANIMATION ============ */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeScale {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .anim { animation: fadeUp 0.45s ease-out both; animation-delay: calc(var(--i, 0) * 0.06s); }
+  .anim-scale { animation: fadeScale 0.4s ease-out both; animation-delay: calc(var(--i, 0) * 0.06s); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* ============ NAV LAYOUT ============ */
+  .wrap {
+    max-width: 1320px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 170px 1fr;
+    gap: 0 40px;
+  }
+  .main { min-width: 0; }
+
+  /* TOC — Desktop */
+  .toc {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    padding: 14px 0;
+    grid-row: 1 / -1;
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
+  .toc::-webkit-scrollbar { width: 3px; }
+  .toc::-webkit-scrollbar-thumb { background: var(--surface-elevated); border-radius: 2px; }
+
+  .toc-title {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    padding: 0 0 10px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .toc a {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 5px;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+    line-height: 1.4;
+    margin-bottom: 1px;
+  }
+  .toc a:hover { color: var(--text); background: var(--surface2); }
+  .toc a.active { color: var(--text); border-left-color: var(--gold); }
+
+  @media (max-width: 1000px) {
+    .wrap { grid-template-columns: 1fr; padding-top: 0; }
+    body { padding-top: 0; }
+    .toc {
+      position: sticky; top: 0; z-index: 200;
+      max-height: none; display: flex; gap: 4px; align-items: center;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      padding: 10px 0; margin: 0 -40px; padding-left: 40px; padding-right: 40px;
+      grid-row: auto;
+    }
+    .toc::-webkit-scrollbar { display: none; }
+    .toc-title { display: none; }
+    .toc a {
+      white-space: nowrap; flex-shrink: 0;
+      border-left: none; border-bottom: 2px solid transparent;
+      border-radius: 4px 4px 0 0; padding: 6px 10px; font-size: 10px;
+    }
+    .toc a.active { border-left: none; border-bottom-color: var(--gold); background: var(--surface); }
+    .main { padding-top: 20px; }
+    .sec-head { scroll-margin-top: 52px; }
+  }
+
+  /* ============ TYPOGRAPHY ============ */
+  h1 {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.8px;
+    margin-bottom: 4px;
+    text-wrap: balance;
+  }
+  h1 span { color: var(--gold); }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 36px;
+    font-family: var(--font-mono);
+    font-weight: 400;
+  }
+
+  .sec-head {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    margin-top: 40px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    scroll-margin-top: 20px;
+  }
+  .sec-head .dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }
+
+  /* ============ CARD ============ */
+  .ve-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin-bottom: 16px;
+  }
+  .ve-card--hero {
+    background: var(--surface-elevated);
+    border-color: color-mix(in srgb, var(--border) 40%, var(--gold) 60%);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+    padding: 26px 28px;
+  }
+  .ve-card--recessed {
+    background: var(--surface2);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  .ve-card .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 10px;
+    display: flex; align-items: center; gap: 7px;
+  }
+
+  .ve-card h3 {
+    font-size: 16px; font-weight: 600; margin-bottom: 8px;
+  }
+  .ve-card p, .ve-card li {
+    font-size: 13px; line-height: 1.65; color: var(--text-dim);
+  }
+  .ve-card ul { list-style: none; padding: 0; }
+  .ve-card li {
+    padding-left: 16px; position: relative; margin-bottom: 4px;
+  }
+  .ve-card li::before {
+    content: ''; position: absolute; left: 0; top: 8px;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--text-dim); opacity: 0.5;
+  }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    background: var(--blue-dim);
+    color: var(--blue);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+
+  /* ============ KPIS ============ */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .kpi .num {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    letter-spacing: -1px;
+  }
+  .kpi .kpi-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  /* ============ APPROACH CARDS ============ */
+  .approach-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  .approach {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    position: relative;
+  }
+  .approach--selected {
+    border-color: var(--gold);
+    background: var(--surface-elevated);
+  }
+  .approach--selected::after {
+    content: 'SELECTED';
+    position: absolute;
+    top: 10px; right: 12px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: var(--gold);
+    background: var(--gold-dim);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .approach h4 {
+    font-size: 13px; font-weight: 600; margin-bottom: 6px;
+  }
+  .approach p {
+    font-size: 11.5px; line-height: 1.55; color: var(--text-dim);
+  }
+  .approach .tag {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-top: 8px;
+    margin-right: 4px;
+  }
+  .tag--pro { background: var(--green-dim); color: var(--green); }
+  .tag--con { background: var(--coral-dim); color: var(--coral); }
+
+  /* ============ TYPE MODEL ============ */
+  .type-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    color: var(--text-dim);
+  }
+  .type-block .kw { color: var(--blue); }
+  .type-block .tp { color: var(--gold); }
+  .type-block .str { color: var(--green); }
+  .type-block .cm { color: var(--slate); font-style: italic; }
+
+  /* ============ COMPONENT TREE ============ */
+  .comp-tree {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    position: relative;
+  }
+  .comp-node {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    position: relative;
+  }
+  .comp-node--root {
+    border-color: var(--gold);
+    background: var(--surface-elevated);
+  }
+  .comp-node--mid {
+    margin-left: 40px;
+    border-color: var(--teal-dim);
+  }
+  .comp-node--leaf {
+    margin-left: 80px;
+    border-color: var(--blue-dim);
+  }
+  .comp-node h4 {
+    font-size: 14px; font-weight: 600; margin-bottom: 4px;
+    font-family: var(--font-mono);
+  }
+  .comp-node p {
+    font-size: 12px; color: var(--text-dim); line-height: 1.5;
+  }
+  .comp-node .badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .badge--new { background: var(--green-dim); color: var(--green); }
+  .badge--mod { background: var(--gold-dim); color: var(--gold); }
+  .badge--existing { background: var(--slate-dim); color: var(--slate); }
+
+  .comp-connector {
+    width: 1px;
+    height: 12px;
+    margin-left: 30px;
+    border-left: 2px dashed var(--border-bright);
+  }
+  .comp-connector--mid { margin-left: 70px; }
+
+  /* ============ FLOW ARROW ============ */
+  .flow-arrow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 0;
+  }
+  .flow-arrow svg {
+    width: 18px; height: 18px;
+    fill: none; stroke: var(--border-bright);
+    stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* ============ TASK PIPELINE ============ */
+  .task-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .task-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    gap: 12px;
+    align-items: center;
+  }
+  .task-num {
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 700;
+    text-align: center;
+  }
+  .task-body h4 {
+    font-size: 13px; font-weight: 600; margin-bottom: 2px;
+  }
+  .task-body p {
+    font-size: 11px; color: var(--text-dim); line-height: 1.4;
+  }
+  .task-files {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: right;
+    line-height: 1.5;
+  }
+  .task-files .new { color: var(--green); }
+  .task-files .mod { color: var(--gold); }
+
+  /* ============ RESOLUTION FLOW ============ */
+  .res-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .res-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    text-align: center;
+    position: relative;
+  }
+  .res-step .step-num {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--teal);
+    margin-bottom: 6px;
+  }
+  .res-step h4 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .res-step p { font-size: 11px; color: var(--text-dim); line-height: 1.45; }
+  .res-arrow {
+    position: absolute;
+    right: -18px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--border-bright);
+    font-size: 14px;
+    z-index: 1;
+  }
+
+  /* ============ MERMAID ============ */
+  .mermaid-wrap {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .mermaid-inner {
+    overflow: auto;
+    cursor: grab;
+    min-height: 200px;
+  }
+  .mermaid-inner:active { cursor: grabbing; }
+
+  .zoom-controls {
+    position: absolute;
+    top: 10px; right: 10px;
+    display: flex; gap: 4px;
+    z-index: 10;
+  }
+  .zoom-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    width: 30px; height: 30px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .zoom-btn:hover { color: var(--text); border-color: var(--border-bright); }
+
+  .mermaid .nodeLabel { color: var(--text) !important; }
+  .mermaid .edgeLabel { color: var(--text-dim) !important; background-color: var(--surface) !important; }
+  .mermaid .edgeLabel rect { fill: var(--surface) !important; }
+
+  /* ============ CALLOUT ============ */
+  .callout {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gold);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    margin-top: 14px;
+  }
+  .callout strong { color: var(--text); font-weight: 600; }
+
+  /* ============ MOCK PREVIEW ============ */
+  .mock-preview {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .mock-chat {
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .mock-bubble {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .mock-bubble .role {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+  .mock-bubble--agent .role { color: var(--teal); }
+  .mock-bubble--user .role { color: var(--gold); }
+  .mock-bubble p { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .mock-bubble h5 { font-size: 12px; font-weight: 600; margin: 6px 0 2px; }
+
+  .mock-action-row {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;
+    padding-top: 10px; border-top: 1px solid var(--border);
+  }
+  .mock-btn {
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid;
+    cursor: default;
+  }
+  .mock-btn--primary {
+    background: var(--gold-dim);
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+  .mock-btn--secondary {
+    background: var(--teal-dim);
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+  .mock-btn--outline {
+    background: transparent;
+    border-color: var(--border-bright);
+    color: var(--text-dim);
+  }
+
+  .mock-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: center;
+    margin-top: 6px;
+  }
+
+  /* ============ EVIDENCE LIST ============ */
+  .evidence-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .evidence-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .evidence-icon {
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .evidence-icon--test { background: var(--green-dim); color: var(--green); }
+  .evidence-icon--shot { background: var(--blue-dim); color: var(--blue); }
+  .evidence-item p { font-size: 11px; color: var(--text-dim); line-height: 1.4; }
+  .evidence-item strong { color: var(--text); font-weight: 500; }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 768px) {
+    body { padding: 20px; }
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .approach-grid { grid-template-columns: 1fr; }
+    .res-steps { grid-template-columns: 1fr; }
+    .res-arrow { display: none; }
+    .evidence-grid { grid-template-columns: 1fr; }
+    .comp-node--mid { margin-left: 20px; }
+    .comp-node--leaf { margin-left: 40px; }
+    .comp-connector { margin-left: 15px; }
+    .comp-connector--mid { margin-left: 35px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <nav class="toc" id="toc">
+    <div class="toc-title">KAT-187</div>
+    <a href="#s1">Scope</a>
+    <a href="#s2">UI Preview</a>
+    <a href="#s3">Design Decision</a>
+    <a href="#s4">Type Model</a>
+    <a href="#s5">Component Tree</a>
+    <a href="#s6">Data Flow</a>
+    <a href="#s7">Resolution</a>
+    <a href="#s8">Tasks</a>
+    <a href="#s9">Evidence</a>
+  </nav>
+
+  <div class="main">
+
+    <h1 class="anim" style="--i:0">Inline <span>Approval Actions</span><br>in Conversation</h1>
+    <p class="subtitle anim" style="--i:1">KAT-187 &middot; Spec 04 Build Session &middot; Renderer-only decision extraction</p>
+
+    <!-- ===== SCOPE ===== -->
+    <div id="s1" class="sec-head anim" style="--i:2; color: var(--gold)">
+      <span class="dot" style="background: var(--gold)"></span> Scope
+    </div>
+
+    <div class="ve-card ve-card--hero anim" style="--i:3">
+      <p>Agent tech-stack proposal messages render action buttons inline. Action clicks send deterministic follow-up prompts through the existing run submission flow. Decisions are replay-safe across persisted run history. No new IPC schema or main-process changes required.</p>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi anim-scale" style="--i:4">
+        <div class="num" style="color: var(--gold)">7</div>
+        <div class="kpi-label">Tasks</div>
+      </div>
+      <div class="kpi anim-scale" style="--i:5">
+        <div class="num" style="color: var(--teal)">3</div>
+        <div class="kpi-label">New Files</div>
+      </div>
+      <div class="kpi anim-scale" style="--i:6">
+        <div class="num" style="color: var(--blue)">2</div>
+        <div class="kpi-label">Modified</div>
+      </div>
+      <div class="kpi anim-scale" style="--i:7">
+        <div class="num" style="color: var(--coral)">0</div>
+        <div class="kpi-label">IPC Changes</div>
+      </div>
+    </div>
+
+    <!-- ===== UI PREVIEW ===== -->
+    <div id="s2" class="sec-head anim" style="--i:8; color: var(--teal)">
+      <span class="dot" style="background: var(--teal)"></span> UI Preview
+    </div>
+
+    <div class="mock-preview anim" style="--i:9">
+      <div class="mock-chat">
+        <div class="mock-bubble mock-bubble--agent">
+          <div class="role">Agent</div>
+          <h5>Why</h5>
+          <p>Electron + TypeScript keeps desktop iteration stable.</p>
+          <h5>How to keep Tech stable later</h5>
+          <p>Keep provider adapter boundaries explicit.</p>
+          <p style="margin-top: 8px; font-size: 11px; color: var(--text-dim);">Approve this plan with 1 check? Clarifications</p>
+          <div class="mock-action-row">
+            <div class="mock-btn mock-btn--primary">Approve the plan...</div>
+            <div class="mock-btn mock-btn--secondary">Keep the last switch...</div>
+            <div class="mock-btn mock-btn--outline">Clarifications</div>
+          </div>
+        </div>
+        <div class="mock-label">Mock 12 / Available state</div>
+      </div>
+    </div>
+
+    <div class="mock-preview anim" style="--i:10">
+      <div class="mock-chat">
+        <div class="mock-bubble mock-bubble--agent" style="opacity: 0.6;">
+          <div class="role">Agent</div>
+          <p style="font-size: 11px;">Tech stack proposal content...</p>
+          <div class="mock-action-row" style="opacity: 0.5;">
+            <div class="mock-btn mock-btn--primary" style="opacity: 0.5;">Approve the plan...</div>
+            <div class="mock-btn mock-btn--secondary" style="opacity: 0.5;">Keep the last switch...</div>
+            <div class="mock-btn mock-btn--outline" style="opacity: 0.5;">Clarifications</div>
+          </div>
+          <p style="font-size: 10px; color: var(--text-dim); margin-top: 8px; font-family: var(--font-mono);">Decision sent</p>
+        </div>
+        <div class="mock-bubble mock-bubble--user">
+          <div class="role">User</div>
+          <p>Approve the plan and continue with this tech stack.</p>
+        </div>
+        <div class="mock-label">Mock 13 / Resolved state</div>
+      </div>
+    </div>
+
+    <!-- ===== DESIGN DECISION ===== -->
+    <div id="s3" class="sec-head anim" style="--i:11; color: var(--blue)">
+      <span class="dot" style="background: var(--blue)"></span> Design Decision
+    </div>
+
+    <div class="approach-grid">
+      <div class="approach approach--selected anim" style="--i:12">
+        <h4>1. Renderer Extraction</h4>
+        <p>Detect decision prompts from agent markdown in renderer, render inline buttons, map to canonical follow-up prompts via <code>submitPrompt</code>.</p>
+        <span class="tag tag--pro">Small scope</span>
+        <span class="tag tag--pro">No IPC change</span>
+        <span class="tag tag--pro">Replay-safe</span>
+        <span class="tag tag--con">Heuristic parsing</span>
+      </div>
+      <div class="approach anim" style="--i:13">
+        <h4>2. Typed Decision Payloads</h4>
+        <p>Extend runtime events so agent messages include structured <code>decisionCard</code> metadata across shared/main/preload/renderer.</p>
+        <span class="tag tag--pro">Deterministic</span>
+        <span class="tag tag--con">Wide scope</span>
+        <span class="tag tag--con">Delays delivery</span>
+      </div>
+      <div class="approach anim" style="--i:14">
+        <h4>3. Right Panel Only</h4>
+        <p>Move decision affordances to spec panel. Center conversation stays read-only.</p>
+        <span class="tag tag--pro">Reuses panel</span>
+        <span class="tag tag--con">Spec conflict</span>
+        <span class="tag tag--con">Breaks context</span>
+      </div>
+    </div>
+
+    <!-- ===== TYPE MODEL ===== -->
+    <div id="s4" class="sec-head anim" style="--i:15; color: var(--gold)">
+      <span class="dot" style="background: var(--gold)"></span> Type Model
+    </div>
+
+    <div class="ve-card anim" style="--i:16">
+      <div class="label" style="color: var(--blue)">
+        <span class="dot" style="background: var(--blue)"></span> message-decision-parser.ts
+      </div>
+      <div class="type-block"><span class="kw">type</span> <span class="tp">InlineDecisionActionId</span> =
+  | <span class="str">'approve_tech_stack_plan'</span>
+  | <span class="str">'keep_last_stack_switch'</span>
+  | <span class="str">'ask_for_clarification'</span>
+
+<span class="kw">type</span> <span class="tp">InlineDecisionAction</span> = {
+  id: <span class="tp">InlineDecisionActionId</span>
+  label: <span class="kw">string</span>
+  followUpPrompt: <span class="kw">string</span>        <span class="cm">// canonical text sent via submitPrompt</span>
+  variant: <span class="str">'default'</span> | <span class="str">'secondary'</span> | <span class="str">'outline'</span>
+}
+
+<span class="kw">type</span> <span class="tp">InlineDecisionCard</span> = {
+  sourceMessageId: <span class="kw">string</span>       <span class="cm">// ties card to originating agent message</span>
+  promptLabel: <span class="kw">string</span>
+  actions: <span class="tp">InlineDecisionAction</span>[]
+}</div>
+    </div>
+
+    <div class="callout anim" style="--i:17">
+      <strong>Detection contract:</strong> Only agent messages eligible. Must contain "Approve this plan" + "Approve the plan" + "Keep the last switch" patterns. Unknown shapes fail closed.
+    </div>
+
+    <!-- ===== COMPONENT TREE ===== -->
+    <div id="s5" class="sec-head anim" style="--i:18; color: var(--teal)">
+      <span class="dot" style="background: var(--teal)"></span> Component Architecture
+    </div>
+
+    <div class="comp-tree">
+      <div class="comp-node comp-node--root anim" style="--i:19">
+        <h4>ChatPanel <span class="badge badge--mod">Modified</span></h4>
+        <p>Extracts <code>InlineDecisionCard</code> from eligible agent messages. Derives decision state (<code>available</code> / <code>pending</code> / <code>resolved</code>) from <code>runState</code> and message history. Routes action clicks to <code>submitPrompt(followUpPrompt)</code>.</p>
+      </div>
+      <div class="comp-connector"></div>
+      <div class="comp-node comp-node--mid anim" style="--i:20">
+        <h4>MessageBubble <span class="badge badge--mod">Modified</span></h4>
+        <p>Receives optional <code>decisionCard</code>, <code>decisionState</code>, and <code>onDecisionAction</code> props. Renders action row below markdown content when a card is present. Shows "Decision sent" label when resolved.</p>
+      </div>
+      <div class="comp-connector comp-connector--mid"></div>
+      <div class="comp-node comp-node--leaf anim" style="--i:21">
+        <h4>MessageActionRow <span class="badge badge--new">New</span></h4>
+        <p>Generic reusable action button row. Receives <code>actions[]</code>, <code>disabled</code>, <code>onAction</code>. Uses shadcn <code>Button</code> primitives with variant support.</p>
+      </div>
+    </div>
+
+    <div style="height: 8px"></div>
+
+    <div class="ve-card ve-card--recessed anim" style="--i:22">
+      <div class="label" style="color: var(--slate)">
+        <span class="dot" style="background: var(--slate)"></span> Supporting modules
+      </div>
+      <ul>
+        <li><code>message-decision-parser.ts</code> <span class="badge badge--new" style="vertical-align: middle">New</span> Exports <code>extractInlineDecisionCard()</code> and <code>isDecisionResolved()</code></li>
+        <li><code>useIpcSessionConversation</code> <span class="badge badge--existing" style="vertical-align: middle">Existing</span> Provides messages, runState, and submitPrompt. No changes needed.</li>
+      </ul>
+    </div>
+
+    <!-- ===== DATA FLOW ===== -->
+    <div id="s6" class="sec-head anim" style="--i:23; color: var(--blue)">
+      <span class="dot" style="background: var(--blue)"></span> Data Flow
+    </div>
+
+    <div class="mermaid-wrap anim" style="--i:24">
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomDiagram(1)" title="Zoom in">+</button>
+        <button class="zoom-btn" onclick="zoomDiagram(-1)" title="Zoom out">&minus;</button>
+        <button class="zoom-btn" onclick="zoomDiagram(0)" title="Reset zoom">R</button>
+      </div>
+      <div class="mermaid-inner" id="mermaid-container">
+        <pre class="mermaid">
+sequenceDiagram
+    participant H as Hook
+    participant CP as ChatPanel
+    participant P as Parser
+    participant MB as MessageBubble
+    participant AR as ActionRow
+    participant RT as Runtime
+
+    H->>CP: messages + runState
+    CP->>P: extractInlineDecisionCard per agent msg
+    P-->>CP: InlineDecisionCard or undefined
+    CP->>P: isDecisionResolved check
+    P-->>CP: boolean
+    CP->>MB: message + card + state + callback
+    MB->>AR: actions + disabled + onAction
+    Note over AR: User clicks Approve
+    AR->>CP: onAction with actionId
+    CP->>RT: submitPrompt with followUpPrompt
+    RT-->>H: New user message appended
+    Note over H,RT: Decision now resolved via message ordering
+        </pre>
+      </div>
+    </div>
+
+    <!-- ===== RESOLUTION ===== -->
+    <div id="s7" class="sec-head anim" style="--i:25; color: var(--coral)">
+      <span class="dot" style="background: var(--coral)"></span> Resolution Semantics
+    </div>
+
+    <div class="res-steps">
+      <div class="res-step anim" style="--i:26">
+        <div class="step-num">STEP 1</div>
+        <h4>Click Action</h4>
+        <p>Action row disabled. <code>submitPrompt</code> called with canonical follow-up text.</p>
+        <span class="res-arrow">&rarr;</span>
+      </div>
+      <div class="res-step anim" style="--i:27">
+        <div class="step-num">STEP 2</div>
+        <h4>Run Executes</h4>
+        <p>Follow-up prompt persisted as normal user message. Agent responds.</p>
+        <span class="res-arrow">&rarr;</span>
+      </div>
+      <div class="res-step anim" style="--i:28">
+        <div class="step-num">STEP 3</div>
+        <h4>Resolved</h4>
+        <p><code>isDecisionResolved</code> detects matching user message after source. Card renders as non-interactive.</p>
+      </div>
+    </div>
+
+    <div class="callout anim" style="--i:29">
+      <strong>Replay-safe:</strong> No additional persistence fields required. Resolution derives from message ordering in the existing conversation history. Works identically on replay.
+    </div>
+
+    <!-- ===== TASKS ===== -->
+    <div id="s8" class="sec-head anim" style="--i:30; color: var(--green)">
+      <span class="dot" style="background: var(--green)"></span> Implementation Tasks (TDD)
+    </div>
+
+    <div class="task-grid">
+      <div class="task-item anim" style="--i:31">
+        <div class="task-num" style="color: var(--gold)">1</div>
+        <div class="task-body">
+          <h4>Decision Parsing Domain</h4>
+          <p>Parser + resolution helpers for mock-12/13 agent message shape</p>
+        </div>
+        <div class="task-files">
+          <span class="new">+ message-decision-parser.ts</span><br>
+          <span class="new">+ message-decision-parser.test.ts</span>
+        </div>
+      </div>
+      <div class="task-item anim" style="--i:32">
+        <div class="task-num" style="color: var(--gold)">2</div>
+        <div class="task-body">
+          <h4>Message Action Row UI</h4>
+          <p>Reusable button row component using shadcn Button primitives</p>
+        </div>
+        <div class="task-files">
+          <span class="new">+ MessageActionRow.tsx</span><br>
+          <span class="new">+ MessageActionRow.test.tsx</span>
+        </div>
+      </div>
+      <div class="task-item anim" style="--i:33">
+        <div class="task-num" style="color: var(--teal)">3</div>
+        <div class="task-body">
+          <h4>MessageBubble Decision Rendering</h4>
+          <p>Accept optional decision props, render action row + resolved label</p>
+        </div>
+        <div class="task-files">
+          <span class="mod">~ MessageBubble.tsx</span><br>
+          <span class="mod">~ MessageBubble.test.tsx</span>
+        </div>
+      </div>
+      <div class="task-item anim" style="--i:34">
+        <div class="task-num" style="color: var(--teal)">4</div>
+        <div class="task-body">
+          <h4>ChatPanel Decision Wiring</h4>
+          <p>Extract cards, derive state, wire action callbacks to submitPrompt</p>
+        </div>
+        <div class="task-files">
+          <span class="mod">~ ChatPanel.tsx</span><br>
+          <span class="mod">~ ChatPanel.test.tsx</span>
+        </div>
+      </div>
+      <div class="task-item anim" style="--i:35">
+        <div class="task-num" style="color: var(--blue)">5</div>
+        <div class="task-body">
+          <h4>Hook Replay Contract</h4>
+          <p>Guard test: follow-up prompt persists as normal user message on replay</p>
+        </div>
+        <div class="task-files">
+          <span class="mod">~ useIpcSessionConversation.test.ts</span>
+        </div>
+      </div>
+      <div class="task-item anim" style="--i:36">
+        <div class="task-num" style="color: var(--blue)">6</div>
+        <div class="task-body">
+          <h4>E2E Evidence Capture</h4>
+          <p>Playwright test: action visibility, click submission, post-click screenshots</p>
+        </div>
+        <div class="task-files">
+          <span class="new">+ kat-187-approval-actions.spec.ts</span>
+        </div>
+      </div>
+      <div class="task-item anim" style="--i:37">
+        <div class="task-num" style="color: var(--coral)">7</div>
+        <div class="task-body">
+          <h4>Verification Gate</h4>
+          <p>Full test suite run, evidence checklist, Linear comment preparation</p>
+        </div>
+        <div class="task-files">
+          <span class="mod">~ implementation-plan.md</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== EVIDENCE ===== -->
+    <div id="s9" class="sec-head anim" style="--i:38; color: var(--slate)">
+      <span class="dot" style="background: var(--slate)"></span> Completion Evidence
+    </div>
+
+    <div class="evidence-grid">
+      <div class="evidence-item anim" style="--i:39">
+        <div class="evidence-icon evidence-icon--test">UT</div>
+        <p><strong>Parser tests</strong> detect mock-12/13 shapes, ignore normal messages, fail closed on malformed input</p>
+      </div>
+      <div class="evidence-item anim" style="--i:40">
+        <div class="evidence-icon evidence-icon--test">IT</div>
+        <p><strong>ChatPanel tests</strong> action click triggers submitPrompt, pending state disables row</p>
+      </div>
+      <div class="evidence-item anim" style="--i:41">
+        <div class="evidence-icon evidence-icon--test">RC</div>
+        <p><strong>Replay contract</strong> follow-up prompt persisted as normal conversation turn</p>
+      </div>
+      <div class="evidence-item anim" style="--i:42">
+        <div class="evidence-icon evidence-icon--shot">S1</div>
+        <p><strong>mock12-actions-visible.png</strong> inline action row visible on tech-stack proposal</p>
+      </div>
+      <div class="evidence-item anim" style="--i:43">
+        <div class="evidence-icon evidence-icon--shot">S2</div>
+        <p><strong>mock13-actions-post-click.png</strong> resolved state after approval click</p>
+      </div>
+      <div class="evidence-item anim" style="--i:44">
+        <div class="evidence-icon evidence-icon--test">E2</div>
+        <p><strong>E2E Playwright</strong> full flow: seed prompt, action visible, click, post-click state</p>
+      </div>
+    </div>
+
+    <div class="callout anim" style="--i:45">
+      <strong>Non-goals:</strong> KAT-188 task panel parity, new runtime IPC schema for typed decisions, model/provider selection rework, full conversation protocol redesign.
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /wrap -->
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: isDark ? '#1b2a40' : '#e8eef4',
+      primaryBorderColor: isDark ? '#4a9edd' : '#2874aa',
+      primaryTextColor: isDark ? '#d4dce8' : '#1a2a3a',
+      secondaryColor: isDark ? '#192638' : '#f0f4f8',
+      secondaryBorderColor: isDark ? '#2fb8a0' : '#0e8a75',
+      secondaryTextColor: isDark ? '#d4dce8' : '#1a2a3a',
+      lineColor: isDark ? '#5e7a94' : '#94a3b8',
+      actorBkg: isDark ? '#1b2a40' : '#e8eef4',
+      actorBorder: isDark ? '#d4a73a' : '#b08520',
+      actorTextColor: isDark ? '#d4dce8' : '#1a2a3a',
+      signalColor: isDark ? '#7a8fa6' : '#5a7088',
+      signalTextColor: isDark ? '#d4dce8' : '#1a2a3a',
+      noteBkgColor: isDark ? '#192638' : '#fef9ec',
+      noteTextColor: isDark ? '#d4dce8' : '#1a2a3a',
+      noteBorderColor: isDark ? '#d4a73a' : '#b08520',
+      activationBkgColor: isDark ? '#1b2a40' : '#dbeafe',
+      activationBorderColor: isDark ? '#4a9edd' : '#2874aa',
+      fontSize: '14px',
+      fontFamily: 'DM Sans, system-ui, sans-serif',
+    }
+  });
+</script>
+
+<script>
+// Zoom controls
+let currentZoom = 1;
+const ZOOM_STEP = 0.2;
+const container = document.getElementById('mermaid-container');
+
+function zoomDiagram(dir) {
+  if (dir === 0) { currentZoom = 1; }
+  else { currentZoom = Math.max(0.4, Math.min(3, currentZoom + dir * ZOOM_STEP)); }
+  const svg = container.querySelector('svg');
+  if (svg) { svg.style.transform = `scale(${currentZoom})`; svg.style.transformOrigin = 'top left'; }
+}
+
+container.addEventListener('wheel', (e) => {
+  if (e.ctrlKey || e.metaKey) {
+    e.preventDefault();
+    zoomDiagram(e.deltaY < 0 ? 1 : -1);
+  }
+}, { passive: false });
+
+// Drag panning
+let isDragging = false, startX, startY, scrollLeft, scrollTop;
+container.addEventListener('mousedown', (e) => {
+  if (currentZoom <= 1) return;
+  isDragging = true;
+  startX = e.pageX - container.offsetLeft;
+  startY = e.pageY - container.offsetTop;
+  scrollLeft = container.scrollLeft;
+  scrollTop = container.scrollTop;
+});
+container.addEventListener('mouseleave', () => isDragging = false);
+container.addEventListener('mouseup', () => isDragging = false);
+container.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  e.preventDefault();
+  container.scrollLeft = scrollLeft - (e.pageX - container.offsetLeft - startX);
+  container.scrollTop = scrollTop - (e.pageY - container.offsetTop - startY);
+});
+
+// Scroll spy
+(function() {
+  const toc = document.getElementById('toc');
+  const links = toc.querySelectorAll('a');
+  const sections = [];
+  links.forEach(link => {
+    const id = link.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (el) sections.push({ id, el, link });
+  });
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const match = sections.find(s => s.el === entry.target);
+        if (match) {
+          match.link.classList.add('active');
+          if (window.innerWidth <= 1000) {
+            match.link.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          }
+        }
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px' });
+  sections.forEach(s => observer.observe(s.el));
+  links.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const id = link.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        history.replaceState(null, '', '#' + id);
+      }
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
