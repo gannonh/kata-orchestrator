@@ -27,6 +27,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isUnsafeRecordKey(key: string): boolean {
+  return key === '__proto__' || key === 'constructor' || key === 'prototype'
+}
+
 function isSpaceRecord(value: unknown): boolean {
   if (!isRecord(value)) {
     return false
@@ -194,9 +198,13 @@ function normalizeSpecDocuments(value: unknown): AppState['specDocuments'] {
     return {}
   }
 
-  const normalized: AppState['specDocuments'] = {}
+  const normalized = Object.create(null) as AppState['specDocuments']
 
   for (const [key, record] of Object.entries(value)) {
+    if (isUnsafeRecordKey(key)) {
+      console.warn('[StateStore] Dropping unsafe spec document key:', key)
+      continue
+    }
     if (isPersistedSpecDocument(record)) {
       normalized[key] = record
     } else {
@@ -208,10 +216,14 @@ function normalizeSpecDocuments(value: unknown): AppState['specDocuments'] {
 }
 
 function reconcileInterruptedRuns(runs: AppState['runs']): AppState['runs'] {
-  const reconciled: AppState['runs'] = {}
+  const reconciled = Object.create(null) as AppState['runs']
   const completedAt = new Date().toISOString()
 
   for (const [key, run] of Object.entries(runs)) {
+    if (isUnsafeRecordKey(key)) {
+      console.warn('[StateStore] Dropping unsafe run key:', key)
+      continue
+    }
     if (run.status === 'queued' || run.status === 'running') {
       reconciled[key] = {
         ...run,

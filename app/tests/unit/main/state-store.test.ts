@@ -707,6 +707,57 @@ describe('createStateStore', () => {
     })
   })
 
+  test('drops prototype-polluting keys from specDocuments', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {},
+        specDocuments: {
+          '__proto__': {
+            markdown: '# Evil',
+            updatedAt: '2026-03-03T00:00:00.000Z'
+          },
+          constructor: {
+            markdown: '# Evil',
+            updatedAt: '2026-03-03T00:00:00.000Z'
+          },
+          prototype: {
+            markdown: '# Evil',
+            updatedAt: '2026-03-03T00:00:00.000Z'
+          },
+          'safe-key': {
+            markdown: '# Safe',
+            updatedAt: '2026-03-03T00:00:00.000Z'
+          }
+        },
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+
+    expect(Object.keys(state.specDocuments)).toEqual(['safe-key'])
+    expect(state.specDocuments['safe-key']?.markdown).toBe('# Safe')
+  })
+
+  test('drops prototype-polluting keys from runs during reconciliation', () => {
+    const makeRun = (id: string) =>
+      `{"id":"${id}","sessionId":"s","prompt":"p","status":"running","model":"m","provider":"p","createdAt":"2026-03-03T00:00:00.000Z","messages":[]}`
+    fs.writeFileSync(
+      filePath,
+      `{"spaces":{},"sessions":{},"runs":{"constructor":${makeRun('constructor')},"safe_run":${makeRun('safe_run')}},"agentRoster":{},"specDocuments":{},"activeSpaceId":null,"activeSessionId":null}`
+    )
+
+    const state = createStateStore(filePath).load({ reconcileInterruptedRuns: true })
+
+    expect(state.runs.safe_run?.status).toBe('failed')
+    expect(state.runs).not.toHaveProperty('constructor')
+  })
+
   test('does not reconcile interrupted runs on default load', () => {
     const runsPayload = {
       queued_run: {
