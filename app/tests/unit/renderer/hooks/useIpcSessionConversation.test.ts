@@ -430,6 +430,84 @@ describe('useIpcSessionConversation', () => {
     expect(result.current.state.messages[1].content).toBe('hi there')
   })
 
+  it('prefers persisted run draft metadata when replay restores latestDraft', async () => {
+    const persistedDraft = {
+      runId: 'run-1',
+      generatedAt: '2026-03-01T00:00:02Z',
+      content: '# Persisted draft from run metadata'
+    }
+
+    mockRunList.mockResolvedValue([
+      {
+        id: 'run-1',
+        sessionId: 's-1',
+        prompt: 'hello',
+        status: 'completed',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-01T00:00:00Z',
+        draft: persistedDraft,
+        messages: [
+          { id: 'u1', role: 'user', content: 'hello', createdAt: '2026-03-01T00:00:00Z' },
+          { id: 'a1', role: 'agent', content: 'hi there', createdAt: '2026-03-01T00:00:01Z' }
+        ]
+      }
+    ])
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    expect(result.current.state.messages).toHaveLength(2)
+    expect(result.current.state.messages[0].content).toBe('hello')
+    expect(result.current.state.messages[1].content).toBe('hi there')
+    expect(result.current.state.latestDraft).toEqual(persistedDraft)
+  })
+
+  it('surfaces reconciled interrupted-run fallback from replay as an error state', async () => {
+    const interruptedRunError = 'Recovered after app restart: in-flight run was interrupted'
+
+    mockRunList.mockResolvedValue([
+      {
+        id: 'run-1',
+        sessionId: 's-1',
+        prompt: 'retry after restart',
+        status: 'failed',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-01T00:00:00Z',
+        errorMessage: interruptedRunError,
+        messages: [
+          {
+            id: 'u1',
+            role: 'user',
+            content: 'retry after restart',
+            createdAt: '2026-03-01T00:00:00Z'
+          }
+        ]
+      }
+    ])
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    expect(result.current.state.messages).toHaveLength(1)
+    expect(result.current.state.messages[0].content).toBe('retry after restart')
+    expect(result.current.state.runState).toBe('error')
+    expect(result.current.state.errorMessage).toBe(interruptedRunError)
+  })
+
   it('silently ignores replay errors', async () => {
     mockRunList.mockRejectedValue(new Error('network error'))
 

@@ -9,6 +9,8 @@ import type { SessionRuntimeEvent } from '../types/session-runtime-adapter'
 
 const DEFAULT_RUN_MODEL = 'gpt-5.3-codex'
 const DEFAULT_RUN_PROVIDER = 'openai-codex'
+const INTERRUPTED_RUN_RECOVERY_ERROR_MESSAGE =
+  'Recovered after app restart: in-flight run was interrupted'
 
 export function useIpcSessionConversation(sessionId: string | null) {
   const [state, dispatch] = useReducer(
@@ -83,14 +85,19 @@ export function useIpcSessionConversation(sessionId: string | null) {
               dispatch({ type: 'SUBMIT_PROMPT', prompt: msg.content })
             } else {
               setLatestDraft(
-                buildLatestDraft({
-                  prompt: run.prompt,
-                  runId: run.id,
-                  generatedAt: msg.createdAt
-                })
+                run.draft ??
+                  buildLatestDraft({
+                    prompt: run.prompt,
+                    runId: run.id,
+                    generatedAt: msg.createdAt
+                  })
               )
               dispatch({ type: 'RUN_SUCCEEDED', response: msg.content })
             }
+          }
+
+          if (isReconciledInterruptedRunFallback(run.status, run.errorMessage)) {
+            dispatch({ type: 'RUN_FAILED', error: run.errorMessage })
           }
         }
       })
@@ -159,6 +166,13 @@ export function useIpcSessionConversation(sessionId: string | null) {
     submitPrompt,
     retry
   }
+}
+
+function isReconciledInterruptedRunFallback(
+  status: string,
+  errorMessage: string | undefined
+): errorMessage is string {
+  return status === 'failed' && errorMessage === INTERRUPTED_RUN_RECOVERY_ERROR_MESSAGE
 }
 
 // TODO: replace with spec extraction pipeline output once connected.
