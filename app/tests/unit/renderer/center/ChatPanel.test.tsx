@@ -238,6 +238,30 @@ describe('ChatPanel', () => {
     expect(submitPrompt).not.toHaveBeenCalled()
   })
 
+  it('renders decision actions only for the decision message, not for plain messages', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        messages: [
+          { id: 'm1', role: 'agent', content: decisionProposal, createdAt: '2026-03-01T00:00:01Z' },
+          { id: 'm2', role: 'agent', content: 'Hello, how can I help?', createdAt: '2026-03-01T00:00:02Z' },
+        ],
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn(),
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    const approveButtons = screen.getAllByRole('button', { name: 'Approve the plan...' })
+    expect(approveButtons).toHaveLength(1)
+
+    const keepButtons = screen.getAllByRole('button', { name: 'Keep the last switch...' })
+    expect(keepButtons).toHaveLength(1)
+
+    const clarifyButtons = screen.getAllByRole('button', { name: 'Clarifications' })
+    expect(clarifyButtons).toHaveLength(1)
+  })
+
   it('publishes derived conversation entries when messages change', () => {
     const onConversationEntriesChange = vi.fn()
     mockHook.mockReturnValue({

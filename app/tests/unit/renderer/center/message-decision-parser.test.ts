@@ -173,6 +173,27 @@ describe('message-decision-parser', () => {
     expect(stripDecisionActionLines(plain)).toBe(plain)
   })
 
+  it('returns false when a matching user message appears BEFORE the decision card', () => {
+    const messages: ConversationMessage[] = [
+      {
+        id: 'user-early',
+        role: 'user',
+        content: 'Approve the plan and continue with this tech stack.',
+        createdAt: '2026-03-03T00:00:00.000Z'
+      },
+      {
+        id: 'agent-1',
+        role: 'agent',
+        content: proposal,
+        createdAt: '2026-03-03T00:00:01.000Z'
+      }
+    ]
+
+    const card = extractInlineDecisionCard(messages[1]!)
+    expect(card).toBeTruthy()
+    expect(isDecisionResolved(messages, card!)).toBe(false)
+  })
+
   it('returns false when the decision source message is not present in the conversation', () => {
     const card = extractInlineDecisionCard({
       id: 'agent-source',

@@ -28,18 +28,9 @@ test.describe('KAT-187 approval actions parity @uat', () => {
       '- Keep the last switch...'
     ].join('\n')
 
-    const didStubRunSubmit = await electronApp.evaluate(({ ipcMain }) => {
-      const handlers = (ipcMain as unknown as { _invokeHandlers?: Map<string, unknown> })._invokeHandlers
-      const existingHandler = handlers?.get('run:submit')
-      if (typeof existingHandler !== 'function') {
-        return false
-      }
-
-      const globalState = globalThis as { __kat187_prevRunSubmitHandler?: unknown }
-      globalState.__kat187_prevRunSubmitHandler = existingHandler
-      ipcMain.removeHandler('run:submit')
+    await electronApp.evaluate(({ ipcMain }) => {
+      try { ipcMain.removeHandler('run:submit') } catch { /* no prior handler */ }
       ipcMain.handle('run:submit', async () => ({ runId: 'run-kat-187-e2e' }))
-      return true
     })
 
     try {
@@ -87,18 +78,9 @@ test.describe('KAT-187 approval actions parity @uat', () => {
         fullPage: true
       })
     } finally {
-      if (didStubRunSubmit) {
-        await electronApp.evaluate(({ ipcMain }) => {
-          const globalState = globalThis as { __kat187_prevRunSubmitHandler?: unknown }
-          const previousHandler = globalState.__kat187_prevRunSubmitHandler
-          delete globalState.__kat187_prevRunSubmitHandler
-
-          ipcMain.removeHandler('run:submit')
-          if (typeof previousHandler === 'function') {
-            ipcMain.handle('run:submit', previousHandler as (...args: unknown[]) => unknown)
-          }
-        })
-      }
+      await electronApp.evaluate(({ ipcMain }) => {
+        try { ipcMain.removeHandler('run:submit') } catch { /* already removed */ }
+      })
     }
   })
 })

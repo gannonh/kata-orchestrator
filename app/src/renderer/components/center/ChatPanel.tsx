@@ -6,7 +6,7 @@ import type { ConversationEntry } from '../left/conversation-entry-index'
 import { buildConversationEntries } from '../left/conversation-entry-index'
 import { ChatInput } from './ChatInput'
 import { MessageBubble } from './MessageBubble'
-import { extractInlineDecisionCard, isDecisionResolved } from './message-decision-parser'
+import { type DecisionState, extractInlineDecisionCard, type InlineDecisionCard, isDecisionResolved } from './message-decision-parser'
 import { type ScrollToMessage, MessageList } from './MessageList'
 import { RunStatusBadge } from './RunStatusBadge'
 
@@ -34,27 +34,29 @@ export function ChatPanel({
     onConversationEntriesChange?.(conversationEntries)
   }, [conversationEntries, onConversationEntriesChange])
 
-  const decisionCards = useMemo(
-    () =>
-      state.messages.map((message) => {
+  const decisionCardMap = useMemo(
+    () => {
+      const map = new Map<string, { card: InlineDecisionCard | undefined; resolved: boolean }>()
+      for (const message of state.messages) {
         const card = extractInlineDecisionCard(message)
         const resolved = card ? isDecisionResolved(state.messages, card) : false
-        return { card, resolved }
-      }),
+        map.set(message.id, { card, resolved })
+      }
+      return map
+    },
     [state.messages]
   )
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <MessageList onRegisterScrollToMessage={onRegisterScrollToMessage}>
-        {state.messages.map((message, index) => {
-          const { card: decisionCard, resolved } = decisionCards[index]
-          const decisionState =
-            state.runState === 'pending'
+        {state.messages.map((message) => {
+          const { card: decisionCard, resolved } = decisionCardMap.get(message.id) ?? { card: undefined, resolved: false }
+          const decisionState: DecisionState = resolved
+            ? 'resolved'
+            : state.runState === 'pending'
               ? 'pending'
-              : resolved
-                ? 'resolved'
-                : 'available'
+              : 'available'
 
           return (
             <div
@@ -74,6 +76,8 @@ export function ChatPanel({
 
                   if (selectedAction) {
                     submitPrompt(selectedAction.followUpPrompt)
+                  } else {
+                    console.error(`[ChatPanel] Decision action "${actionId}" not found in card for message ${decisionCard?.sourceMessageId}`)
                   }
                 }}
               />

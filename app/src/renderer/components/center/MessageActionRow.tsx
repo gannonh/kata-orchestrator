@@ -1,9 +1,10 @@
 import { Button } from '../ui/button'
+import { type ActionVariant } from './message-decision-parser'
 
 export type MessageAction<TActionId extends string = string> = {
   id: TActionId
   label: string
-  variant: 'default' | 'secondary' | 'outline'
+  variant: ActionVariant
 }
 
 type MessageActionRowProps<TActionId extends string = string> = {

@@ -3,10 +3,9 @@ import { cn } from '../../lib/cn'
 import { type ChatMessage } from '../../types/chat'
 import { type ConversationMessage } from '../../types/session-conversation'
 import { MessageActionRow } from './MessageActionRow'
-import { stripDecisionActionLines, type InlineDecisionActionId, type InlineDecisionCard } from './message-decision-parser'
+import { stripDecisionActionLines, type DecisionState, type InlineDecisionActionId, type InlineDecisionCard } from './message-decision-parser'
 
 type BubbleMessage = ChatMessage | ConversationMessage
-type DecisionState = 'available' | 'pending' | 'resolved'
 
 type MessageBubbleProps = {
   message: BubbleMessage

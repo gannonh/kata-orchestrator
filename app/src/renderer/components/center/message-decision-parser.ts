@@ -1,5 +1,9 @@
 import type { ConversationMessage } from '../../types/session-conversation'
 
+export type DecisionState = 'available' | 'pending' | 'resolved'
+
+export type ActionVariant = 'default' | 'secondary' | 'outline'
+
 export type InlineDecisionActionId =
   | 'approve_tech_stack_plan'
   | 'keep_last_stack_switch'
@@ -9,7 +13,7 @@ export type InlineDecisionAction = {
   id: InlineDecisionActionId
   label: string
   followUpPrompt: string
-  variant: 'default' | 'secondary' | 'outline'
+  variant: ActionVariant
 }
 
 export type InlineDecisionCard = {
@@ -22,26 +26,26 @@ const PROMPT_LABEL = 'Approve this plan with 1 check? Clarifications'
 const APPROVE_ACTION_LABEL = 'Approve the plan...'
 const KEEP_SWITCH_ACTION_LABEL = 'Keep the last switch...'
 
-const BASE_ACTIONS: InlineDecisionAction[] = [
-  {
+const BASE_ACTIONS = {
+  approve_tech_stack_plan: {
     id: 'approve_tech_stack_plan',
     label: APPROVE_ACTION_LABEL,
     followUpPrompt: 'Approve the plan and continue with this tech stack.',
     variant: 'default'
   },
-  {
+  keep_last_stack_switch: {
     id: 'keep_last_stack_switch',
     label: KEEP_SWITCH_ACTION_LABEL,
     followUpPrompt: 'Keep the last switch and apply the revised views.',
     variant: 'secondary'
   },
-  {
+  ask_for_clarification: {
     id: 'ask_for_clarification',
     label: 'Clarifications',
     followUpPrompt: 'I need clarifications before approving this plan.',
     variant: 'outline'
   }
-]
+} satisfies Record<InlineDecisionActionId, InlineDecisionAction>
 
 function normalizeSemanticLine(content: string): string {
   return content
@@ -96,18 +100,31 @@ export function extractInlineDecisionCard(
   const hasApproveAction = hasListActionLine(contentLines, normalizeSemanticLine(APPROVE_ACTION_LABEL))
   const hasKeepSwitchAction = hasListActionLine(contentLines, normalizeSemanticLine(KEEP_SWITCH_ACTION_LABEL))
 
-  if (!hasWhySection || !hasStabilitySection || !hasPrompt || !hasApproveAction || !hasKeepSwitchAction) {
+  const signals = { hasWhySection, hasStabilitySection, hasPrompt, hasApproveAction, hasKeepSwitchAction }
+  const matchedCount = Object.values(signals).filter(Boolean).length
+
+  if (matchedCount < 5) {
+    if (matchedCount > 0) {
+      const missing = Object.entries(signals)
+        .filter(([, v]) => !v)
+        .map(([k]) => k)
+      console.warn(
+        `[message-decision-parser] Partial heuristic match for message ${message.id}: ${matchedCount}/5 signals. Missing: ${missing.join(', ')}`
+      )
+    }
     return undefined
   }
 
   return {
     sourceMessageId: message.id,
     promptLabel: PROMPT_LABEL,
-    actions: BASE_ACTIONS.map((action) => ({ ...action }))
+    actions: Object.values(BASE_ACTIONS).map((action) => ({ ...action }))
   }
 }
 
-const ACTION_NORMALIZED_LABELS = BASE_ACTIONS.map((action) => normalizeSemanticLine(action.label))
+const ACTION_NORMALIZED_LABELS = Object.values(BASE_ACTIONS).map((action) =>
+  normalizeSemanticLine(action.label)
+)
 
 function isActionBulletLine(line: string): boolean {
   if (!/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) return false
@@ -116,6 +133,7 @@ function isActionBulletLine(line: string): boolean {
 }
 
 export function stripDecisionActionLines(content: string): string {
+  if (!content) return content ?? ''
   return content
     .split(/\r?\n/)
     .filter((line) => {
@@ -132,6 +150,7 @@ export function stripDecisionActionLines(content: string): string {
 export function isDecisionResolved(messages: ConversationMessage[], card: InlineDecisionCard): boolean {
   const sourceIndex = messages.findIndex((message) => message.id === card.sourceMessageId)
   if (sourceIndex < 0) {
+    console.warn(`[message-decision-parser] Orphaned sourceMessageId "${card.sourceMessageId}" not found in messages`)
     return false
   }
 
