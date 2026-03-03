@@ -30,7 +30,7 @@ test.describe('Desktop app navigation @uat', () => {
     await expect(appWindow.getByLabel('Search files')).toBeVisible()
   })
 
-  test('renders agents coordinator and toggles background agent list @uat @ci @quality-gate', async ({
+  test('renders persisted roster baseline in agents tab @uat @ci @quality-gate', async ({
     appWindow
   }) => {
     await ensureWorkspaceShell(appWindow)
@@ -39,21 +39,12 @@ test.describe('Desktop app navigation @uat', () => {
 
     await leftTabs.getByRole('tab', { name: /Agents/ }).click()
     await expect(appWindow.getByRole('heading', { name: 'Agents' })).toBeVisible()
+    await expect(appWindow.getByText('Kata Agents')).toBeVisible()
     await expect(appWindow.getByText('MVP Planning Coordinator')).toBeVisible()
     await expect(
       appWindow.getByText('Agents write code, maintain notes, and coordinate tasks.')
     ).toBeVisible()
-
-    const backgroundToggle = appWindow.getByRole('button', { name: /background agents running/i })
-    await expect(backgroundToggle).toBeVisible()
-    await expect(appWindow.getByText('Task Block Parser')).toHaveCount(0)
-
-    await backgroundToggle.click()
-    await expect(appWindow.getByText('Task Block Parser')).toBeVisible()
-    await expect(appWindow.getByText('Implement Spec Panel')).toBeVisible()
-
-    await backgroundToggle.click()
-    await expect(appWindow.getByText('Task Block Parser')).toHaveCount(0)
+    await expect(appWindow.getByRole('button', { name: /background agents running/i })).toHaveCount(0)
   })
 
   test('renders context preview states 0-3 with expected task and notes variants @uat @ci @quality-gate', async ({

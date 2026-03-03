@@ -5,7 +5,7 @@ import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createDefaultAppState } from '../../../src/shared/types/space'
-import type { AppState } from '../../../src/shared/types/space'
+import type { AppState, SessionAgentRecord } from '../../../src/shared/types/space'
 
 const { mockRemoveHandler, mockHandle, mockOpenExternal, mockShowOpenDialog, mockProvisionManagedWorkspace, mockFsAccess, mockExecFile } = vi.hoisted(() => ({
   mockRemoveHandler: vi.fn(),
@@ -122,7 +122,11 @@ describe('registerIpcHandlers', () => {
     expect(mockRemoveHandler).toHaveBeenCalledWith('space:list')
     expect(mockRemoveHandler).toHaveBeenCalledWith('space:get')
     expect(mockRemoveHandler).toHaveBeenCalledWith('session:create')
+    expect(mockRemoveHandler).toHaveBeenCalledWith('session-agent-roster:list')
+    expect(mockRemoveHandler).toHaveBeenCalledWith('session:listBySpace')
     expect(mockHandle).toHaveBeenCalledWith('space:create', expect.any(Function))
+    expect(mockHandle).toHaveBeenCalledWith('session-agent-roster:list', expect.any(Function))
+    expect(mockHandle).toHaveBeenCalledWith('session:listBySpace', expect.any(Function))
   })
 
   it('opens valid external http(s) URLs through shell', async () => {
@@ -417,12 +421,205 @@ describe('registerIpcHandlers', () => {
     expect(store.save).toHaveBeenCalledTimes(1)
   })
 
+  it('session:create preserves existing roster state and seeds baseline agents for the new session', async () => {
+    const existingSpace = {
+      id: 'space-1',
+      name: 'Existing',
+      repoUrl: 'https://github.com/user/repo',
+      rootPath: '/Users/me/repo',
+      branch: 'main',
+      orchestrationMode: 'team' as const,
+      createdAt: '2026-02-25T00:00:00.000Z',
+      status: 'active' as const
+    }
+    const existingRosterEntry: SessionAgentRecord = {
+      id: 'agent-existing',
+      sessionId: 'session-existing',
+      name: 'Existing Agent',
+      role: 'Existing role',
+      kind: 'specialist',
+      status: 'idle',
+      avatarColor: '#999999',
+      sortOrder: 9,
+      createdAt: '2026-02-24T00:00:00.000Z',
+      updatedAt: '2026-02-24T00:00:00.000Z'
+    }
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      spaces: { [existingSpace.id]: existingSpace },
+      agentRoster: { [existingRosterEntry.id]: existingRosterEntry }
+    })
+    registerIpcHandlers(store)
+    const sessionCreate = getHandlersByChannel().get('session:create')!
+
+    const createdSession = await sessionCreate({}, { spaceId: existingSpace.id, label: 'Session 2' })
+    const savedState = store.save.mock.calls[0]?.[0] as AppState
+    const seededRoster = Object.values(savedState.agentRoster)
+      .filter((entry) => entry.sessionId === (createdSession as { id: string }).id)
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+
+    expect(savedState.agentRoster[existingRosterEntry.id]).toEqual(existingRosterEntry)
+    expect(seededRoster).toHaveLength(2)
+    expect(seededRoster).toEqual([
+      expect.objectContaining({
+        sessionId: (createdSession as { id: string }).id,
+        name: 'Kata Agents',
+        role: 'System-managed agent group',
+        kind: 'system',
+        status: 'idle',
+        avatarColor: '#334155',
+        sortOrder: 0
+      }),
+      expect.objectContaining({
+        sessionId: (createdSession as { id: string }).id,
+        name: 'MVP Planning Coordinator',
+        role: 'Coordinates MVP planning tasks',
+        kind: 'coordinator',
+        status: 'idle',
+        avatarColor: '#0f766e',
+        sortOrder: 1
+      })
+    ])
+  })
+
+  it('session:create wraps save failures with a descriptive error code', async () => {
+    const existingSpace = {
+      id: 'space-1',
+      name: 'Existing',
+      repoLabel: 'org/repo',
+      repoUrl: '',
+      branch: 'main',
+      rootPath: '/tmp/repo',
+      workspaceMode: 'managed' as const,
+      provisioningMethod: 'clone-github' as const,
+      orchestrationMode: 'team' as const,
+      createdAt: '2026-03-01T00:00:00.000Z',
+      status: 'active' as const
+    }
+
+    const saveErrorStore = createMockStore({
+      ...createDefaultAppState(),
+      spaces: { [existingSpace.id]: existingSpace }
+    })
+    saveErrorStore.save.mockImplementation(() => {
+      throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+    })
+    registerIpcHandlers(saveErrorStore)
+    const sessionCreate = getHandlersByChannel().get('session:create')
+
+    await expect(
+      sessionCreate?.({}, { spaceId: existingSpace.id, label: 'Session 1' })
+    ).rejects.toThrow('Session created but failed to save state (ENOSPC)')
+  })
+
+  it('session-agent-roster:list returns sorted entries for a session and [] for unknown session ids', async () => {
+    const roster: Record<string, SessionAgentRecord> = {
+      late: {
+        id: 'late',
+        sessionId: 'session-1',
+        name: 'Late',
+        role: 'Late role',
+        kind: 'specialist',
+        status: 'idle',
+        avatarColor: '#111111',
+        sortOrder: 1,
+        createdAt: '2026-02-27T00:00:03.000Z',
+        updatedAt: '2026-02-27T00:00:03.000Z'
+      },
+      firstCreated: {
+        id: 'first-created',
+        sessionId: 'session-1',
+        name: 'First Created',
+        role: 'First role',
+        kind: 'specialist',
+        status: 'idle',
+        avatarColor: '#222222',
+        sortOrder: 1,
+        createdAt: '2026-02-27T00:00:01.000Z',
+        updatedAt: '2026-02-27T00:00:01.000Z'
+      },
+      system: {
+        id: 'system',
+        sessionId: 'session-1',
+        name: 'System',
+        role: 'System role',
+        kind: 'system',
+        status: 'idle',
+        avatarColor: '#333333',
+        sortOrder: 0,
+        createdAt: '2026-02-27T00:00:02.000Z',
+        updatedAt: '2026-02-27T00:00:02.000Z'
+      },
+      otherSession: {
+        id: 'other-session',
+        sessionId: 'session-2',
+        name: 'Other Session',
+        role: 'Other role',
+        kind: 'coordinator',
+        status: 'idle',
+        avatarColor: '#444444',
+        sortOrder: 0,
+        createdAt: '2026-02-27T00:00:00.000Z',
+        updatedAt: '2026-02-27T00:00:00.000Z'
+      }
+    }
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      agentRoster: roster
+    })
+    registerIpcHandlers(store)
+    const rosterList = getHandlersByChannel().get('session-agent-roster:list')!
+
+    await expect(rosterList({}, { sessionId: 'session-1' })).resolves.toEqual([
+      roster.system,
+      roster.firstCreated,
+      roster.late
+    ])
+    await expect(rosterList({}, { sessionId: 'missing' })).resolves.toEqual([])
+  })
+
+  it('session:listBySpace returns sessions for the space sorted by newest first', async () => {
+    const sessions = {
+      old: {
+        id: 'session-old',
+        spaceId: 'space-1',
+        label: 'Old',
+        createdAt: '2026-02-27T00:00:00.000Z'
+      },
+      otherSpace: {
+        id: 'session-other-space',
+        spaceId: 'space-2',
+        label: 'Other Space',
+        createdAt: '2026-02-28T00:00:00.000Z'
+      },
+      newest: {
+        id: 'session-newest',
+        spaceId: 'space-1',
+        label: 'Newest',
+        createdAt: '2026-03-01T00:00:00.000Z'
+      }
+    }
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      sessions
+    })
+    registerIpcHandlers(store)
+    const sessionListBySpace = getHandlersByChannel().get('session:listBySpace')!
+
+    await expect(sessionListBySpace({}, { spaceId: 'space-1' })).resolves.toEqual([
+      sessions.newest,
+      sessions.old
+    ])
+  })
+
   it('rejects malformed payloads for space and session handlers', async () => {
     registerIpcHandlers(createMockStore())
     const handlers = getHandlersByChannel()
     const spaceCreate = handlers.get('space:create')
     const spaceGet = handlers.get('space:get')
     const sessionCreate = handlers.get('session:create')
+    const sessionAgentRosterList = handlers.get('session-agent-roster:list')
+    const sessionListBySpace = handlers.get('session:listBySpace')
 
     await expect(spaceCreate?.({}, null)).rejects.toThrow('Space input must be an object')
     await expect(
@@ -517,6 +714,12 @@ describe('registerIpcHandlers', () => {
     await expect(sessionCreate?.({}, null)).rejects.toThrow('Session input must be an object')
     await expect(sessionCreate?.({}, { spaceId: 1, label: true })).rejects.toThrow(
       'Session input is missing required string fields'
+    )
+    await expect(sessionAgentRosterList?.({}, { sessionId: 123 })).rejects.toThrow(
+      'session-agent-roster:list input must be an object with string sessionId'
+    )
+    await expect(sessionListBySpace?.({}, { spaceId: 123 })).rejects.toThrow(
+      'session:listBySpace input must be an object with string spaceId'
     )
   })
 

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   CreateSessionInput,
   CreateSpaceInput,
+  SessionAgentRecord,
   SessionRecord,
   SpaceRecord
 } from '../shared/types/space'
@@ -13,6 +14,8 @@ const SPACE_CREATE_CHANNEL = 'space:create'
 const SPACE_LIST_CHANNEL = 'space:list'
 const SPACE_GET_CHANNEL = 'space:get'
 const SESSION_CREATE_CHANNEL = 'session:create'
+const SESSION_AGENT_ROSTER_LIST_CHANNEL = 'session-agent-roster:list'
+const SESSION_LIST_BY_SPACE_CHANNEL = 'session:listBySpace'
 const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
 const GIT_LIST_BRANCHES_CHANNEL = 'git:listBranches'
 const GITHUB_LIST_REPOS_CHANNEL = 'github:listRepos'
@@ -51,6 +54,10 @@ const kataApi = {
     invokeTyped<SpaceRecord | null>(SPACE_GET_CHANNEL, { id }),
   sessionCreate: (input: CreateSessionInput): Promise<SessionRecord> =>
     invokeTyped<SessionRecord>(SESSION_CREATE_CHANNEL, input),
+  sessionAgentRosterList: (input: { sessionId: string }): Promise<SessionAgentRecord[]> =>
+    invokeTyped<SessionAgentRecord[]>(SESSION_AGENT_ROSTER_LIST_CHANNEL, input),
+  sessionListBySpace: (input: { spaceId: string }): Promise<SessionRecord[]> =>
+    invokeTyped<SessionRecord[]>(SESSION_LIST_BY_SPACE_CHANNEL, input),
   dialogOpenDirectory: (): Promise<{ path: string } | { error: string; path: string } | null> =>
     invokeTyped(DIALOG_OPEN_DIR_CHANNEL),
   gitListBranches: (repoPath: string): Promise<string[] | { error: string }> =>
@@ -85,7 +92,7 @@ const kataApi = {
 
   // Model channel
   modelList: () =>
-    invokeTyped<Array<{ provider: string; modelId: string; name: string; authStatus: string }>>(MODEL_LIST_CHANNEL)
+    invokeTyped<Array<{ provider: string; modelId: string; name: string; authStatus: 'oauth' | 'api_key' | 'none' }>>(MODEL_LIST_CHANNEL)
 }
 
 contextBridge.exposeInMainWorld('kata', kataApi)
