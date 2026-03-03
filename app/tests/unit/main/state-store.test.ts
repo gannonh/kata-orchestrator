@@ -691,6 +691,43 @@ describe('createStateStore', () => {
     expect(state.activeSessionId).toBeNull()
   })
 
+  test('resets activeSessionId when session belongs to a different space', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {
+          s1: {
+            id: 's1',
+            name: 'Space One',
+            repoUrl: 'https://github.com/test/repo',
+            rootPath: '/tmp/repo',
+            branch: 'main',
+            orchestrationMode: 'single',
+            createdAt: '2026-01-01T00:00:00Z',
+            status: 'active'
+          }
+        },
+        sessions: {
+          sess1: {
+            id: 'sess1',
+            spaceId: 's2',
+            label: 'Session from other space',
+            createdAt: '2026-01-01T00:00:00Z'
+          }
+        },
+        runs: {},
+        agentRoster: {},
+        activeSpaceId: 's1',
+        activeSessionId: 'sess1'
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+
+    expect(state.activeSpaceId).toBe('s1')
+    expect(state.activeSessionId).toBeNull()
+  })
+
   test('rethrows non-ENOENT file system errors when loading', () => {
     const store = createStateStore(filePath)
     const readError = Object.assign(new Error('permission denied'), {
@@ -709,7 +746,18 @@ describe('createStateStore', () => {
     const store = createStateStore(filePath)
 
     const state: AppState = {
-      spaces: {},
+      spaces: {
+        's1': {
+          id: 's1',
+          name: 'Test Space',
+          repoUrl: 'https://github.com/test/repo',
+          rootPath: '/tmp/repo',
+          branch: 'main',
+          orchestrationMode: 'single',
+          createdAt: '2026-01-01T00:00:00Z',
+          status: 'active'
+        }
+      },
       sessions: {
         'sess1': {
           id: 'sess1',
@@ -720,7 +768,7 @@ describe('createStateStore', () => {
       },
       runs: {},
       agentRoster: {},
-      activeSpaceId: null,
+      activeSpaceId: 's1',
       activeSessionId: 'sess1'
     }
 

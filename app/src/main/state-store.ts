@@ -224,8 +224,10 @@ export function createStateStore(filePath: string): StateStore {
         parsed.activeSpaceId !== null && parsed.spaces[parsed.activeSpaceId]
           ? parsed.activeSpaceId
           : null
+      const candidateSession =
+        parsed.activeSessionId !== null ? parsed.sessions[parsed.activeSessionId] : undefined
       const activeSessionId =
-        parsed.activeSessionId !== null && parsed.sessions[parsed.activeSessionId]
+        candidateSession && candidateSession.spaceId === activeSpaceId
           ? parsed.activeSessionId
           : null
 
