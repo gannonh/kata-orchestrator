@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { StateStore } from './state-store'
 import type { RunRecord, RunStatus, PersistedMessage } from '../shared/types/run'
+import type { LatestRunDraft } from '../shared/types/spec-document'
 
 const VALID_TRANSITIONS: Record<RunStatus, RunStatus[]> = {
   queued: ['running', 'failed'],
@@ -105,6 +106,40 @@ export function appendRunMessage(
     runs: {
       ...state.runs,
       [runId]: { ...run, messages: [...run.messages, message] }
+    }
+  })
+}
+
+export function setRunDraft(store: StateStore, runId: string, draft: LatestRunDraft): void {
+  const state = store.load()
+  const run = state.runs[runId]
+  if (!run) {
+    console.error(`[Orchestrator] Cannot set draft for unknown run: ${runId}`)
+    return
+  }
+
+  store.save({
+    ...state,
+    runs: {
+      ...state.runs,
+      [runId]: { ...run, draft }
+    }
+  })
+}
+
+export function markRunDraftApplied(store: StateStore, runId: string, appliedAt: string): void {
+  const state = store.load()
+  const run = state.runs[runId]
+  if (!run) {
+    console.error(`[Orchestrator] Cannot mark draft-applied for unknown run: ${runId}`)
+    return
+  }
+
+  store.save({
+    ...state,
+    runs: {
+      ...state.runs,
+      [runId]: { ...run, draftAppliedAt: appliedAt }
     }
   })
 }

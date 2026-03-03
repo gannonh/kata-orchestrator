@@ -22,7 +22,14 @@ import {
   WorkspaceProvisioningError,
   provisionManagedWorkspace
 } from './workspace-provisioning'
-import { createRun, updateRunStatus, appendRunMessage, getRunsForSession } from './orchestrator'
+import {
+  createRun,
+  updateRunStatus,
+  appendRunMessage,
+  setRunDraft,
+  markRunDraftApplied,
+  getRunsForSession
+} from './orchestrator'
 import { createAgentRunner } from './agent-runner'
 import type { AgentRunner } from './agent-runner'
 import type { AuthStorage } from './auth-storage'
@@ -55,6 +62,7 @@ const GITHUB_LIST_BRANCHES_CHANNEL = 'github:listBranches'
 const RUN_SUBMIT_CHANNEL = 'run:submit'
 const RUN_ABORT_CHANNEL = 'run:abort'
 const RUN_LIST_CHANNEL = 'run:list'
+const RUN_MARK_DRAFT_APPLIED_CHANNEL = 'run:markDraftApplied'
 const RUN_EVENT_CHANNEL = 'run:event'
 const AUTH_STATUS_CHANNEL = 'auth:status'
 const AUTH_LOGIN_CHANNEL = 'auth:login'
@@ -571,6 +579,11 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
             content: msg.content,
             createdAt: msg.createdAt
           })
+          setRunDraft(stateStore, run.id, {
+            runId: run.id,
+            generatedAt: msg.createdAt,
+            content: msg.content
+          })
         }
         // Map runtime ConversationRunState to persisted RunStatus:
         // 'pending' (agent starting) -> 'running'
@@ -621,6 +634,15 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       throw new Error('run:list requires a string sessionId')
     }
     return getRunsForSession(stateStore, input.sessionId)
+  })
+
+  ipcMain.removeHandler(RUN_MARK_DRAFT_APPLIED_CHANNEL)
+  ipcMain.handle(RUN_MARK_DRAFT_APPLIED_CHANNEL, async (_event, input: unknown) => {
+    if (!isObjectRecord(input) || typeof input.runId !== 'string') {
+      throw new Error('run:markDraftApplied requires a string runId')
+    }
+    markRunDraftApplied(stateStore, input.runId, new Date().toISOString())
+    return { ok: true as const }
   })
 
   ipcMain.removeHandler(AUTH_STATUS_CHANNEL)

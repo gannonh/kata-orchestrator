@@ -69,12 +69,16 @@ vi.mock('../../../src/main/workspace-provisioning', async () => {
 const mockCreateRun = vi.fn()
 const mockUpdateRunStatus = vi.fn()
 const mockAppendRunMessage = vi.fn()
+const mockSetRunDraft = vi.fn()
+const mockMarkRunDraftApplied = vi.fn()
 const mockGetRunsForSession = vi.fn()
 
 vi.mock('../../../src/main/orchestrator', () => ({
   createRun: (...args: unknown[]) => mockCreateRun(...args),
   updateRunStatus: (...args: unknown[]) => mockUpdateRunStatus(...args),
   appendRunMessage: (...args: unknown[]) => mockAppendRunMessage(...args),
+  setRunDraft: (...args: unknown[]) => mockSetRunDraft(...args),
+  markRunDraftApplied: (...args: unknown[]) => mockMarkRunDraftApplied(...args),
   getRunsForSession: (...args: unknown[]) => mockGetRunsForSession(...args)
 }))
 
@@ -937,6 +941,7 @@ describe('registerIpcHandlers', () => {
       mockCreateAgentRunner.mockReset()
       mockCredentialResolver.getApiKey.mockReset()
       mockCredentialResolver.getAuthStatus.mockReset()
+      mockSetRunDraft.mockReset()
     })
 
     it('creates a run and starts an agent runner', async () => {
@@ -995,6 +1000,11 @@ describe('registerIpcHandlers', () => {
         role: 'agent',
         content: 'response text',
         createdAt: '2026-03-01T00:00:01Z'
+      })
+      expect(mockSetRunDraft).toHaveBeenCalledWith(store, 'run-ev-1', {
+        runId: 'run-ev-1',
+        generatedAt: '2026-03-01T00:00:01Z',
+        content: 'response text'
       })
 
       // Test idle -> completed transition (also removes from activeRunners)
@@ -1189,6 +1199,39 @@ describe('registerIpcHandlers', () => {
       const handler = getHandlersByChannel().get('run:list')!
       await expect(handler(null, null)).rejects.toThrow('run:list requires a string sessionId')
       await expect(handler(null, { sessionId: 123 })).rejects.toThrow('run:list requires a string sessionId')
+    })
+  })
+
+  describe('run:markDraftApplied', () => {
+    beforeEach(() => {
+      mockMarkRunDraftApplied.mockReset()
+    })
+
+    it('stamps run draft-applied timestamp through main-process handler', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('run:markDraftApplied')!
+
+      const result = await handler(null, { runId: 'run-1' })
+
+      expect(result).toEqual({ ok: true })
+      expect(mockMarkRunDraftApplied).toHaveBeenCalledTimes(1)
+      expect(mockMarkRunDraftApplied).toHaveBeenCalledWith(
+        expect.anything(),
+        'run-1',
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
+      )
+    })
+
+    it('rejects malformed input', async () => {
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('run:markDraftApplied')!
+
+      await expect(handler(null, null)).rejects.toThrow(
+        'run:markDraftApplied requires a string runId'
+      )
+      await expect(handler(null, { runId: 123 })).rejects.toThrow(
+        'run:markDraftApplied requires a string runId'
+      )
     })
   })
 
