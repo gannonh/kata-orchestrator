@@ -1,43 +1,79 @@
-import { act, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useSpecDocument } from '../../../../src/renderer/hooks/useSpecDocument'
+const mockSpecGet = vi.fn()
+const mockSpecSave = vi.fn()
+const mockSpecApplyDraft = vi.fn()
+
+async function loadHook() {
+  const mod = await import('../../../../src/renderer/hooks/useSpecDocument')
+  return mod.useSpecDocument
+}
 
 describe('useSpecDocument', () => {
-  afterEach(() => {
-    window.localStorage.clear()
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+
+    mockSpecGet.mockResolvedValue(null)
+    mockSpecSave.mockImplementation(async (input: { markdown: string; appliedRunId?: string }) => ({
+      markdown: input.markdown,
+      updatedAt: '2026-03-03T00:00:00.000Z',
+      appliedRunId: input.appliedRunId
+    }))
+    mockSpecApplyDraft.mockImplementation(async (input: {
+      draft: { runId: string; content: string }
+    }) => ({
+      markdown: input.draft.content,
+      updatedAt: '2026-03-03T00:01:00.000Z',
+      appliedRunId: input.draft.runId,
+      appliedAt: '2026-03-03T00:01:00.000Z'
+    }))
+
+    ;(window as any).kata = {
+      specGet: mockSpecGet,
+      specSave: mockSpecSave,
+      specApplyDraft: mockSpecApplyDraft
+    }
   })
 
-  it('loads an existing document from session-scoped storage', () => {
-    window.localStorage.setItem(
-      'kata.spec-panel.v1:space-1:session-1',
-      JSON.stringify({
-        markdown: ['## Goal', 'Load from storage', '', '## Tasks', '- [x] Restore saved specs'].join('\n'),
-        appliedRunId: 'run-123'
-      })
-    )
+  afterEach(() => {
+    delete (window as any).kata
+  })
 
+  it('loads an existing document via specGet', async () => {
+    mockSpecGet.mockResolvedValueOnce({
+      markdown: ['## Goal', 'Load from IPC', '', '## Tasks', '- [x] Restore saved specs'].join('\n'),
+      updatedAt: '2026-03-03T00:00:00.000Z',
+      appliedRunId: 'run-123'
+    })
+
+    const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
 
-    expect(result.current.document).toMatchObject({
-      markdown: ['## Goal', 'Load from storage', '', '## Tasks', '- [x] Restore saved specs'].join('\n'),
-      appliedRunId: 'run-123',
-      sections: {
-        goal: 'Load from storage'
-      },
-      tasks: [
-        {
-          id: 'task-1',
-          title: 'Restore saved specs',
-          status: 'complete'
-        }
-      ]
+    await waitFor(() => {
+      expect(mockSpecGet).toHaveBeenCalledWith({ spaceId: 'space-1', sessionId: 'session-1' })
+      expect(result.current.document).toMatchObject({
+        markdown: ['## Goal', 'Load from IPC', '', '## Tasks', '- [x] Restore saved specs'].join('\n'),
+        appliedRunId: 'run-123',
+        sections: {
+          goal: 'Load from IPC'
+        },
+        tasks: [
+          {
+            id: 'task-1',
+            title: 'Restore saved specs',
+            status: 'complete'
+          }
+        ]
+      })
     })
   })
 
-  it('parses markdown and persists the parsed document for the active session', () => {
+  it('parses markdown and persists through specSave', async () => {
+    const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
@@ -69,15 +105,15 @@ describe('useSpecDocument', () => {
         markdownLineIndex: 7
       }
     ])
-    const persisted = JSON.parse(
-      window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1') ?? 'null'
-    )
-    expect(persisted).toEqual({ markdown })
-    expect(persisted).not.toHaveProperty('sections')
-    expect(persisted).not.toHaveProperty('tasks')
+    expect(mockSpecSave).toHaveBeenCalledWith({
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      markdown
+    })
   })
 
-  it('applies a draft, records the run id, and persists toggled task changes', () => {
+  it('applies draft via specApplyDraft and persists task toggles through specSave', async () => {
+    const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
@@ -97,6 +133,14 @@ describe('useSpecDocument', () => {
       result.current.applyDraft(draft)
     })
 
+    expect(mockSpecApplyDraft).toHaveBeenCalledWith({
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      draft
+    })
+    expect(mockSpecSave).not.toHaveBeenCalledWith(
+      expect.objectContaining({ markdown: draft.content })
+    )
     expect(result.current.document.appliedRunId).toBe('run-456')
     expect(result.current.document.tasks[0]?.status).toBe('not_started')
 
@@ -110,24 +154,18 @@ describe('useSpecDocument', () => {
         '\n'
       )
     )
-    const persisted = JSON.parse(
-      window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1') ?? 'null'
-    )
-    expect(persisted).toEqual({
-      appliedRunId: 'run-456',
-      markdown: [
-        '## Goal',
-        'Apply the incoming draft.',
-        '',
-        '## Tasks',
-        '- [/] Review the draft'
-      ].join('\n')
+    expect(mockSpecSave).toHaveBeenLastCalledWith({
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      markdown: ['## Goal', 'Apply the incoming draft.', '', '## Tasks', '- [/] Review the draft'].join('\n'),
+      appliedRunId: 'run-456'
     })
-    expect(persisted).not.toHaveProperty('sections')
-    expect(persisted).not.toHaveProperty('tasks')
   })
 
-  it('keeps documents isolated by session key', () => {
+  it('keeps documents isolated by session key in local fallback cache', async () => {
+    mockSpecGet.mockResolvedValue(null)
+
+    const useSpecDocument = await loadHook()
     const first = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
@@ -145,79 +183,69 @@ describe('useSpecDocument', () => {
 
     expect(second.result.current.document.sections.goal).toBe('')
     expect(firstReloaded.result.current.document.sections.goal).toBe('Session one only')
-    expect(window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1')).not.toBeNull()
-    expect(window.localStorage.getItem('kata.spec-panel.v1:space-1:session-2')).toBeNull()
   })
 
-  it('falls back to an empty parsed document when storage is malformed', () => {
-    window.localStorage.setItem('kata.spec-panel.v1:space-1:session-1', JSON.stringify(null))
+  it('falls back to an empty parsed document when specGet payload is malformed', async () => {
+    mockSpecGet.mockResolvedValueOnce({ markdown: 42, appliedRunId: 'run-1' })
 
+    const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
 
-    expect(result.current.document).toMatchObject({
-      markdown: '',
-      sections: {
-        goal: ''
-      },
-      tasks: []
+    await waitFor(() => {
+      expect(result.current.document).toMatchObject({
+        markdown: '',
+        sections: {
+          goal: ''
+        },
+        tasks: []
+      })
     })
   })
 
-  it('falls back to an empty parsed document when storage JSON is invalid', () => {
-    window.localStorage.setItem('kata.spec-panel.v1:space-1:session-1', '{')
+  it('keeps local state when specSave rejects', async () => {
+    mockSpecSave.mockRejectedValueOnce(new Error('ipc unavailable'))
 
+    const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
 
-    expect(result.current.document).toMatchObject({
-      markdown: '',
-      sections: {
-        goal: ''
-      },
-      tasks: []
+    act(() => {
+      result.current.setMarkdown('## Goal\nPersist locally')
     })
+
+    expect(result.current.document.sections.goal).toBe('Persist locally')
+    expect(mockSpecSave).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back when persisted markdown is not a string', () => {
-    window.localStorage.setItem(
-      'kata.spec-panel.v1:space-1:session-1',
-      JSON.stringify({ markdown: 42, appliedRunId: 'run-1' })
-    )
+  it('works when spec IPC methods are unavailable', async () => {
+    ;(window as any).kata = {}
 
+    const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
 
-    expect(result.current.document).toMatchObject({
-      markdown: '',
-      sections: {
-        goal: ''
-      },
-      tasks: []
-    })
-  })
-
-  it('does not update state when localStorage.setItem throws', () => {
-    const { result } = renderHook(() =>
-      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
-    )
-
-    const setItemSpy = vi.spyOn(window.localStorage.__proto__, 'setItem').mockImplementation(() => {
-      throw new DOMException('QuotaExceededError')
+    act(() => {
+      result.current.applyDraft({
+        runId: 'run-99',
+        generatedAt: '2026-03-02T12:05:00.000Z',
+        content: ['## Goal', 'Keep existing state', '', '## Tasks', '- [ ] Existing task'].join('\n')
+      })
     })
 
     act(() => {
-      result.current.setMarkdown('## Goal\nShould not persist')
+      result.current.toggleTask('task-1')
     })
 
-    expect(result.current.document.markdown).toBe('')
-    setItemSpy.mockRestore()
+    expect(result.current.document.appliedRunId).toBe('run-99')
+    expect(result.current.document.tasks[0]?.status).toBe('in_progress')
   })
 
-  it('ignores unknown task ids when toggling', () => {
+  it('ignores unknown task ids when toggling', async () => {
+    const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
@@ -231,13 +259,11 @@ describe('useSpecDocument', () => {
     })
 
     const beforeMarkdown = result.current.document.markdown
-    const beforeStorage = window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1')
 
     act(() => {
       result.current.toggleTask('missing-task-id')
     })
 
     expect(result.current.document.markdown).toBe(beforeMarkdown)
-    expect(window.localStorage.getItem('kata.spec-panel.v1:space-1:session-1')).toBe(beforeStorage)
   })
 })
