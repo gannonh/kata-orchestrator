@@ -6,11 +6,10 @@ import {
 } from '../components/center/sessionConversationState'
 import type { LatestRunDraft } from '../types/spec-document'
 import type { SessionRuntimeEvent } from '../types/session-runtime-adapter'
+import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../shared/types/run'
 
 const DEFAULT_RUN_MODEL = 'gpt-5.3-codex'
 const DEFAULT_RUN_PROVIDER = 'openai-codex'
-const INTERRUPTED_RUN_RECOVERY_ERROR_MESSAGE =
-  'Recovered after app restart: in-flight run was interrupted'
 
 export function useIpcSessionConversation(sessionId: string | null) {
   const [state, dispatch] = useReducer(
@@ -172,7 +171,7 @@ function isReconciledInterruptedRunFallback(
   status: string,
   errorMessage: string | undefined
 ): errorMessage is string {
-  return status === 'failed' && errorMessage === INTERRUPTED_RUN_RECOVERY_ERROR_MESSAGE
+  return status === 'failed' && errorMessage === INTERRUPTED_RUN_ERROR_MESSAGE
 }
 
 // TODO: replace with spec extraction pipeline output once connected.

@@ -217,6 +217,30 @@ describe('Orchestrator', () => {
     consoleSpy.mockRestore()
   })
 
+  it('setRunDraft rejects draft with mismatched runId', async () => {
+    const { createRun, setRunDraft } = await import('../../../src/main/orchestrator')
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const run = createRun(store, {
+      sessionId: 's-1',
+      prompt: 'test',
+      model: 'm',
+      provider: 'p'
+    })
+
+    setRunDraft(store, run.id, {
+      runId: 'different-run-id',
+      generatedAt: '2026-03-01T00:01:00.000Z',
+      content: '## Goal\nMismatch'
+    })
+
+    expect(state.runs[run.id].draft).toBeUndefined()
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Draft runId mismatch')
+    )
+    consoleSpy.mockRestore()
+  })
+
   it('updateRunStatus rejects invalid transitions', async () => {
     const { createRun, updateRunStatus } = await import('../../../src/main/orchestrator')
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

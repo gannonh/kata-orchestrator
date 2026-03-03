@@ -707,7 +707,51 @@ describe('createStateStore', () => {
     })
   })
 
-  test('reconciles queued and running runs to failed on load', () => {
+  test('does not reconcile interrupted runs on default load', () => {
+    const runsPayload = {
+      queued_run: {
+        id: 'queued_run',
+        sessionId: 'sess-1',
+        prompt: 'queued',
+        status: 'queued',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-03T00:00:00.000Z',
+        messages: []
+      },
+      running_run: {
+        id: 'running_run',
+        sessionId: 'sess-1',
+        prompt: 'running',
+        status: 'running',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-03T00:00:00.000Z',
+        startedAt: '2026-03-03T00:00:01.000Z',
+        messages: []
+      }
+    }
+
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: runsPayload,
+        agentRoster: {},
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+
+    expect(state.runs.queued_run?.status).toBe('queued')
+    expect(state.runs.running_run?.status).toBe('running')
+  })
+
+  test('reconciles queued and running runs to failed when reconcileInterruptedRuns option is true', () => {
     fs.writeFileSync(
       filePath,
       JSON.stringify({
@@ -773,7 +817,7 @@ describe('createStateStore', () => {
       })
     )
 
-    const state = createStateStore(filePath).load()
+    const state = createStateStore(filePath).load({ reconcileInterruptedRuns: true })
     const expectedError = 'Recovered after app restart: in-flight run was interrupted'
 
     expect(state.runs.queued_run?.status).toBe('failed')

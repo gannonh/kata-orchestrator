@@ -117,6 +117,12 @@ export function setRunDraft(store: StateStore, runId: string, draft: LatestRunDr
     console.error(`[Orchestrator] Cannot set draft for unknown run: ${runId}`)
     return
   }
+  if (draft.runId !== runId) {
+    console.error(
+      `[Orchestrator] Draft runId mismatch: expected ${runId}, received ${draft.runId}`
+    )
+    return
+  }
 
   store.save({
     ...state,

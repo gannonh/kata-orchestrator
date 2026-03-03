@@ -9,12 +9,16 @@ import {
   createDefaultAppState
 } from '../shared/types/space'
 import type { AppState, SessionAgentRecord } from '../shared/types/space'
-import { RUN_STATUSES } from '../shared/types/run'
+import { INTERRUPTED_RUN_ERROR_MESSAGE, RUN_STATUSES } from '../shared/types/run'
 import type { PersistedMessage } from '../shared/types/run'
 import type { PersistedSpecDocument } from '../shared/types/spec-document'
 
+export type StateStoreLoadOptions = {
+  reconcileInterruptedRuns?: boolean
+}
+
 export type StateStore = {
-  load(): AppState
+  load(options?: StateStoreLoadOptions): AppState
   save(state: AppState): void
 }
 
@@ -215,9 +219,6 @@ function normalizeSpecDocuments(value: unknown): AppState['specDocuments'] {
   return normalized
 }
 
-const INTERRUPTED_RUN_ERROR_MESSAGE =
-  'Recovered after app restart: in-flight run was interrupted'
-
 function reconcileInterruptedRuns(runs: AppState['runs']): AppState['runs'] {
   const reconciled: AppState['runs'] = {}
   const completedAt = new Date().toISOString()
@@ -250,7 +251,7 @@ function isErrnoCode(error: unknown, code: string): boolean {
 
 export function createStateStore(filePath: string): StateStore {
   return {
-    load(): AppState {
+    load(options?: StateStoreLoadOptions): AppState {
       let raw: string
 
       try {
@@ -291,7 +292,9 @@ export function createStateStore(filePath: string): StateStore {
       return {
         spaces: parsed.spaces,
         sessions: parsed.sessions,
-        runs: reconcileInterruptedRuns(parsed.runs ?? {}),
+        runs: options?.reconcileInterruptedRuns
+          ? reconcileInterruptedRuns(parsed.runs ?? {})
+          : (parsed.runs ?? {}),
         agentRoster: normalizeAgentRoster(parsed.agentRoster),
         specDocuments: normalizeSpecDocuments(parsed.specDocuments),
         activeSpaceId,

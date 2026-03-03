@@ -348,6 +348,19 @@ function parseSpecApplyDraftInput(input: unknown): {
   }
 }
 
+function assertSpecScope(state: AppState, spaceId: string, sessionId: string): void {
+  if (!state.spaces[spaceId]) {
+    throw new Error(`Unknown spaceId: ${spaceId}`)
+  }
+  const session = state.sessions[sessionId]
+  if (!session) {
+    throw new Error(`Unknown sessionId: ${sessionId}`)
+  }
+  if (session.spaceId !== spaceId) {
+    throw new Error(`Session ${sessionId} does not belong to space ${spaceId}`)
+  }
+}
+
 function buildSpecDocumentKey(spaceId: string, sessionId: string): string {
   return `${spaceId}:${sessionId}`
 }
@@ -433,7 +446,7 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
   })
 
   ipcMain.handle(APP_BOOTSTRAP_CHANNEL, async () => {
-    const state = stateStore.load()
+    const state = stateStore.load({ reconcileInterruptedRuns: true })
     return {
       spaces: state.spaces,
       sessions: state.sessions,
@@ -621,13 +634,16 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
 
   ipcMain.handle(SPEC_GET_CHANNEL, async (_event, input: unknown) => {
     const { spaceId, sessionId } = parseSpecGetInput(input)
+    const state = stateStore.load()
+    assertSpecScope(state, spaceId, sessionId)
     const key = buildSpecDocumentKey(spaceId, sessionId)
-    return stateStore.load().specDocuments[key] ?? null
+    return state.specDocuments[key] ?? null
   })
 
   ipcMain.handle(SPEC_SAVE_CHANNEL, async (_event, input: unknown) => {
     const parsedInput = parseSpecSaveInput(input)
     const state = stateStore.load()
+    assertSpecScope(state, parsedInput.spaceId, parsedInput.sessionId)
     const key = buildSpecDocumentKey(parsedInput.spaceId, parsedInput.sessionId)
     const existing = state.specDocuments[key]
     const updatedAt = new Date().toISOString()
@@ -664,6 +680,13 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
   ipcMain.handle(SPEC_APPLY_DRAFT_CHANNEL, async (_event, input: unknown) => {
     const parsedInput = parseSpecApplyDraftInput(input)
     const state = stateStore.load()
+    assertSpecScope(state, parsedInput.spaceId, parsedInput.sessionId)
+    const run = state.runs[parsedInput.draft.runId]
+    if (!run || run.sessionId !== parsedInput.sessionId) {
+      throw new Error(
+        `Draft run ${parsedInput.draft.runId} does not belong to session ${parsedInput.sessionId}`
+      )
+    }
     const key = buildSpecDocumentKey(parsedInput.spaceId, parsedInput.sessionId)
     const appliedAt = new Date().toISOString()
 

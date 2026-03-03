@@ -800,6 +800,15 @@ describe('registerIpcHandlers', () => {
   it('spec:get returns persisted spec document by <spaceId>:<sessionId> key', async () => {
     const store = createMockStore({
       ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team', createdAt: '2026-03-03T00:00:00.000Z', status: 'active'
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      },
       specDocuments: {
         'space-1:session-1': {
           markdown: '# Persisted',
@@ -814,11 +823,66 @@ describe('registerIpcHandlers', () => {
       markdown: '# Persisted',
       updatedAt: '2026-03-03T00:00:00.000Z'
     })
-    await expect(handler({}, { spaceId: 'space-1', sessionId: 'missing' })).resolves.toBeNull()
+  })
+
+  it('spec:get throws for unknown spaceId', async () => {
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:get')!
+    await expect(handler({}, { spaceId: 'missing', sessionId: 'sess' })).rejects.toThrow('Unknown spaceId: missing')
+  })
+
+  it('spec:get throws for unknown sessionId', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      }
+    })
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:get')!
+    await expect(handler({}, { spaceId: 'space-1', sessionId: 'missing' })).rejects.toThrow('Unknown sessionId: missing')
+  })
+
+  it('spec:get throws when session belongs to a different space', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-2', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      }
+    })
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:get')!
+    await expect(handler({}, { spaceId: 'space-1', sessionId: 'session-1' })).rejects.toThrow(
+      'Session session-1 does not belong to space space-1'
+    )
   })
 
   it('spec:save upserts markdown with updatedAt and optional applied fields', async () => {
-    const state = createDefaultAppState()
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      }
+    }
     const store = createMockStore(state)
     registerIpcHandlers(store)
 
@@ -853,6 +917,15 @@ describe('registerIpcHandlers', () => {
   it('spec:save preserves existing applied metadata when omitted from input', async () => {
     const state = {
       ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      },
       specDocuments: {
         'space-1:session-1': {
           markdown: '# Existing',
@@ -881,7 +954,24 @@ describe('registerIpcHandlers', () => {
   })
 
   it('spec:applyDraft saves markdown/applied metadata and marks run draft applied', async () => {
-    const state = createDefaultAppState()
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      },
+      runs: {
+        'run-10': {
+          id: 'run-10', sessionId: 'session-1', prompt: 'test', status: 'completed' as const,
+          model: 'm', provider: 'p', createdAt: '2026-03-03T00:00:00.000Z', messages: []
+        }
+      }
+    }
     const store = createMockStore(state)
     registerIpcHandlers(store)
 
@@ -919,6 +1009,40 @@ describe('registerIpcHandlers', () => {
       'run-10',
       expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
     )
+  })
+
+  it('spec:applyDraft throws when run does not belong to session', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      },
+      runs: {
+        'run-10': {
+          id: 'run-10', sessionId: 'other-session', prompt: 'test', status: 'completed' as const,
+          model: 'm', provider: 'p', createdAt: '2026-03-03T00:00:00.000Z', messages: []
+        }
+      }
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:applyDraft')!
+    await expect(handler({}, {
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      draft: {
+        runId: 'run-10',
+        generatedAt: '2026-03-03T00:00:00.000Z',
+        content: '## Draft'
+      }
+    })).rejects.toThrow('Draft run run-10 does not belong to session session-1')
   })
 
   it('rejects malformed payloads for space and session handlers', async () => {

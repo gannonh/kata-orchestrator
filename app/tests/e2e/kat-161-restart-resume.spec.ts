@@ -181,7 +181,7 @@ test.describe('KAT-161 relaunch resume persistence @uat', () => {
       await expect(rightPanel.getByText('In Progress')).toBeVisible()
 
       await relaunchedWindow.screenshot({
-        path: path.join(evidenceDir, 'restored-session-spec.png'),
+        path: path.join(evidenceDir, `restored-session-spec-${Date.now()}.png`),
         fullPage: true
       })
 
@@ -291,7 +291,7 @@ test.describe('KAT-161 relaunch resume persistence @uat', () => {
       )
 
       await relaunchedWindow.screenshot({
-        path: path.join(evidenceDir, 'interrupted-run-recovered-error.png'),
+        path: path.join(evidenceDir, `interrupted-run-recovered-error-${Date.now()}.png`),
         fullPage: true
       })
 
