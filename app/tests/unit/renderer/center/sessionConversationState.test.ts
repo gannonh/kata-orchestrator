@@ -380,6 +380,25 @@ describe('sessionConversationReducer', () => {
     expect(updated.messages.find((message) => message.id === persistedMessage.id)?.content).toBe('Draft complete')
   })
 
+  it('returns current state when UPDATE_MESSAGE target id is missing', () => {
+    const withUserPrompt = sessionConversationReducer(createInitialSessionConversationState(), {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+
+    const nextState = sessionConversationReducer(withUserPrompt, {
+      type: 'UPDATE_MESSAGE',
+      message: {
+        id: 'missing-message',
+        role: 'agent',
+        content: 'No-op update',
+        createdAt: '2026-03-03T10:00:00.000Z'
+      }
+    })
+
+    expect(nextState).toBe(withUserPrompt)
+  })
+
   it('returns current state for unknown events', () => {
     const initialState = createInitialSessionConversationState()
 

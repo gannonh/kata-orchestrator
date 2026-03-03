@@ -76,7 +76,7 @@ describe('MessageList', () => {
       delete (HTMLElement.prototype as { scrollIntoView?: () => void }).scrollIntoView
     }
 
-    render(
+    const { unmount } = render(
       <MessageList onRegisterScrollToMessage={onRegisterScrollToMessage}>
         <div data-message-id="m-1">Message 1</div>
       </MessageList>
@@ -88,5 +88,8 @@ describe('MessageList', () => {
     expect(scrollToMessage('m-1')).toBe(true)
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center', behavior: 'smooth' })
     expect(scrollToMessage('missing')).toBe(false)
+
+    unmount()
+    expect(scrollToMessage('m-1')).toBe(false)
   })
 })

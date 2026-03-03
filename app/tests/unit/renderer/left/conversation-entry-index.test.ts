@@ -61,4 +61,19 @@ describe('buildConversationEntries', () => {
 
     expect(entries[0]?.timestamp).toBe('--:--')
   })
+
+  it('truncates very long labels with an ellipsis', () => {
+    const longLine = 'A'.repeat(90)
+    const entries = buildConversationEntries([
+      {
+        id: 'm-5',
+        role: 'agent',
+        content: longLine,
+        createdAt: '2026-03-03T10:03:00.000Z'
+      }
+    ])
+
+    expect(entries[0]?.label.endsWith('…')).toBe(true)
+    expect(entries[0]?.label.length).toBeLessThanOrEqual(72)
+  })
 })
