@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SessionRuntimeEvent } from '../../../../src/renderer/types/session-runtime-adapter'
@@ -428,6 +428,68 @@ describe('useIpcSessionConversation', () => {
     expect(result.current.state.messages).toHaveLength(2)
     expect(result.current.state.messages[0].content).toBe('hello')
     expect(result.current.state.messages[1].content).toBe('hi there')
+  })
+
+  it('replays inline decision follow-up as a normal persisted user message', async () => {
+    mockRunList.mockResolvedValue([
+      {
+        id: 'run-1',
+        sessionId: 's-1',
+        prompt: 'review decision options',
+        status: 'completed',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-01T00:00:00Z',
+        messages: [
+          {
+            id: 'u1',
+            role: 'user',
+            content: 'review decision options',
+            createdAt: '2026-03-01T00:00:00Z'
+          },
+          {
+            id: 'a1',
+            role: 'agent',
+            content: 'Inline decision: choose A or B?',
+            createdAt: '2026-03-01T00:00:01Z'
+          },
+          {
+            id: 'u2',
+            role: 'user',
+            content: 'Choose option A and continue.',
+            createdAt: '2026-03-01T00:00:02Z'
+          },
+          {
+            id: 'a2',
+            role: 'agent',
+            content: 'Proceeding with option A.',
+            createdAt: '2026-03-01T00:00:03Z'
+          }
+        ]
+      }
+    ])
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    await waitFor(() => {
+      expect(result.current.state.messages).toHaveLength(4)
+    })
+
+    expect(result.current.state.runState).toBe('idle')
+    expect(result.current.state.messages.map(({ role, content }) => ({ role, content }))).toEqual([
+      { role: 'user', content: 'review decision options' },
+      { role: 'agent', content: 'Inline decision: choose A or B?' },
+      { role: 'user', content: 'Choose option A and continue.' },
+      { role: 'agent', content: 'Proceeding with option A.' }
+    ])
+    const replayedIds = result.current.state.messages.map((message) => message.id)
+    expect(replayedIds).toHaveLength(4)
+    replayedIds.forEach((id) => {
+      expect(id).toMatch(/^(user|agent)-\d+$/)
+    })
   })
 
   it('silently ignores replay errors', async () => {

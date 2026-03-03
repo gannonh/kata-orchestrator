@@ -2,19 +2,34 @@ import { MarkdownRenderer } from '../shared/MarkdownRenderer'
 import { cn } from '../../lib/cn'
 import { type ChatMessage } from '../../types/chat'
 import { type ConversationMessage } from '../../types/session-conversation'
+import { MessageActionRow } from './MessageActionRow'
+import type { InlineDecisionActionId, InlineDecisionCard } from './message-decision-parser'
 
 type BubbleMessage = ChatMessage | ConversationMessage
+type DecisionState = 'available' | 'pending' | 'resolved'
 
 type MessageBubbleProps = {
   message: BubbleMessage
   variant?: 'default' | 'collapsed'
   summary?: string
+  decisionCard?: InlineDecisionCard
+  decisionState?: DecisionState
+  onDecisionAction?: (actionId: InlineDecisionActionId) => void
 }
 
-export function MessageBubble({ message, variant = 'default', summary }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  variant = 'default',
+  summary,
+  decisionCard,
+  decisionState = 'available',
+  onDecisionAction
+}: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const isCollapsed = variant === 'collapsed' && Boolean(summary?.trim())
   const displayContent = isCollapsed ? summary ?? '' : message.content
+  const shouldRenderDecisionCard = message.role === 'agent' && Boolean(decisionCard)
+  const isDecisionDisabled = decisionState === 'pending' || decisionState === 'resolved'
 
   return (
     <article className={cn('flex flex-col gap-2', isUser ? 'items-end' : 'items-start')}>
@@ -36,6 +51,19 @@ export function MessageBubble({ message, variant = 'default', summary }: Message
           <MarkdownRenderer content={displayContent} />
         )}
       </div>
+      {shouldRenderDecisionCard && decisionCard ? (
+        <div className="max-w-[85%] space-y-2 px-1">
+          <p className="text-xs text-muted-foreground">{decisionCard.promptLabel}</p>
+          <MessageActionRow
+            actions={decisionCard.actions}
+            disabled={isDecisionDisabled}
+            onAction={(actionId) => {
+              onDecisionAction?.(actionId)
+            }}
+          />
+          {decisionState === 'resolved' ? <p className="text-xs text-muted-foreground">Decision sent</p> : null}
+        </div>
+      ) : null}
     </article>
   )
 }

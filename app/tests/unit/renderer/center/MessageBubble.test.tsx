@@ -1,9 +1,18 @@
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MessageBubble } from '../../../../src/renderer/components/center/MessageBubble'
 
 describe('MessageBubble', () => {
+  const decisionCard = {
+    sourceMessageId: 'agent-2',
+    promptLabel: 'Approve this plan with 1 check? Clarifications',
+    actions: [
+      { id: 'approve_tech_stack_plan', label: 'Approve the plan...', variant: 'default', followUpPrompt: 'Approve.' },
+      { id: 'ask_for_clarification', label: 'Clarifications', variant: 'outline', followUpPrompt: 'Clarify.' }
+    ]
+  } as const
+
   afterEach(() => {
     cleanup()
   })
@@ -71,5 +80,108 @@ describe('MessageBubble', () => {
 
     expect(screen.getByText('I would like to build the following product...')).toBeTruthy()
     expect(screen.queryByText('Long content that should not be shown when collapsed.')).toBeNull()
+  })
+
+  it('falls back to full message content when collapsed summary is blank', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 'user-3',
+          role: 'user',
+          content: 'Use full content when summary is blank.'
+        }}
+        variant="collapsed"
+        summary="   "
+      />
+    )
+
+    expect(screen.getByText('Use full content when summary is blank.')).toBeTruthy()
+  })
+
+  it('renders decision action buttons when a decision card is provided', () => {
+    const onDecisionAction = vi.fn()
+
+    render(
+      <MessageBubble
+        message={{
+          id: 'agent-2',
+          role: 'agent',
+          content: 'Decision message content',
+          createdAt: '1970-01-01T00:00:02.000Z'
+        }}
+        decisionCard={decisionCard}
+        decisionState="available"
+        onDecisionAction={onDecisionAction}
+      />
+    )
+
+    expect(screen.getByText('Approve this plan with 1 check? Clarifications')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Approve the plan...' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Approve the plan...' }))
+    expect(onDecisionAction).toHaveBeenCalledWith('approve_tech_stack_plan')
+  })
+
+  it('does not render decision actions for non-agent messages even when decision card is provided', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 'assistant-2',
+          role: 'assistant',
+          content: 'Non-agent message content'
+        }}
+        decisionCard={decisionCard}
+        decisionState="available"
+        onDecisionAction={vi.fn()}
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: 'Approve the plan...' })).toBeNull()
+  })
+
+  it('disables decision buttons while decision state is pending', () => {
+    const onDecisionAction = vi.fn()
+
+    render(
+      <MessageBubble
+        message={{
+          id: 'agent-2',
+          role: 'agent',
+          content: 'Decision message content',
+          createdAt: '1970-01-01T00:00:02.000Z'
+        }}
+        decisionCard={decisionCard}
+        decisionState="pending"
+        onDecisionAction={onDecisionAction}
+      />
+    )
+
+    const approveButton = screen.getByRole('button', { name: 'Approve the plan...' }) as HTMLButtonElement
+    expect(approveButton.disabled).toBe(true)
+    fireEvent.click(approveButton)
+    expect(onDecisionAction).not.toHaveBeenCalled()
+  })
+
+  it('shows decision sent text and disables actions when decision state is resolved', () => {
+    const onDecisionAction = vi.fn()
+
+    render(
+      <MessageBubble
+        message={{
+          id: 'agent-2',
+          role: 'agent',
+          content: 'Decision message content',
+          createdAt: '1970-01-01T00:00:02.000Z'
+        }}
+        decisionCard={decisionCard}
+        decisionState="resolved"
+        onDecisionAction={onDecisionAction}
+      />
+    )
+
+    expect(screen.getByText('Decision sent')).toBeTruthy()
+    const approveButton = screen.getByRole('button', { name: 'Approve the plan...' }) as HTMLButtonElement
+    expect(approveButton.disabled).toBe(true)
+    fireEvent.click(approveButton)
+    expect(onDecisionAction).not.toHaveBeenCalled()
   })
 })
