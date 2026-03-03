@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { _electron as electron, type ElectronApplication } from '@playwright/test'
+import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../src/shared/types/run'
 import { expect, test } from './fixtures/electron'
 import { writeKat161Evidence } from './helpers/kat-161-evidence'
 import { ensureHomeSpacesView, ensureWorkspaceShell } from './helpers/shell-view'
@@ -286,9 +287,7 @@ test.describe('KAT-161 relaunch resume persistence @uat', () => {
         (run) => run.status === 'failed'
       )
       expect(recoveredRun).toBeDefined()
-      expect(recoveredRun?.errorMessage).toBe(
-        'Recovered after app restart: in-flight run was interrupted'
-      )
+      expect(recoveredRun?.errorMessage).toBe(INTERRUPTED_RUN_ERROR_MESSAGE)
 
       await relaunchedWindow.screenshot({
         path: path.join(evidenceDir, `interrupted-run-recovered-error-${Date.now()}.png`),

@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SessionRuntimeEvent } from '../../../../src/renderer/types/session-runtime-adapter'
+import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../../../src/shared/types/run'
 
 let onRunEventCallback: ((event: SessionRuntimeEvent) => void) | null = null
 const mockRunSubmit = vi.fn().mockResolvedValue({ runId: 'run-1' })
@@ -512,7 +513,7 @@ describe('useIpcSessionConversation', () => {
   })
 
   it('surfaces reconciled interrupted-run fallback from replay as an error state', async () => {
-    const interruptedRunError = 'Recovered after app restart: in-flight run was interrupted'
+    const interruptedRunError = INTERRUPTED_RUN_ERROR_MESSAGE
 
     mockRunList.mockResolvedValue([
       {
