@@ -5,6 +5,8 @@ import { CenterPanel } from '../center/CenterPanel'
 import { ChatPanel } from '../center/ChatPanel'
 import { PanelResizer } from './PanelResizer'
 import { RightPanel } from './RightPanel'
+import type { ScrollToMessage } from '../center/MessageList'
+import type { ConversationEntry } from '../left/conversation-entry-index'
 import type { LatestRunDraft } from '../../types/spec-document'
 
 const RESIZER_WIDTH = 10
@@ -59,6 +61,8 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
   const [centerRightOffset, setCenterRightOffset] = useState(0)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [availableWidth, setAvailableWidth] = useState(1440)
+  const [conversationEntries, setConversationEntries] = useState<ConversationEntry[]>([])
+  const [scrollToMessage, setScrollToMessage] = useState<ScrollToMessage | null>(null)
   const activeSessionKey = activeSessionId ?? null
   const [latestDraftState, setLatestDraftState] = useState<{
     sessionId: string | null
@@ -177,6 +181,16 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
     },
     [activeSessionKey]
   )
+  const handleRegisterScrollToMessage = useCallback((nextScrollToMessage: ScrollToMessage) => {
+    setScrollToMessage(() => nextScrollToMessage)
+  }, [])
+
+  const handleJumpToMessage = useCallback(
+    (messageId: string) => {
+      scrollToMessage?.(messageId)
+    },
+    [scrollToMessage]
+  )
 
   return (
     <main
@@ -205,6 +219,8 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
             setTheme((currentTheme) => (currentTheme === 'dark' ? 'light' : 'dark'))
           }}
           onOpenHome={onOpenHome}
+          conversationEntries={conversationEntries}
+          onJumpToMessage={handleJumpToMessage}
         />
 
         {leftCollapsed ? (
@@ -222,6 +238,8 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
           <ChatPanel
             sessionId={activeSessionId ?? null}
             onLatestDraftChange={handleLatestDraftChange}
+            onConversationEntriesChange={setConversationEntries}
+            onRegisterScrollToMessage={handleRegisterScrollToMessage}
           />
         </CenterPanel>
 

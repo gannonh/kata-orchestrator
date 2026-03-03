@@ -81,6 +81,8 @@ describe('ChatPanel', () => {
 
     expect(screen.getByText('Hello world')).toBeTruthy()
     expect(screen.getByText('Hi there')).toBeTruthy()
+    expect(document.querySelector('[data-message-id="m1"]')).toBeTruthy()
+    expect(document.querySelector('[data-message-id="m2"]')).toBeTruthy()
   })
 
   it('submitting a message calls submitPrompt from the hook', () => {
@@ -127,5 +129,57 @@ describe('ChatPanel', () => {
     render(<ChatPanel sessionId={null} />)
 
     expect(screen.queryByText('GPT-5.3 Codex')).toBeNull()
+  })
+
+  it('publishes derived conversation entries when messages change', () => {
+    const onConversationEntriesChange = vi.fn()
+    mockHook.mockReturnValue({
+      state: idleState({
+        messages: [
+          {
+            id: 'm1',
+            role: 'agent',
+            content: '## Spec Updated\n\nAdded tasks',
+            createdAt: '2026-03-03T10:00:00Z'
+          }
+        ]
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(
+      <ChatPanel
+        sessionId={null}
+        onConversationEntriesChange={onConversationEntriesChange}
+      />
+    )
+
+    expect(onConversationEntriesChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'entry-m1',
+        messageId: 'm1',
+        label: 'Spec Updated',
+        role: 'agent'
+      })
+    ])
+  })
+
+  it('registers a jump handler from MessageList when callback is provided', () => {
+    const onRegisterScrollToMessage = vi.fn()
+    mockHook.mockReturnValue({
+      state: idleState(),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(
+      <ChatPanel
+        sessionId={null}
+        onRegisterScrollToMessage={onRegisterScrollToMessage}
+      />
+    )
+
+    expect(onRegisterScrollToMessage).toHaveBeenCalledWith(expect.any(Function))
   })
 })

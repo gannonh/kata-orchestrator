@@ -86,6 +86,30 @@ export function sessionConversationReducer(
         runState: 'error',
         errorMessage: event.error
       }
+    case 'APPEND_MESSAGE': {
+      if (state.messages.some((message) => message.id === event.message.id)) {
+        return {
+          ...state,
+          messages: state.messages.map((message) => (message.id === event.message.id ? event.message : message))
+        }
+      }
+
+      return {
+        ...state,
+        messages: [...state.messages, event.message]
+      }
+    }
+    case 'UPDATE_MESSAGE': {
+      const existingMessageIndex = state.messages.findIndex((message) => message.id === event.message.id)
+      if (existingMessageIndex < 0) {
+        return state
+      }
+
+      return {
+        ...state,
+        messages: state.messages.map((message) => (message.id === event.message.id ? event.message : message))
+      }
+    }
     case 'RETRY_FROM_ERROR':
       if (state.runState !== 'error') {
         return state
@@ -123,6 +147,6 @@ function createMessage(
     id: `${role}-${sequence}`,
     role,
     content,
-    createdAt: new Date(sequence * 1000).toISOString()
+    createdAt: new Date().toISOString()
   }
 }
