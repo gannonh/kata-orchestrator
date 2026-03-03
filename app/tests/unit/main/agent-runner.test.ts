@@ -114,6 +114,124 @@ describe('AgentRunner', () => {
     expect(msg.content).toBe('Draft ready for review.')
   })
 
+  it('emits message_updated while assistant output is streaming', async () => {
+    mockPrompt.mockReset().mockImplementation(async () => {
+      if (!subscribeCallback) {
+        return
+      }
+
+      subscribeCallback({ type: 'agent_start' })
+      subscribeCallback({
+        type: 'message_start',
+        message: {
+          role: 'assistant',
+          content: [],
+          usage: {
+            input: 0,
+            output: 0,
+            totalTokens: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+          },
+          stopReason: 'stop',
+          api: 'anthropic-messages',
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-6-20250514',
+          timestamp: Date.now()
+        }
+      } as AgentEvent)
+      subscribeCallback({
+        type: 'message_update',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Draft' }],
+          usage: {
+            input: 0,
+            output: 0,
+            totalTokens: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+          },
+          stopReason: 'stop',
+          api: 'anthropic-messages',
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-6-20250514',
+          timestamp: Date.now()
+        },
+        assistantMessageEvent: {
+          type: 'text_delta',
+          contentIndex: 0,
+          delta: 'Draft',
+          partial: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Draft' }],
+            usage: {
+              input: 0,
+              output: 0,
+              totalTokens: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+            },
+            stopReason: 'stop',
+            api: 'anthropic-messages',
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-6-20250514',
+            timestamp: Date.now()
+          }
+        }
+      } as AgentEvent)
+      subscribeCallback({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Draft complete.' }],
+          usage: {
+            input: 0,
+            output: 0,
+            totalTokens: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 }
+          },
+          stopReason: 'stop',
+          api: 'anthropic-messages',
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-6-20250514',
+          timestamp: Date.now()
+        }
+      } as AgentEvent)
+      subscribeCallback({ type: 'agent_end', messages: [] })
+    })
+
+    const { createAgentRunner } = await import('../../../src/main/agent-runner')
+    const events: SessionRuntimeEvent[] = []
+
+    const runner = createAgentRunner({
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic',
+      apiKey: 'sk-ant-test',
+      systemPrompt: 'You are a helpful assistant.',
+      onEvent: (event) => events.push(event)
+    })
+
+    await runner.execute('Plan phase 2')
+
+    const streamEvents = events.filter((event) => event.type === 'message_updated')
+    expect(streamEvents.length).toBeGreaterThan(0)
+    expect(
+      (streamEvents[0] as { type: 'message_updated'; message: { content: string } }).message.content
+    ).toBe('Draft')
+    expect(
+      (events.find((event) => event.type === 'message_appended') as {
+        type: 'message_appended'
+        message: { content: string }
+      }).message.content
+    ).toBe('Draft complete.')
+  })
+
   it('configures agent with system prompt and model', async () => {
     const { createAgentRunner } = await import('../../../src/main/agent-runner')
 

@@ -14,23 +14,23 @@ async function expectRunStatus(appWindow: Page, label: 'Ready' | 'Thinking' | 'E
   await expect(appWindow.getByRole('status', { name: label })).toBeVisible({ timeout })
 }
 
-async function expectTerminalRunStatus(appWindow: Page, timeout: number): Promise<'Stopped' | 'Error'> {
-  const stoppedStatus = appWindow.getByRole('status', { name: 'Stopped' })
-  const errorStatus = appWindow.getByRole('status', { name: 'Error' })
-  const start = Date.now()
-
-  while (Date.now() - start < timeout) {
-    if (await stoppedStatus.isVisible().catch(() => false)) {
+async function waitForTerminalRunStatus(
+  appWindow: Page,
+  timeoutMs: number
+): Promise<'Error' | 'Stopped'> {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < timeoutMs) {
+    if (await appWindow.getByRole('status', { name: 'Stopped' }).isVisible()) {
       return 'Stopped'
     }
-    if (await errorStatus.isVisible().catch(() => false)) {
+    if (await appWindow.getByRole('status', { name: 'Error' }).isVisible()) {
       return 'Error'
     }
 
     await appWindow.waitForTimeout(100)
   }
 
-  throw new Error(`Expected terminal run status (Stopped or Error) within ${timeout}ms`)
+  throw new Error(`Run did not reach terminal state (Stopped/Error) within ${timeoutMs}ms`)
 }
 
 test.describe('KAT-158 session shell run-state evidence @uat', () => {
@@ -51,24 +51,29 @@ test.describe('KAT-158 session shell run-state evidence @uat', () => {
     await expectRunStatus(appWindow, 'Thinking', 1_000)
     await appWindow.screenshot({ path: pendingStatePath, fullPage: true })
 
-    const firstTerminalStatus = await expectTerminalRunStatus(appWindow, 30_000)
+    const firstTerminalState = await waitForTerminalRunStatus(appWindow, 10_000)
 
-    if (firstTerminalStatus === 'Error') {
-      await appWindow.screenshot({ path: errorStatePath, fullPage: true })
-    } else {
+    if (firstTerminalState === 'Stopped') {
+      await appWindow.screenshot({ path: idleStatePath, fullPage: true })
+
       await messageInput.fill('/error trigger deterministic failure for KAT-158')
       await sendButton.click()
-      await expectRunStatus(appWindow, 'Error', 5_000)
+      await expectRunStatus(appWindow, 'Error', 1_000)
       await appWindow.screenshot({ path: errorStatePath, fullPage: true })
+      return
     }
+
+    await appWindow.screenshot({ path: errorStatePath, fullPage: true })
 
     const retryButton = appWindow.getByRole('button', { name: 'Retry' })
     await expect(retryButton).toBeVisible()
     await retryButton.click()
 
     await expectRunStatus(appWindow, 'Thinking', 1_000)
-    const postRetryTerminalStatus = await expectTerminalRunStatus(appWindow, 30_000)
-    expect(postRetryTerminalStatus).toBe('Stopped')
+    const terminalStateAfterRetry = await waitForTerminalRunStatus(appWindow, 10_000)
+    if (terminalStateAfterRetry !== 'Stopped') {
+      throw new Error(`Expected retry to recover to Stopped, got ${terminalStateAfterRetry}`)
+    }
     await appWindow.screenshot({ path: idleStatePath, fullPage: true })
   })
 })

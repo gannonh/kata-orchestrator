@@ -21,7 +21,9 @@ test.describe('Wave 1 desktop shell UAT @uat', () => {
     await expect(
       appWindow.getByRole('tablist', { name: 'Center panel tabs' }).getByRole('tab', { name: 'Coordinator' })
     ).toBeVisible()
-    await expect(appWindow.getByRole('heading', { name: 'Spec' })).toBeVisible()
+    await expect(
+      appWindow.getByTestId('right-panel').getByRole('heading', { name: /^Spec$/ })
+    ).toBeVisible()
 
     await expect(appWindow.getByLabel('Resize left panel')).toBeVisible()
     await expect(appWindow.getByLabel('Resize center-right divider')).toBeVisible()
@@ -102,12 +104,22 @@ test.describe('Wave 1 desktop shell UAT @uat', () => {
         return root.scrollWidth - root.clientWidth
       })
     }).toBeLessThanOrEqual(0)
+
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0]
+      window.setSize(1440, 900)
+    })
   })
 
   test('double-clicking center divider resets center and right to equal widths @quality-gate', async ({
+    electronApp,
     appWindow
   }) => {
     await ensureWorkspaceShell(appWindow)
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0]
+      window.setSize(1440, 900)
+    })
 
     const centerPanel = appWindow.getByTestId('center-panel')
     const rightPanel = appWindow.getByTestId('right-panel')

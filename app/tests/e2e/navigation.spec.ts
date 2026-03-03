@@ -13,19 +13,20 @@ test.describe('Desktop app navigation @uat', () => {
     await ensureWorkspaceShell(appWindow)
 
     const leftTabs = appWindow.getByRole('tablist', { name: /Left panel (tabs|modules)/ })
+    const leftPanelContent = appWindow.getByTestId('left-panel-content')
 
     await expect(leftTabs.getByRole('tab', { name: /Agents/ })).toHaveAttribute('aria-selected', 'true')
 
     await leftTabs.getByRole('tab', { name: /Context/ }).click()
-    await expect(appWindow.getByRole('heading', { name: 'Context' })).toBeVisible()
+    await expect(leftPanelContent.getByRole('heading', { name: 'Context' })).toBeVisible()
 
     await leftTabs.getByRole('tab', { name: /Changes/ }).click()
-    await expect(appWindow.getByRole('heading', { name: 'Changes' })).toBeVisible()
+    await expect(leftPanelContent.getByRole('heading', { name: 'Changes' })).toBeVisible()
     await expect(appWindow.getByText('Your code lives in:')).toBeVisible()
     await expect(appWindow.getByText('No changes yet')).toBeVisible()
 
     await leftTabs.getByRole('tab', { name: /Files/ }).click()
-    await expect(appWindow.getByRole('heading', { name: 'Files' })).toBeVisible()
+    await expect(leftPanelContent.getByRole('heading', { name: 'Files' })).toBeVisible()
     await expect(appWindow.getByLabel('Search files')).toBeVisible()
   })
 
@@ -155,7 +156,7 @@ test.describe('Desktop app navigation @uat', () => {
     await expect(appWindow.getByText(noteScaffold)).toBeVisible()
 
     await rightTabs.getByRole('tab', { name: 'Spec' }).click()
-    await expect(appWindow.getByRole('heading', { name: /^Goal$/ })).toBeVisible()
+    await expect(rightPanel.getByRole('heading', { name: /^Spec$/ })).toBeVisible()
     await expect(appWindow.getByText(noteScaffold)).toHaveCount(0)
 
     await rightTabs.getByRole('tab', { name: 'New Note' }).click()

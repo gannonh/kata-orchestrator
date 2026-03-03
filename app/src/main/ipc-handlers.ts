@@ -545,11 +545,22 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       systemPrompt: 'You are a helpful AI assistant.',
       onEvent: (runtimeEvent: SessionRuntimeEvent) => {
         try {
-          event.sender.send(RUN_EVENT_CHANNEL, runtimeEvent)
+          const enrichedEvent =
+            runtimeEvent.type === 'message_appended' || runtimeEvent.type === 'message_updated'
+              ? { ...runtimeEvent, runId: run.id }
+              : runtimeEvent
+          event.sender.send(RUN_EVENT_CHANNEL, enrichedEvent)
         } catch (err) {
-          if (!event.sender.isDestroyed()) {
-            console.error('[IPC] Failed to send run event to renderer:', err)
+          if (event.sender.isDestroyed()) {
+            const orphanedRunner = activeRunners.get(run.id)
+            if (orphanedRunner) {
+              orphanedRunner.abort()
+              activeRunners.delete(run.id)
+              updateRunStatus(stateStore, run.id, 'failed', 'Renderer window closed')
+            }
+            return
           }
+          console.error('[IPC] Failed to send run event to renderer:', err)
         }
 
         if (runtimeEvent.type === 'message_appended') {
@@ -627,7 +638,7 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     if (!isObjectRecord(input) || typeof input.provider !== 'string') {
       throw new Error('auth:login requires a string provider')
     }
-    // TODO(KAT-XXX): implement OAuth flow
+    // TODO: implement OAuth flow with provider-specific redirect URI
     return false
   })
 
