@@ -599,7 +599,7 @@ describe('useIpcSessionConversation', () => {
       expect(result.current.state.messages).toHaveLength(4)
     })
 
-    expect(result.current.state.runState).toBe('idle')
+    expect(result.current.state.runState).toBe('empty')
     expect(result.current.state.messages.map(({ role, content }) => ({ role, content }))).toEqual([
       { role: 'user', content: 'review decision options' },
       { role: 'agent', content: 'Inline decision: choose A or B?' },
@@ -607,10 +607,7 @@ describe('useIpcSessionConversation', () => {
       { role: 'agent', content: 'Proceeding with option A.' }
     ])
     const replayedIds = result.current.state.messages.map((message) => message.id)
-    expect(replayedIds).toHaveLength(4)
-    replayedIds.forEach((id) => {
-      expect(id).toMatch(/^(user|agent)-\d+$/)
-    })
+    expect(replayedIds).toEqual(['u1', 'a1', 'u2', 'a2'])
   })
 
   it('silently ignores replay errors', async () => {

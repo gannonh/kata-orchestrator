@@ -57,16 +57,14 @@ export function ChatPanel({
                 decisionCard={decisionCard}
                 decisionState={decisionState}
                 onDecisionAction={(actionId) => {
-                  if (!decisionCard || decisionState !== 'available') {
-                    return
-                  }
+                  const selectedAction =
+                    decisionState === 'available'
+                      ? decisionCard?.actions.find((action) => action.id === actionId)
+                      : undefined
 
-                  const selectedAction = decisionCard.actions.find((action) => action.id === actionId)
-                  if (!selectedAction) {
-                    return
+                  if (selectedAction) {
+                    submitPrompt(selectedAction.followUpPrompt)
                   }
-
-                  submitPrompt(selectedAction.followUpPrompt)
                 }}
               />
             </div>
