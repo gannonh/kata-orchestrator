@@ -62,7 +62,7 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [availableWidth, setAvailableWidth] = useState(1440)
   const [conversationEntries, setConversationEntries] = useState<ConversationEntry[]>([])
-  const [scrollToMessage, setScrollToMessage] = useState<ScrollToMessage | null>(null)
+  const scrollToMessageRef = useRef<ScrollToMessage | null>(null)
   const activeSessionKey = activeSessionId ?? null
   const [latestDraftState, setLatestDraftState] = useState<{
     sessionId: string | null
@@ -182,14 +182,14 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
     [activeSessionKey]
   )
   const handleRegisterScrollToMessage = useCallback((nextScrollToMessage: ScrollToMessage) => {
-    setScrollToMessage(() => nextScrollToMessage)
+    scrollToMessageRef.current = nextScrollToMessage
   }, [])
 
   const handleJumpToMessage = useCallback(
     (messageId: string) => {
-      scrollToMessage?.(messageId)
+      scrollToMessageRef.current?.(messageId)
     },
-    [scrollToMessage]
+    []
   )
 
   return (
