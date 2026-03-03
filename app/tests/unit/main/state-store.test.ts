@@ -43,6 +43,7 @@ describe('createStateStore', () => {
       sessions: {},
       runs: {},
       agentRoster: {},
+      specDocuments: {},
       activeSpaceId: 's1',
       activeSessionId: null
     }
@@ -300,6 +301,7 @@ describe('createStateStore', () => {
       sessions: {},
       runs: {},
       agentRoster: {},
+      specDocuments: {},
       activeSpaceId: null,
       activeSessionId: null
     })
@@ -487,6 +489,7 @@ describe('createStateStore', () => {
       sessions: {},
       runs: {},
       agentRoster: {},
+      specDocuments: {},
       activeSpaceId: null,
       activeSessionId: null
     })
@@ -652,6 +655,153 @@ describe('createStateStore', () => {
     })
   })
 
+  test('loads valid specDocuments and drops malformed entries', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {},
+        specDocuments: {
+          's1:sess1': {
+            markdown: '# Spec',
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            appliedRunId: 'run-1',
+            appliedAt: '2026-03-03T00:01:00.000Z'
+          },
+          bad_markdown: {
+            markdown: 123,
+            updatedAt: '2026-03-03T00:00:00.000Z'
+          },
+          bad_updatedAt: {
+            markdown: '# Broken',
+            updatedAt: 123
+          },
+          bad_appliedAt: {
+            markdown: '# Broken',
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            appliedAt: 123
+          },
+          bad_appliedRunId: {
+            markdown: '# Broken',
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            appliedRunId: 123
+          },
+          bad_non_object: 42
+        },
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+
+    expect(state.specDocuments).toEqual({
+      's1:sess1': {
+        markdown: '# Spec',
+        updatedAt: '2026-03-03T00:00:00.000Z',
+        appliedRunId: 'run-1',
+        appliedAt: '2026-03-03T00:01:00.000Z'
+      }
+    })
+  })
+
+  test('reconciles queued and running runs to failed on load', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {
+          queued_run: {
+            id: 'queued_run',
+            sessionId: 'sess-1',
+            prompt: 'queued',
+            status: 'queued',
+            model: 'm',
+            provider: 'p',
+            createdAt: '2026-03-03T00:00:00.000Z',
+            messages: []
+          },
+          running_run: {
+            id: 'running_run',
+            sessionId: 'sess-1',
+            prompt: 'running',
+            status: 'running',
+            model: 'm',
+            provider: 'p',
+            createdAt: '2026-03-03T00:00:00.000Z',
+            startedAt: '2026-03-03T00:00:01.000Z',
+            messages: [
+              {
+                id: 'msg-1',
+                role: 'agent',
+                content: 'Working...',
+                createdAt: '2026-03-03T00:00:02.000Z'
+              }
+            ]
+          },
+          failed_run: {
+            id: 'failed_run',
+            sessionId: 'sess-1',
+            prompt: 'failed',
+            status: 'failed',
+            model: 'm',
+            provider: 'p',
+            createdAt: '2026-03-03T00:00:00.000Z',
+            completedAt: '2026-03-03T00:00:05.000Z',
+            errorMessage: 'Original failure',
+            messages: []
+          },
+          completed_run: {
+            id: 'completed_run',
+            sessionId: 'sess-1',
+            prompt: 'completed',
+            status: 'completed',
+            model: 'm',
+            provider: 'p',
+            createdAt: '2026-03-03T00:00:00.000Z',
+            completedAt: '2026-03-03T00:00:06.000Z',
+            messages: []
+          }
+        },
+        agentRoster: {},
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    const expectedError = 'Recovered after app restart: in-flight run was interrupted'
+
+    expect(state.runs.queued_run?.status).toBe('failed')
+    expect(state.runs.queued_run?.errorMessage).toBe(expectedError)
+    expect(state.runs.queued_run?.completedAt).toEqual(expect.any(String))
+    expect(Number.isNaN(Date.parse(state.runs.queued_run?.completedAt ?? ''))).toBe(false)
+
+    expect(state.runs.running_run?.status).toBe('failed')
+    expect(state.runs.running_run?.errorMessage).toBe(expectedError)
+    expect(state.runs.running_run?.completedAt).toEqual(expect.any(String))
+    expect(Number.isNaN(Date.parse(state.runs.running_run?.completedAt ?? ''))).toBe(false)
+    expect(state.runs.running_run?.messages).toEqual([
+      {
+        id: 'msg-1',
+        role: 'agent',
+        content: 'Working...',
+        createdAt: '2026-03-03T00:00:02.000Z'
+      }
+    ])
+
+    expect(state.runs.failed_run?.status).toBe('failed')
+    expect(state.runs.failed_run?.errorMessage).toBe('Original failure')
+    expect(state.runs.failed_run?.completedAt).toBe('2026-03-03T00:00:05.000Z')
+
+    expect(state.runs.completed_run?.status).toBe('completed')
+    expect(state.runs.completed_run?.completedAt).toBe('2026-03-03T00:00:06.000Z')
+  })
+
   test('nulls active ids that do not point to existing records while preserving valid state', () => {
     fs.writeFileSync(
       filePath,
@@ -768,6 +918,7 @@ describe('createStateStore', () => {
       },
       runs: {},
       agentRoster: {},
+      specDocuments: {},
       activeSpaceId: 's1',
       activeSessionId: 'sess1'
     }

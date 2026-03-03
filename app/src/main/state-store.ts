@@ -11,6 +11,7 @@ import {
 import type { AppState, SessionAgentRecord } from '../shared/types/space'
 import { RUN_STATUSES } from '../shared/types/run'
 import type { PersistedMessage } from '../shared/types/run'
+import type { PersistedSpecDocument } from '../shared/types/spec-document'
 
 export type StateStore = {
   load(): AppState
@@ -91,6 +92,19 @@ function isRunRecord(value: unknown): boolean {
   )
 }
 
+function isPersistedSpecDocument(value: unknown): value is PersistedSpecDocument {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    typeof value.markdown === 'string' &&
+    typeof value.updatedAt === 'string' &&
+    (value.appliedRunId === undefined || typeof value.appliedRunId === 'string') &&
+    (value.appliedAt === undefined || typeof value.appliedAt === 'string')
+  )
+}
+
 function isSessionAgentRecord(value: unknown): value is SessionAgentRecord {
   if (!isRecord(value)) {
     return false
@@ -133,6 +147,7 @@ type PersistedAppState = {
   sessions: AppState['sessions']
   runs?: AppState['runs']
   agentRoster?: unknown
+  specDocuments?: unknown
   activeSpaceId: string | null
   activeSessionId: string | null
 }
@@ -180,6 +195,48 @@ function normalizeAgentRoster(value: unknown): AppState['agentRoster'] {
   }
 
   return normalized
+}
+
+function normalizeSpecDocuments(value: unknown): AppState['specDocuments'] {
+  if (!isRecord(value)) {
+    return {}
+  }
+
+  const normalized: AppState['specDocuments'] = {}
+
+  for (const [key, record] of Object.entries(value)) {
+    if (isPersistedSpecDocument(record)) {
+      normalized[key] = record
+    } else {
+      console.warn('[StateStore] Dropping invalid spec document entry:', key)
+    }
+  }
+
+  return normalized
+}
+
+const INTERRUPTED_RUN_ERROR_MESSAGE =
+  'Recovered after app restart: in-flight run was interrupted'
+
+function reconcileInterruptedRuns(runs: AppState['runs']): AppState['runs'] {
+  const reconciled: AppState['runs'] = {}
+  const completedAt = new Date().toISOString()
+
+  for (const [key, run] of Object.entries(runs)) {
+    if (run.status === 'queued' || run.status === 'running') {
+      reconciled[key] = {
+        ...run,
+        status: 'failed',
+        completedAt,
+        errorMessage: INTERRUPTED_RUN_ERROR_MESSAGE
+      }
+      continue
+    }
+
+    reconciled[key] = run
+  }
+
+  return reconciled
 }
 
 function isErrnoCode(error: unknown, code: string): boolean {
@@ -234,8 +291,9 @@ export function createStateStore(filePath: string): StateStore {
       return {
         spaces: parsed.spaces,
         sessions: parsed.sessions,
-        runs: parsed.runs ?? {},
+        runs: reconcileInterruptedRuns(parsed.runs ?? {}),
         agentRoster: normalizeAgentRoster(parsed.agentRoster),
+        specDocuments: normalizeSpecDocuments(parsed.specDocuments),
         activeSpaceId,
         activeSessionId
       }
