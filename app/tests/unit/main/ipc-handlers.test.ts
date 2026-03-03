@@ -69,12 +69,14 @@ vi.mock('../../../src/main/workspace-provisioning', async () => {
 const mockCreateRun = vi.fn()
 const mockUpdateRunStatus = vi.fn()
 const mockAppendRunMessage = vi.fn()
+const mockSetRunDraft = vi.fn()
 const mockGetRunsForSession = vi.fn()
 
 vi.mock('../../../src/main/orchestrator', () => ({
   createRun: (...args: unknown[]) => mockCreateRun(...args),
   updateRunStatus: (...args: unknown[]) => mockUpdateRunStatus(...args),
   appendRunMessage: (...args: unknown[]) => mockAppendRunMessage(...args),
+  setRunDraft: (...args: unknown[]) => mockSetRunDraft(...args),
   getRunsForSession: (...args: unknown[]) => mockGetRunsForSession(...args)
 }))
 
@@ -118,15 +120,27 @@ describe('registerIpcHandlers', () => {
     registerIpcHandlers(createMockStore())
 
     expect(mockRemoveHandler).toHaveBeenCalledWith('kata:openExternalUrl')
+    expect(mockRemoveHandler).toHaveBeenCalledWith('app:bootstrap')
     expect(mockRemoveHandler).toHaveBeenCalledWith('space:create')
     expect(mockRemoveHandler).toHaveBeenCalledWith('space:list')
     expect(mockRemoveHandler).toHaveBeenCalledWith('space:get')
+    expect(mockRemoveHandler).toHaveBeenCalledWith('space:setActive')
     expect(mockRemoveHandler).toHaveBeenCalledWith('session:create')
     expect(mockRemoveHandler).toHaveBeenCalledWith('session-agent-roster:list')
     expect(mockRemoveHandler).toHaveBeenCalledWith('session:listBySpace')
+    expect(mockRemoveHandler).toHaveBeenCalledWith('session:setActive')
+    expect(mockRemoveHandler).toHaveBeenCalledWith('spec:get')
+    expect(mockRemoveHandler).toHaveBeenCalledWith('spec:save')
+    expect(mockRemoveHandler).toHaveBeenCalledWith('spec:applyDraft')
+    expect(mockHandle).toHaveBeenCalledWith('app:bootstrap', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('space:create', expect.any(Function))
+    expect(mockHandle).toHaveBeenCalledWith('space:setActive', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('session-agent-roster:list', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('session:listBySpace', expect.any(Function))
+    expect(mockHandle).toHaveBeenCalledWith('session:setActive', expect.any(Function))
+    expect(mockHandle).toHaveBeenCalledWith('spec:get', expect.any(Function))
+    expect(mockHandle).toHaveBeenCalledWith('spec:save', expect.any(Function))
+    expect(mockHandle).toHaveBeenCalledWith('spec:applyDraft', expect.any(Function))
   })
 
   it('opens valid external http(s) URLs through shell', async () => {
@@ -612,14 +626,434 @@ describe('registerIpcHandlers', () => {
     ])
   })
 
+  it('app:bootstrap returns persisted startup slices including active IDs and spec documents', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1',
+          name: 'Space 1',
+          repoUrl: 'https://github.com/org/repo',
+          rootPath: '/tmp/repo',
+          branch: 'main',
+          orchestrationMode: 'team' as const,
+          createdAt: '2026-03-03T00:00:00.000Z',
+          status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': {
+          id: 'session-1',
+          spaceId: 'space-1',
+          label: 'Session 1',
+          createdAt: '2026-03-03T00:00:00.000Z'
+        }
+      },
+      specDocuments: {
+        'space-1:session-1': {
+          markdown: '# Spec',
+          updatedAt: '2026-03-03T00:10:00.000Z',
+          appliedRunId: 'run-1',
+          appliedAt: '2026-03-03T00:11:00.000Z'
+        }
+      },
+      activeSpaceId: 'space-1',
+      activeSessionId: 'session-1'
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('app:bootstrap')!
+    await expect(handler({})).resolves.toEqual({
+      spaces: state.spaces,
+      sessions: state.sessions,
+      specDocuments: state.specDocuments,
+      activeSpaceId: 'space-1',
+      activeSessionId: 'session-1'
+    })
+  })
+
+  it('space:setActive persists activeSpaceId and clears activeSessionId when session is outside that space', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1',
+          name: 'Space 1',
+          repoUrl: 'https://github.com/org/repo1',
+          rootPath: '/tmp/repo1',
+          branch: 'main',
+          orchestrationMode: 'team' as const,
+          createdAt: '2026-03-03T00:00:00.000Z',
+          status: 'active' as const
+        },
+        'space-2': {
+          id: 'space-2',
+          name: 'Space 2',
+          repoUrl: 'https://github.com/org/repo2',
+          rootPath: '/tmp/repo2',
+          branch: 'main',
+          orchestrationMode: 'team' as const,
+          createdAt: '2026-03-03T00:00:00.000Z',
+          status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': {
+          id: 'session-1',
+          spaceId: 'space-1',
+          label: 'Session 1',
+          createdAt: '2026-03-03T00:00:00.000Z'
+        }
+      },
+      activeSpaceId: 'space-1',
+      activeSessionId: 'session-1'
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('space:setActive')!
+    await expect(handler({}, { spaceId: 'space-2' })).resolves.toEqual({
+      activeSpaceId: 'space-2',
+      activeSessionId: null
+    })
+    expect(store.save).toHaveBeenCalledWith({
+      ...state,
+      activeSpaceId: 'space-2',
+      activeSessionId: null
+    })
+  })
+
+  it('space:setActive rejects unknown space ids', async () => {
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('space:setActive')!
+    await expect(handler({}, { spaceId: 'missing-space' })).rejects.toThrow(
+      'Cannot set active space to unknown id: missing-space'
+    )
+  })
+
+  it('session:setActive persists activeSessionId and matching activeSpaceId', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1',
+          name: 'Space 1',
+          repoUrl: 'https://github.com/org/repo1',
+          rootPath: '/tmp/repo1',
+          branch: 'main',
+          orchestrationMode: 'team' as const,
+          createdAt: '2026-03-03T00:00:00.000Z',
+          status: 'active' as const
+        },
+        'space-2': {
+          id: 'space-2',
+          name: 'Space 2',
+          repoUrl: 'https://github.com/org/repo2',
+          rootPath: '/tmp/repo2',
+          branch: 'main',
+          orchestrationMode: 'team' as const,
+          createdAt: '2026-03-03T00:00:00.000Z',
+          status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': {
+          id: 'session-1',
+          spaceId: 'space-2',
+          label: 'Session 1',
+          createdAt: '2026-03-03T00:00:00.000Z'
+        }
+      },
+      activeSpaceId: 'space-1',
+      activeSessionId: null
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('session:setActive')!
+    await expect(handler({}, { sessionId: 'session-1' })).resolves.toEqual({
+      activeSpaceId: 'space-2',
+      activeSessionId: 'session-1'
+    })
+    expect(store.save).toHaveBeenCalledWith({
+      ...state,
+      activeSpaceId: 'space-2',
+      activeSessionId: 'session-1'
+    })
+  })
+
+  it('session:setActive rejects unknown session ids', async () => {
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('session:setActive')!
+    await expect(handler({}, { sessionId: 'missing-session' })).rejects.toThrow(
+      'Cannot set active session to unknown id: missing-session'
+    )
+  })
+
+  it('spec:get returns persisted spec document by <spaceId>:<sessionId> key', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team', createdAt: '2026-03-03T00:00:00.000Z', status: 'active'
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      },
+      specDocuments: {
+        'space-1:session-1': {
+          markdown: '# Persisted',
+          updatedAt: '2026-03-03T00:00:00.000Z'
+        }
+      }
+    })
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:get')!
+    await expect(handler({}, { spaceId: 'space-1', sessionId: 'session-1' })).resolves.toEqual({
+      markdown: '# Persisted',
+      updatedAt: '2026-03-03T00:00:00.000Z'
+    })
+  })
+
+  it('spec:get throws for unknown spaceId', async () => {
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:get')!
+    await expect(handler({}, { spaceId: 'missing', sessionId: 'sess' })).rejects.toThrow('Unknown spaceId: missing')
+  })
+
+  it('spec:get throws for unknown sessionId', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      }
+    })
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:get')!
+    await expect(handler({}, { spaceId: 'space-1', sessionId: 'missing' })).rejects.toThrow('Unknown sessionId: missing')
+  })
+
+  it('spec:get throws when session belongs to a different space', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-2', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      }
+    })
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:get')!
+    await expect(handler({}, { spaceId: 'space-1', sessionId: 'session-1' })).rejects.toThrow(
+      'Session session-1 does not belong to space space-1'
+    )
+  })
+
+  it('spec:save upserts markdown with updatedAt and optional applied fields', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      }
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:save')!
+    const result = await handler({}, {
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      markdown: '# Updated markdown',
+      appliedRunId: 'run-55',
+      appliedAt: '2026-03-03T00:12:00.000Z'
+    })
+
+    expect(result).toEqual(expect.objectContaining({
+      markdown: '# Updated markdown',
+      appliedRunId: 'run-55',
+      appliedAt: '2026-03-03T00:12:00.000Z',
+      updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
+    }))
+    expect(store.save).toHaveBeenCalledWith({
+      ...state,
+      specDocuments: {
+        'space-1:session-1': expect.objectContaining({
+          markdown: '# Updated markdown',
+          appliedRunId: 'run-55',
+          appliedAt: '2026-03-03T00:12:00.000Z',
+          updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
+        })
+      }
+    })
+  })
+
+  it('spec:save preserves existing applied metadata when omitted from input', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      },
+      specDocuments: {
+        'space-1:session-1': {
+          markdown: '# Existing',
+          updatedAt: '2026-03-03T00:00:00.000Z',
+          appliedRunId: 'run-existing',
+          appliedAt: '2026-03-03T00:01:00.000Z'
+        }
+      }
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:save')!
+    const result = await handler({}, {
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      markdown: '# Updated without explicit applied metadata'
+    })
+
+    expect(result).toEqual(expect.objectContaining({
+      markdown: '# Updated without explicit applied metadata',
+      appliedRunId: 'run-existing',
+      appliedAt: '2026-03-03T00:01:00.000Z',
+      updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
+    }))
+  })
+
+  it('spec:applyDraft saves markdown/applied metadata and marks run draft applied', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      },
+      runs: {
+        'run-10': {
+          id: 'run-10', sessionId: 'session-1', prompt: 'test', status: 'completed' as const,
+          model: 'm', provider: 'p', createdAt: '2026-03-03T00:00:00.000Z', messages: []
+        }
+      }
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:applyDraft')!
+    const result = await handler({}, {
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      draft: {
+        runId: 'run-10',
+        generatedAt: '2026-03-03T00:00:00.000Z',
+        content: '## Applied draft'
+      }
+    })
+
+    expect(result).toEqual(expect.objectContaining({
+      markdown: '## Applied draft',
+      appliedRunId: 'run-10',
+      appliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
+    }))
+    expect(store.save).toHaveBeenCalledWith(expect.objectContaining({
+      specDocuments: {
+        'space-1:session-1': expect.objectContaining({
+          markdown: '## Applied draft',
+          appliedRunId: 'run-10',
+          appliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+          updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
+        })
+      },
+      runs: expect.objectContaining({
+        'run-10': expect.objectContaining({
+          draftAppliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
+        })
+      })
+    }))
+  })
+
+  it('spec:applyDraft throws when run does not belong to session', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      },
+      runs: {
+        'run-10': {
+          id: 'run-10', sessionId: 'other-session', prompt: 'test', status: 'completed' as const,
+          model: 'm', provider: 'p', createdAt: '2026-03-03T00:00:00.000Z', messages: []
+        }
+      }
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:applyDraft')!
+    await expect(handler({}, {
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      draft: {
+        runId: 'run-10',
+        generatedAt: '2026-03-03T00:00:00.000Z',
+        content: '## Draft'
+      }
+    })).rejects.toThrow('Draft run run-10 does not belong to session session-1')
+  })
+
   it('rejects malformed payloads for space and session handlers', async () => {
     registerIpcHandlers(createMockStore())
     const handlers = getHandlersByChannel()
+    const spaceSetActive = handlers.get('space:setActive')
     const spaceCreate = handlers.get('space:create')
     const spaceGet = handlers.get('space:get')
     const sessionCreate = handlers.get('session:create')
     const sessionAgentRosterList = handlers.get('session-agent-roster:list')
     const sessionListBySpace = handlers.get('session:listBySpace')
+    const sessionSetActive = handlers.get('session:setActive')
+    const specGet = handlers.get('spec:get')
+    const specSave = handlers.get('spec:save')
+    const specApplyDraft = handlers.get('spec:applyDraft')
 
     await expect(spaceCreate?.({}, null)).rejects.toThrow('Space input must be an object')
     await expect(
@@ -720,6 +1154,30 @@ describe('registerIpcHandlers', () => {
     )
     await expect(sessionListBySpace?.({}, { spaceId: 123 })).rejects.toThrow(
       'session:listBySpace input must be an object with string spaceId'
+    )
+    await expect(spaceSetActive?.({}, { spaceId: 123 })).rejects.toThrow(
+      'space:setActive input must be an object with string spaceId'
+    )
+    await expect(sessionSetActive?.({}, { sessionId: 123 })).rejects.toThrow(
+      'session:setActive input must be an object with string sessionId'
+    )
+    await expect(specGet?.({}, { spaceId: 'space-1', sessionId: 123 })).rejects.toThrow(
+      'spec:get input must be an object with string spaceId and sessionId'
+    )
+    await expect(specSave?.({}, { spaceId: 'space-1', sessionId: 'session-1', markdown: 123 })).rejects.toThrow(
+      'spec:save input must include string spaceId, sessionId, and markdown'
+    )
+    await expect(specSave?.({}, { spaceId: 'space-1', sessionId: 'session-1', markdown: '# ok', appliedRunId: 123 })).rejects.toThrow(
+      'spec:save appliedRunId must be a string when provided'
+    )
+    await expect(specSave?.({}, { spaceId: 'space-1', sessionId: 'session-1', markdown: '# ok', appliedAt: 123 })).rejects.toThrow(
+      'spec:save appliedAt must be a string when provided'
+    )
+    await expect(specApplyDraft?.({}, { spaceId: 'space-1', sessionId: 'session-1', draft: null })).rejects.toThrow(
+      'spec:applyDraft input must include a draft object'
+    )
+    await expect(specApplyDraft?.({}, { spaceId: 'space-1', sessionId: 'session-1', draft: { runId: 123, content: '# bad' } })).rejects.toThrow(
+      'spec:applyDraft draft must include string runId and content'
     )
   })
 
@@ -937,6 +1395,7 @@ describe('registerIpcHandlers', () => {
       mockCreateAgentRunner.mockReset()
       mockCredentialResolver.getApiKey.mockReset()
       mockCredentialResolver.getAuthStatus.mockReset()
+      mockSetRunDraft.mockReset()
     })
 
     it('creates a run and starts an agent runner', async () => {
@@ -995,6 +1454,11 @@ describe('registerIpcHandlers', () => {
         role: 'agent',
         content: 'response text',
         createdAt: '2026-03-01T00:00:01Z'
+      })
+      expect(mockSetRunDraft).toHaveBeenCalledWith(store, 'run-ev-1', {
+        runId: 'run-ev-1',
+        generatedAt: '2026-03-01T00:00:01Z',
+        content: 'response text'
       })
 
       // Test idle -> completed transition (also removes from activeRunners)

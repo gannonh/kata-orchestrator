@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SessionRuntimeEvent } from '../../../../src/renderer/types/session-runtime-adapter'
+import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../../../src/shared/types/run'
 
 let onRunEventCallback: ((event: SessionRuntimeEvent) => void) | null = null
 const mockRunSubmit = vi.fn().mockResolvedValue({ runId: 'run-1' })
@@ -253,6 +254,40 @@ describe('useIpcSessionConversation', () => {
     })
   })
 
+  it('ignores duplicate message_appended events with the same message id', async () => {
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    act(() => {
+      result.current.submitPrompt('test')
+    })
+
+    const duplicateMessage = {
+      id: 'agent-dup-1',
+      role: 'agent' as const,
+      content: 'Draft ready.',
+      createdAt: '2026-03-01T00:00:01.000Z'
+    }
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'message_appended',
+        message: duplicateMessage
+      })
+    })
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'message_appended',
+        message: duplicateMessage
+      })
+    })
+
+    expect(result.current.state.messages.filter((message) => message.id === duplicateMessage.id)).toHaveLength(1)
+  })
+
   it('builds a draft with an empty prompt when message_appended arrives before submit', async () => {
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
@@ -409,7 +444,8 @@ describe('useIpcSessionConversation', () => {
         createdAt: '2026-03-01T00:00:00Z',
         messages: [
           { id: 'u1', role: 'user', content: 'hello', createdAt: '2026-03-01T00:00:00Z' },
-          { id: 'a1', role: 'agent', content: 'hi there', createdAt: '2026-03-01T00:00:01Z' }
+          { id: 'a1', role: 'agent', content: 'hi there', createdAt: '2026-03-01T00:00:01Z' },
+          { id: 'a2', role: 'agent', content: 'more details', createdAt: '2026-03-01T00:00:02Z' }
         ]
       }
     ])
@@ -425,9 +461,94 @@ describe('useIpcSessionConversation', () => {
     })
 
     expect(mockRunList).toHaveBeenCalledWith('s-1')
+    expect(result.current.state.messages).toHaveLength(3)
+    expect(result.current.state.messages[0].id).toBe('u1')
+    expect(result.current.state.messages[0].createdAt).toBe('2026-03-01T00:00:00Z')
+    expect(result.current.state.messages[1].id).toBe('a1')
+    expect(result.current.state.messages[1].createdAt).toBe('2026-03-01T00:00:01Z')
+    expect(result.current.state.messages[2].id).toBe('a2')
+    expect(result.current.state.messages[2].createdAt).toBe('2026-03-01T00:00:02Z')
+    expect(result.current.state.messages[0].content).toBe('hello')
+    expect(result.current.state.messages[1].content).toBe('hi there')
+    expect(result.current.state.messages[2].content).toBe('more details')
+  })
+
+  it('prefers persisted run draft metadata when replay restores latestDraft', async () => {
+    const persistedDraft = {
+      runId: 'run-1',
+      generatedAt: '2026-03-01T00:00:02Z',
+      content: '# Persisted draft from run metadata'
+    }
+
+    mockRunList.mockResolvedValue([
+      {
+        id: 'run-1',
+        sessionId: 's-1',
+        prompt: 'hello',
+        status: 'completed',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-01T00:00:00Z',
+        draft: persistedDraft,
+        messages: [
+          { id: 'u1', role: 'user', content: 'hello', createdAt: '2026-03-01T00:00:00Z' },
+          { id: 'a1', role: 'agent', content: 'hi there', createdAt: '2026-03-01T00:00:01Z' }
+        ]
+      }
+    ])
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
     expect(result.current.state.messages).toHaveLength(2)
     expect(result.current.state.messages[0].content).toBe('hello')
     expect(result.current.state.messages[1].content).toBe('hi there')
+    expect(result.current.state.latestDraft).toEqual(persistedDraft)
+  })
+
+  it('surfaces reconciled interrupted-run fallback from replay as an error state', async () => {
+    const interruptedRunError = INTERRUPTED_RUN_ERROR_MESSAGE
+
+    mockRunList.mockResolvedValue([
+      {
+        id: 'run-1',
+        sessionId: 's-1',
+        prompt: 'retry after restart',
+        status: 'failed',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-01T00:00:00Z',
+        errorMessage: interruptedRunError,
+        messages: [
+          {
+            id: 'u1',
+            role: 'user',
+            content: 'retry after restart',
+            createdAt: '2026-03-01T00:00:00Z'
+          }
+        ]
+      }
+    ])
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    expect(result.current.state.messages).toHaveLength(1)
+    expect(result.current.state.messages[0].content).toBe('retry after restart')
+    expect(result.current.state.runState).toBe('error')
+    expect(result.current.state.errorMessage).toBe(interruptedRunError)
   })
 
   it('replays inline decision follow-up as a normal persisted user message', async () => {
@@ -520,8 +641,8 @@ describe('useIpcSessionConversation', () => {
       await new Promise((resolve) => setTimeout(resolve, 10))
     })
 
-    expect(result.current.state.runState).toBe('empty')
-    expect(result.current.state.messages).toEqual([])
+    expect(result.current.state.runState).toBe('error')
+    expect(result.current.state.errorMessage).toBe('Failed to load conversation history')
   })
 
   it('transitions to error when submitPrompt IPC call rejects', async () => {

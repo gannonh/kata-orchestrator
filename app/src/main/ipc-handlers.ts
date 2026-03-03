@@ -22,7 +22,13 @@ import {
   WorkspaceProvisioningError,
   provisionManagedWorkspace
 } from './workspace-provisioning'
-import { createRun, updateRunStatus, appendRunMessage, getRunsForSession } from './orchestrator'
+import {
+  createRun,
+  updateRunStatus,
+  appendRunMessage,
+  setRunDraft,
+  getRunsForSession
+} from './orchestrator'
 import { createAgentRunner } from './agent-runner'
 import type { AgentRunner } from './agent-runner'
 import type { AuthStorage } from './auth-storage'
@@ -40,14 +46,21 @@ import type {
   SpaceRecord,
   WorkspaceMode
 } from '../shared/types/space'
+import type { PersistedSpecDocument } from '../shared/types/spec-document'
 
 const OPEN_EXTERNAL_URL_CHANNEL = 'kata:openExternalUrl'
+const APP_BOOTSTRAP_CHANNEL = 'app:bootstrap'
 const SPACE_CREATE_CHANNEL = 'space:create'
 const SPACE_LIST_CHANNEL = 'space:list'
 const SPACE_GET_CHANNEL = 'space:get'
+const SPACE_SET_ACTIVE_CHANNEL = 'space:setActive'
 const SESSION_CREATE_CHANNEL = 'session:create'
 const SESSION_AGENT_ROSTER_LIST_CHANNEL = 'session-agent-roster:list'
 const SESSION_LIST_BY_SPACE_CHANNEL = 'session:listBySpace'
+const SESSION_SET_ACTIVE_CHANNEL = 'session:setActive'
+const SPEC_GET_CHANNEL = 'spec:get'
+const SPEC_SAVE_CHANNEL = 'spec:save'
+const SPEC_APPLY_DRAFT_CHANNEL = 'spec:applyDraft'
 const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
 const GIT_LIST_BRANCHES_CHANNEL = 'git:listBranches'
 const GITHUB_LIST_REPOS_CHANNEL = 'github:listRepos'
@@ -245,6 +258,111 @@ function parseSessionListBySpaceInput(input: unknown): { spaceId: string } {
   return { spaceId: input.spaceId }
 }
 
+function parseSpaceSetActiveInput(input: unknown): { spaceId: string } {
+  if (!isObjectRecord(input) || typeof input.spaceId !== 'string') {
+    throw new Error('space:setActive input must be an object with string spaceId')
+  }
+
+  return { spaceId: input.spaceId }
+}
+
+function parseSessionSetActiveInput(input: unknown): { sessionId: string } {
+  if (!isObjectRecord(input) || typeof input.sessionId !== 'string') {
+    throw new Error('session:setActive input must be an object with string sessionId')
+  }
+
+  return { sessionId: input.sessionId }
+}
+
+function parseSpecGetInput(input: unknown): { spaceId: string; sessionId: string } {
+  if (
+    !isObjectRecord(input) ||
+    typeof input.spaceId !== 'string' ||
+    typeof input.sessionId !== 'string'
+  ) {
+    throw new Error('spec:get input must be an object with string spaceId and sessionId')
+  }
+
+  return { spaceId: input.spaceId, sessionId: input.sessionId }
+}
+
+function parseSpecSaveInput(input: unknown): {
+  spaceId: string
+  sessionId: string
+  markdown: string
+  appliedRunId?: string
+  appliedAt?: string
+} {
+  if (
+    !isObjectRecord(input) ||
+    typeof input.spaceId !== 'string' ||
+    typeof input.sessionId !== 'string' ||
+    typeof input.markdown !== 'string'
+  ) {
+    throw new Error('spec:save input must include string spaceId, sessionId, and markdown')
+  }
+
+  if (input.appliedRunId !== undefined && typeof input.appliedRunId !== 'string') {
+    throw new Error('spec:save appliedRunId must be a string when provided')
+  }
+  if (input.appliedAt !== undefined && typeof input.appliedAt !== 'string') {
+    throw new Error('spec:save appliedAt must be a string when provided')
+  }
+
+  return {
+    spaceId: input.spaceId,
+    sessionId: input.sessionId,
+    markdown: input.markdown,
+    appliedRunId: input.appliedRunId,
+    appliedAt: input.appliedAt
+  }
+}
+
+function parseSpecApplyDraftInput(input: unknown): {
+  spaceId: string
+  sessionId: string
+  draft: { runId: string; content: string }
+} {
+  if (
+    !isObjectRecord(input) ||
+    typeof input.spaceId !== 'string' ||
+    typeof input.sessionId !== 'string' ||
+    !isObjectRecord(input.draft)
+  ) {
+    throw new Error('spec:applyDraft input must include a draft object')
+  }
+
+  if (typeof input.draft.runId !== 'string' || typeof input.draft.content !== 'string') {
+    throw new Error('spec:applyDraft draft must include string runId and content')
+  }
+
+  return {
+    spaceId: input.spaceId,
+    sessionId: input.sessionId,
+    draft: {
+      runId: input.draft.runId,
+      content: input.draft.content
+    }
+  }
+}
+
+function assertSpecScope(state: AppState, spaceId: string, sessionId: string): void {
+  if (!state.spaces[spaceId]) {
+    throw new Error(`Unknown spaceId: ${spaceId}`)
+  }
+  const session = state.sessions[sessionId]
+  if (!session) {
+    throw new Error(`Unknown sessionId: ${sessionId}`)
+  }
+  if (session.spaceId !== spaceId) {
+    throw new Error(`Session ${sessionId} does not belong to space ${spaceId}`)
+  }
+}
+
+function buildSpecDocumentKey(spaceId: string, sessionId: string): string {
+  return `${spaceId}:${sessionId}`
+}
+
 function createBaselineSessionAgentRoster(sessionId: string, createdAt: string): SessionAgentRecord[] {
   return [
     {
@@ -303,12 +421,18 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
   const repoCacheBaseDir = options?.repoCacheBaseDir ?? path.join(os.homedir(), '.kata', 'repos')
 
   ipcMain.removeHandler(OPEN_EXTERNAL_URL_CHANNEL)
+  ipcMain.removeHandler(APP_BOOTSTRAP_CHANNEL)
   ipcMain.removeHandler(SPACE_CREATE_CHANNEL)
   ipcMain.removeHandler(SPACE_LIST_CHANNEL)
   ipcMain.removeHandler(SPACE_GET_CHANNEL)
+  ipcMain.removeHandler(SPACE_SET_ACTIVE_CHANNEL)
   ipcMain.removeHandler(SESSION_CREATE_CHANNEL)
   ipcMain.removeHandler(SESSION_AGENT_ROSTER_LIST_CHANNEL)
   ipcMain.removeHandler(SESSION_LIST_BY_SPACE_CHANNEL)
+  ipcMain.removeHandler(SESSION_SET_ACTIVE_CHANNEL)
+  ipcMain.removeHandler(SPEC_GET_CHANNEL)
+  ipcMain.removeHandler(SPEC_SAVE_CHANNEL)
+  ipcMain.removeHandler(SPEC_APPLY_DRAFT_CHANNEL)
 
   ipcMain.handle(OPEN_EXTERNAL_URL_CHANNEL, async (_event, url: unknown) => {
     if (!isExternalHttpUrl(url)) {
@@ -317,6 +441,23 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
 
     await shell.openExternal(url)
     return true
+  })
+
+  let bootstrapCompleted = false
+  ipcMain.handle(APP_BOOTSTRAP_CHANNEL, async () => {
+    const needsReconcile = !bootstrapCompleted
+    const state = stateStore.load(needsReconcile ? { reconcileInterruptedRuns: true } : undefined)
+    if (needsReconcile) {
+      stateStore.save(state)
+      bootstrapCompleted = true
+    }
+    return {
+      spaces: state.spaces,
+      sessions: state.sessions,
+      specDocuments: state.specDocuments,
+      activeSpaceId: state.activeSpaceId,
+      activeSessionId: state.activeSessionId
+    }
   })
 
   ipcMain.handle(SPACE_CREATE_CHANNEL, async (_event, input: unknown) => {
@@ -394,6 +535,28 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     return stateStore.load().spaces[id] ?? null
   })
 
+  ipcMain.handle(SPACE_SET_ACTIVE_CHANNEL, async (_event, input: unknown) => {
+    const { spaceId } = parseSpaceSetActiveInput(input)
+    const state = stateStore.load()
+    if (!state.spaces[spaceId]) {
+      throw new Error(`Cannot set active space to unknown id: ${spaceId}`)
+    }
+
+    const activeSession = state.activeSessionId ? state.sessions[state.activeSessionId] : undefined
+    const activeSessionId = activeSession && activeSession.spaceId === spaceId ? state.activeSessionId : null
+
+    stateStore.save({
+      ...state,
+      activeSpaceId: spaceId,
+      activeSessionId
+    })
+
+    return {
+      activeSpaceId: spaceId,
+      activeSessionId
+    }
+  })
+
   ipcMain.handle(SESSION_CREATE_CHANNEL, async (_event, input: unknown) => {
     const parsedInput = parseCreateSessionInput(input)
     const state = stateStore.load()
@@ -451,6 +614,100 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     return Object.values(stateStore.load().sessions)
       .filter((session) => session.spaceId === spaceId)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+  })
+
+  ipcMain.handle(SESSION_SET_ACTIVE_CHANNEL, async (_event, input: unknown) => {
+    const { sessionId } = parseSessionSetActiveInput(input)
+    const state = stateStore.load()
+    const session = state.sessions[sessionId]
+    if (!session) {
+      throw new Error(`Cannot set active session to unknown id: ${sessionId}`)
+    }
+
+    stateStore.save({
+      ...state,
+      activeSpaceId: session.spaceId,
+      activeSessionId: sessionId
+    })
+
+    return {
+      activeSpaceId: session.spaceId,
+      activeSessionId: sessionId
+    }
+  })
+
+  ipcMain.handle(SPEC_GET_CHANNEL, async (_event, input: unknown) => {
+    const { spaceId, sessionId } = parseSpecGetInput(input)
+    const state = stateStore.load()
+    assertSpecScope(state, spaceId, sessionId)
+    const key = buildSpecDocumentKey(spaceId, sessionId)
+    return state.specDocuments[key] ?? null
+  })
+
+  ipcMain.handle(SPEC_SAVE_CHANNEL, async (_event, input: unknown) => {
+    const parsedInput = parseSpecSaveInput(input)
+    const state = stateStore.load()
+    assertSpecScope(state, parsedInput.spaceId, parsedInput.sessionId)
+    const key = buildSpecDocumentKey(parsedInput.spaceId, parsedInput.sessionId)
+    const existing = state.specDocuments[key]
+    const updatedAt = new Date().toISOString()
+
+    const specDocument: PersistedSpecDocument = {
+      markdown: parsedInput.markdown,
+      updatedAt,
+      ...(existing?.appliedRunId !== undefined && { appliedRunId: existing.appliedRunId }),
+      ...(existing?.appliedAt !== undefined && { appliedAt: existing.appliedAt }),
+      ...(parsedInput.appliedRunId !== undefined && { appliedRunId: parsedInput.appliedRunId }),
+      ...(parsedInput.appliedAt !== undefined && { appliedAt: parsedInput.appliedAt })
+    }
+
+    stateStore.save({
+      ...state,
+      specDocuments: {
+        ...state.specDocuments,
+        [key]: specDocument
+      }
+    })
+
+    return specDocument
+  })
+
+  ipcMain.handle(SPEC_APPLY_DRAFT_CHANNEL, async (_event, input: unknown) => {
+    const parsedInput = parseSpecApplyDraftInput(input)
+    const state = stateStore.load()
+    assertSpecScope(state, parsedInput.spaceId, parsedInput.sessionId)
+    const run = state.runs[parsedInput.draft.runId]
+    if (!run || run.sessionId !== parsedInput.sessionId) {
+      throw new Error(
+        `Draft run ${parsedInput.draft.runId} does not belong to session ${parsedInput.sessionId}`
+      )
+    }
+    const key = buildSpecDocumentKey(parsedInput.spaceId, parsedInput.sessionId)
+    const appliedAt = new Date().toISOString()
+
+    const specDocument: PersistedSpecDocument = {
+      markdown: parsedInput.draft.content,
+      updatedAt: appliedAt,
+      appliedRunId: parsedInput.draft.runId,
+      appliedAt
+    }
+
+    const existingRun = state.runs[parsedInput.draft.runId]
+    stateStore.save({
+      ...state,
+      specDocuments: {
+        ...state.specDocuments,
+        [key]: specDocument
+      },
+      ...(existingRun && {
+        runs: {
+          ...state.runs,
+          [parsedInput.draft.runId]: { ...existingRun, draftAppliedAt: appliedAt }
+        }
+      })
+    })
+
+    return specDocument
   })
 
   ipcMain.removeHandler(DIALOG_OPEN_DIR_CHANNEL)
@@ -571,6 +828,13 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
             content: msg.content,
             createdAt: msg.createdAt
           })
+          if (msg.role === 'agent') {
+            setRunDraft(stateStore, run.id, {
+              runId: run.id,
+              generatedAt: msg.createdAt,
+              content: msg.content
+            })
+          }
         }
         // Map runtime ConversationRunState to persisted RunStatus:
         // 'pending' (agent starting) -> 'running'

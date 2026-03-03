@@ -1,28 +1,42 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 
 import { useIpcSessionConversation } from '../../hooks/useIpcSessionConversation'
 import type { LatestRunDraft } from '../../types/spec-document'
+import type { ConversationEntry } from '../left/conversation-entry-index'
+import { buildConversationEntries } from '../left/conversation-entry-index'
 import { ChatInput } from './ChatInput'
 import { MessageBubble } from './MessageBubble'
-import { MessageList } from './MessageList'
 import { extractInlineDecisionCard, isDecisionResolved } from './message-decision-parser'
+import { type ScrollToMessage, MessageList } from './MessageList'
 import { RunStatusBadge } from './RunStatusBadge'
 
 type ChatPanelProps = {
   sessionId: string | null
   onLatestDraftChange?: (draft: LatestRunDraft | undefined) => void
+  onConversationEntriesChange?: (entries: ConversationEntry[]) => void
+  onRegisterScrollToMessage?: (scrollToMessage: ScrollToMessage) => void
 }
 
-export function ChatPanel({ sessionId, onLatestDraftChange }: ChatPanelProps) {
+export function ChatPanel({
+  sessionId,
+  onLatestDraftChange,
+  onConversationEntriesChange,
+  onRegisterScrollToMessage
+}: ChatPanelProps) {
   const { state, submitPrompt, retry } = useIpcSessionConversation(sessionId)
+  const conversationEntries = useMemo(() => buildConversationEntries(state.messages), [state.messages])
 
   useEffect(() => {
     onLatestDraftChange?.(state.latestDraft)
   }, [onLatestDraftChange, state.latestDraft])
 
+  useEffect(() => {
+    onConversationEntriesChange?.(conversationEntries)
+  }, [conversationEntries, onConversationEntriesChange])
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <MessageList>
+      <MessageList onRegisterScrollToMessage={onRegisterScrollToMessage}>
         {state.messages.map((message) => {
           const decisionCard = extractInlineDecisionCard(message)
           const decisionState =
@@ -33,24 +47,29 @@ export function ChatPanel({ sessionId, onLatestDraftChange }: ChatPanelProps) {
                 : 'available'
 
           return (
-            <MessageBubble
+            <div
               key={message.id}
-              message={message}
-              decisionCard={decisionCard}
-              decisionState={decisionState}
-              onDecisionAction={(actionId) => {
-                if (!decisionCard || decisionState !== 'available') {
-                  return
-                }
+              id={`message-${message.id}`}
+              data-message-id={message.id}
+            >
+              <MessageBubble
+                message={message}
+                decisionCard={decisionCard}
+                decisionState={decisionState}
+                onDecisionAction={(actionId) => {
+                  if (!decisionCard || decisionState !== 'available') {
+                    return
+                  }
 
-                const selectedAction = decisionCard.actions.find((action) => action.id === actionId)
-                if (!selectedAction) {
-                  return
-                }
+                  const selectedAction = decisionCard.actions.find((action) => action.id === actionId)
+                  if (!selectedAction) {
+                    return
+                  }
 
-                submitPrompt(selectedAction.followUpPrompt)
-              }}
-            />
+                  submitPrompt(selectedAction.followUpPrompt)
+                }}
+              />
+            </div>
           )
         })}
       </MessageList>

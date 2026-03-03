@@ -18,6 +18,7 @@ describe('AppShell null-ref guard', () => {
       ...actualReact,
       useRef: (initialValue: unknown) => {
         useRefCallCount += 1
+        const actualRef = actualReact.useRef(initialValue)
 
         if (useRefCallCount === 1) {
           return {
@@ -30,7 +31,7 @@ describe('AppShell null-ref guard', () => {
           }
         }
 
-        return actualReact.useRef(initialValue)
+        return actualRef
       }
     }))
 

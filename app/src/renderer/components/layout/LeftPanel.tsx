@@ -8,10 +8,12 @@ import { mockGit } from '../../mock/git'
 import { getMockProject } from '../../mock/project'
 import { useSessionAgentRoster } from '../../hooks/useSessionAgentRoster'
 import { AgentsTab } from '../left/AgentsTab'
+import { ConversationEntryIndexSection } from '../left/ConversationEntryIndexSection'
 import { ChangesTab, getChangesTabCount } from '../left/ChangesTab'
 import { ContextTab, getContextTabCount } from '../left/ContextTab'
 import { FilesTab } from '../left/FilesTab'
 import { LeftStatusSection } from '../left/LeftStatusSection'
+import type { ConversationEntry } from '../left/conversation-entry-index'
 import { ErrorBoundary } from '../shared/ErrorBoundary'
 import { cn } from '../../lib/cn'
 import { Button } from '../ui/button'
@@ -28,6 +30,8 @@ type LeftPanelProps = {
   theme?: 'dark' | 'light'
   onToggleTheme?: () => void
   onOpenHome?: () => void
+  conversationEntries?: ConversationEntry[]
+  onJumpToMessage?: (messageId: string) => void
 }
 
 export type PreviewState = 0 | 1 | 2 | 3
@@ -71,7 +75,9 @@ export function LeftPanel({
   onCollapsedChange,
   theme,
   onToggleTheme,
-  onOpenHome
+  onOpenHome,
+  conversationEntries = [],
+  onJumpToMessage
 }: LeftPanelProps = {}) {
   const [activeTab, setActiveTab] = useState<LeftPanelTab>('agents')
   const [internalCollapsed, setInternalCollapsed] = useState(false)
@@ -233,11 +239,19 @@ export function LeftPanel({
           <ScrollArea className="min-h-0 flex-1">
             <div className="py-4 pl-4 pr-2">
               {activeTab === 'agents' ? (
-                <AgentsTab
-                  agents={agents}
-                  isLoading={isAgentsLoading}
-                  error={agentsError}
-                />
+                <>
+                  <AgentsTab
+                    agents={agents}
+                    isLoading={isAgentsLoading}
+                    error={agentsError}
+                  />
+                  {onJumpToMessage ? (
+                    <ConversationEntryIndexSection
+                      entries={conversationEntries}
+                      onJumpToMessage={onJumpToMessage}
+                    />
+                  ) : null}
+                </>
               ) : null}
               {activeTab === 'context' ? (
                 <ContextTab

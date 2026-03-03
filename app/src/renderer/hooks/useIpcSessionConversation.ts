@@ -6,6 +6,7 @@ import {
 } from '../components/center/sessionConversationState'
 import type { LatestRunDraft } from '../types/spec-document'
 import type { SessionRuntimeEvent } from '../types/session-runtime-adapter'
+import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../shared/types/run'
 
 const DEFAULT_RUN_MODEL = 'gpt-5.3-codex'
 const DEFAULT_RUN_PROVIDER = 'openai-codex'
@@ -43,6 +44,7 @@ export function useIpcSessionConversation(sessionId: string | null) {
       }
 
       if (event.type === 'message_appended') {
+        dispatch({ type: 'APPEND_MESSAGE', message: event.message })
         setLatestDraft(
           buildLatestDraft({
             prompt: lastPromptRef.current ?? '',
@@ -50,12 +52,12 @@ export function useIpcSessionConversation(sessionId: string | null) {
             generatedAt: event.message.createdAt
           })
         )
-        dispatch({ type: 'RUN_SUCCEEDED', response: event.message.content })
+        dispatch({ type: 'RUN_COMPLETED' })
         return
       }
 
       if (event.type === 'message_updated') {
-        dispatch({ type: 'RUN_STREAM_UPDATED', response: event.message.content })
+        dispatch({ type: 'APPEND_MESSAGE', message: event.message })
       }
     })
 
@@ -79,18 +81,29 @@ export function useIpcSessionConversation(sessionId: string | null) {
         for (const run of runs) {
           lastPromptRef.current = run.prompt
           for (const msg of run.messages) {
-            if (msg.role === 'user') {
-              dispatch({ type: 'SUBMIT_PROMPT', prompt: msg.content })
-            } else {
+            dispatch({
+              type: 'APPEND_MESSAGE',
+              message: {
+                id: msg.id,
+                role: msg.role,
+                content: msg.content,
+                createdAt: msg.createdAt
+              }
+            })
+            if (msg.role === 'agent') {
               setLatestDraft(
-                buildLatestDraft({
-                  prompt: run.prompt,
-                  runId: run.id,
-                  generatedAt: msg.createdAt
-                })
+                run.draft ??
+                  buildLatestDraft({
+                    prompt: run.prompt,
+                    runId: run.id,
+                    generatedAt: msg.createdAt
+                  })
               )
-              dispatch({ type: 'RUN_SUCCEEDED', response: msg.content })
             }
+          }
+
+          if (isReconciledInterruptedRunFallback(run.status, run.errorMessage)) {
+            dispatch({ type: 'RUN_FAILED', error: run.errorMessage })
           }
         }
       })
@@ -159,6 +172,13 @@ export function useIpcSessionConversation(sessionId: string | null) {
     submitPrompt,
     retry
   }
+}
+
+function isReconciledInterruptedRunFallback(
+  status: string,
+  errorMessage: string | undefined
+): errorMessage is string {
+  return status === 'failed' && errorMessage === INTERRUPTED_RUN_ERROR_MESSAGE
 }
 
 // TODO: replace with spec extraction pipeline output once connected.

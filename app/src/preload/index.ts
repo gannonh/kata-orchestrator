@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
+  AppState,
   CreateSessionInput,
   CreateSpaceInput,
   SessionAgentRecord,
@@ -8,14 +9,21 @@ import type {
 } from '../shared/types/space'
 import type { RunRecord } from '../shared/types/run'
 import type { SessionRuntimeEvent } from '../renderer/types/session-runtime-adapter'
+import type { LatestRunDraft, PersistedSpecDocument } from '../shared/types/spec-document'
 
 const OPEN_EXTERNAL_URL_CHANNEL = 'kata:openExternalUrl'
+const APP_BOOTSTRAP_CHANNEL = 'app:bootstrap'
 const SPACE_CREATE_CHANNEL = 'space:create'
 const SPACE_LIST_CHANNEL = 'space:list'
 const SPACE_GET_CHANNEL = 'space:get'
+const SPACE_SET_ACTIVE_CHANNEL = 'space:setActive'
 const SESSION_CREATE_CHANNEL = 'session:create'
 const SESSION_AGENT_ROSTER_LIST_CHANNEL = 'session-agent-roster:list'
 const SESSION_LIST_BY_SPACE_CHANNEL = 'session:listBySpace'
+const SESSION_SET_ACTIVE_CHANNEL = 'session:setActive'
+const SPEC_GET_CHANNEL = 'spec:get'
+const SPEC_SAVE_CHANNEL = 'spec:save'
+const SPEC_APPLY_DRAFT_CHANNEL = 'spec:applyDraft'
 const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
 const GIT_LIST_BRANCHES_CHANNEL = 'git:listBranches'
 const GITHUB_LIST_REPOS_CHANNEL = 'github:listRepos'
@@ -33,6 +41,11 @@ function invokeTyped<TResult>(channel: string, ...args: unknown[]): Promise<TRes
   return ipcRenderer.invoke(channel, ...args) as Promise<TResult>
 }
 
+type AppBootstrapState = Pick<
+  AppState,
+  'spaces' | 'sessions' | 'specDocuments' | 'activeSpaceId' | 'activeSessionId'
+>
+
 const kataApi = {
   getAgents: async () => [],
   getMessages: async () => [],
@@ -46,18 +59,44 @@ const kataApi = {
       return false
     }
   },
+  appBootstrap: (): Promise<AppBootstrapState> =>
+    invokeTyped<AppBootstrapState>(APP_BOOTSTRAP_CHANNEL),
   spaceCreate: (input: CreateSpaceInput): Promise<SpaceRecord> =>
     invokeTyped<SpaceRecord>(SPACE_CREATE_CHANNEL, input),
   spaceList: (): Promise<SpaceRecord[]> =>
     invokeTyped<SpaceRecord[]>(SPACE_LIST_CHANNEL),
   spaceGet: (id: string): Promise<SpaceRecord | null> =>
     invokeTyped<SpaceRecord | null>(SPACE_GET_CHANNEL, { id }),
+  spaceSetActive: (spaceId: string): Promise<{ activeSpaceId: string; activeSessionId: string | null }> =>
+    invokeTyped<{ activeSpaceId: string; activeSessionId: string | null }>(SPACE_SET_ACTIVE_CHANNEL, {
+      spaceId
+    }),
   sessionCreate: (input: CreateSessionInput): Promise<SessionRecord> =>
     invokeTyped<SessionRecord>(SESSION_CREATE_CHANNEL, input),
   sessionAgentRosterList: (input: { sessionId: string }): Promise<SessionAgentRecord[]> =>
     invokeTyped<SessionAgentRecord[]>(SESSION_AGENT_ROSTER_LIST_CHANNEL, input),
   sessionListBySpace: (input: { spaceId: string }): Promise<SessionRecord[]> =>
     invokeTyped<SessionRecord[]>(SESSION_LIST_BY_SPACE_CHANNEL, input),
+  sessionSetActive: (sessionId: string): Promise<{ activeSpaceId: string; activeSessionId: string }> =>
+    invokeTyped<{ activeSpaceId: string; activeSessionId: string }>(SESSION_SET_ACTIVE_CHANNEL, {
+      sessionId
+    }),
+  specGet: (input: { spaceId: string; sessionId: string }): Promise<PersistedSpecDocument | null> =>
+    invokeTyped<PersistedSpecDocument | null>(SPEC_GET_CHANNEL, input),
+  specSave: (input: {
+    spaceId: string
+    sessionId: string
+    markdown: string
+    appliedRunId?: string
+    appliedAt?: string
+  }): Promise<PersistedSpecDocument> =>
+    invokeTyped<PersistedSpecDocument>(SPEC_SAVE_CHANNEL, input),
+  specApplyDraft: (input: {
+    spaceId: string
+    sessionId: string
+    draft: LatestRunDraft
+  }): Promise<PersistedSpecDocument> =>
+    invokeTyped<PersistedSpecDocument>(SPEC_APPLY_DRAFT_CHANNEL, input),
   dialogOpenDirectory: (): Promise<{ path: string } | { error: string; path: string } | null> =>
     invokeTyped(DIALOG_OPEN_DIR_CHANNEL),
   gitListBranches: (repoPath: string): Promise<string[] | { error: string }> =>

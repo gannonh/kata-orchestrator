@@ -33,6 +33,16 @@ export type RunStreamUpdatedEvent = {
   response: string
 }
 
+export type AppendMessageEvent = {
+  type: 'APPEND_MESSAGE'
+  message: ConversationMessage
+}
+
+export type UpdateMessageEvent = {
+  type: 'UPDATE_MESSAGE'
+  message: ConversationMessage
+}
+
 export type RunFailedEvent = {
   type: 'RUN_FAILED'
   error: string
@@ -54,6 +64,8 @@ export type SessionConversationEvent =
   | SubmitPromptEvent
   | RunStreamUpdatedEvent
   | RunSucceededEvent
+  | AppendMessageEvent
+  | UpdateMessageEvent
   | RunFailedEvent
   | RetryFromErrorEvent
   | RunCompletedEvent

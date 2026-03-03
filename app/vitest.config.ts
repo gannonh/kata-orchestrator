@@ -21,6 +21,7 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'src/preload/**/*.d.ts',
+        'src/shared/types/spec-document.ts',
         'src/renderer/types/**/*.ts',
         'src/renderer/components/application-shell*.tsx',
         'src/renderer/components/shadcnblocks/**/*.tsx',

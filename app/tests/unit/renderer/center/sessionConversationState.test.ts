@@ -1,11 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createInitialSessionConversationState,
   sessionConversationReducer
 } from '../../../../src/renderer/components/center/sessionConversationState'
 
+const FIXED_NOW = '2026-03-03T00:00:00.000Z'
+
 describe('sessionConversationReducer', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(FIXED_NOW))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('empty -> pending and appends user message on SUBMIT_PROMPT', () => {
     const initialState = createInitialSessionConversationState()
 
@@ -21,7 +32,7 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -44,13 +55,13 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       },
       {
         id: 'agent-2',
         role: 'agent',
         content: 'Draft complete.',
-        createdAt: '1970-01-01T00:00:02.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -72,13 +83,13 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       },
       {
         id: 'agent-2',
         role: 'agent',
         content: 'Draft',
-        createdAt: '1970-01-01T00:00:02.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -127,7 +138,7 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -160,7 +171,7 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -188,7 +199,7 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -228,15 +239,18 @@ describe('sessionConversationReducer', () => {
     expect(nextState).toBe(initialState)
   })
 
-  it('ignores RUN_FAILED when state is not pending', () => {
-    const initialState = createInitialSessionConversationState()
+  it('ignores RUN_FAILED when state is idle', () => {
+    const idleState = {
+      ...createInitialSessionConversationState(),
+      runState: 'idle' as const
+    }
 
-    const nextState = sessionConversationReducer(initialState, {
+    const nextState = sessionConversationReducer(idleState, {
       type: 'RUN_FAILED',
       error: 'Network timeout'
     })
 
-    expect(nextState).toBe(initialState)
+    expect(nextState).toBe(idleState)
   })
 
   it('ignores duplicate RUN_SUCCEEDED after state returns to idle', () => {
@@ -300,6 +314,111 @@ describe('sessionConversationReducer', () => {
     expect(nextState.runState).toBe('empty')
     expect(nextState.messages).toEqual([])
     expect(nextState.errorMessage).toBeUndefined()
+  })
+
+  it('appends externally supplied messages without rewriting id or timestamp', () => {
+    const initialState = createInitialSessionConversationState()
+
+    const withUserPrompt = sessionConversationReducer(initialState, {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+
+    const persistedMessage = {
+      id: 'agent-msg-42',
+      role: 'agent' as const,
+      content: 'Spec Updated',
+      createdAt: '2026-03-03T10:00:00.000Z'
+    }
+
+    const nextState = sessionConversationReducer(withUserPrompt, {
+      type: 'APPEND_MESSAGE',
+      message: persistedMessage
+    })
+
+    expect(nextState.messages[nextState.messages.length - 1]).toEqual(persistedMessage)
+  })
+
+  it('upserts on APPEND_MESSAGE when the message id already exists', () => {
+    const withUserPrompt = sessionConversationReducer(createInitialSessionConversationState(), {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+
+    const persistedMessage = {
+      id: 'agent-msg-42',
+      role: 'agent' as const,
+      content: 'Spec Updated',
+      createdAt: '2026-03-03T10:00:00.000Z'
+    }
+
+    const withMessage = sessionConversationReducer(withUserPrompt, {
+      type: 'APPEND_MESSAGE',
+      message: persistedMessage
+    })
+
+    const updatedMessage = {
+      ...persistedMessage,
+      content: 'Spec Updated v2'
+    }
+
+    const upsertResult = sessionConversationReducer(withMessage, {
+      type: 'APPEND_MESSAGE',
+      message: updatedMessage
+    })
+
+    expect(upsertResult.messages.filter((message) => message.id === persistedMessage.id)).toHaveLength(1)
+    expect(upsertResult.messages.find((message) => message.id === persistedMessage.id)?.content).toBe(
+      'Spec Updated v2'
+    )
+  })
+
+  it('updates an existing message by id on UPDATE_MESSAGE', () => {
+    const withUserPrompt = sessionConversationReducer(createInitialSessionConversationState(), {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+
+    const persistedMessage = {
+      id: 'agent-msg-42',
+      role: 'agent' as const,
+      content: 'Draft',
+      createdAt: '2026-03-03T10:00:00.000Z'
+    }
+
+    const withMessage = sessionConversationReducer(withUserPrompt, {
+      type: 'APPEND_MESSAGE',
+      message: persistedMessage
+    })
+
+    const updated = sessionConversationReducer(withMessage, {
+      type: 'UPDATE_MESSAGE',
+      message: {
+        ...persistedMessage,
+        content: 'Draft complete'
+      }
+    })
+
+    expect(updated.messages.find((message) => message.id === persistedMessage.id)?.content).toBe('Draft complete')
+  })
+
+  it('returns current state when UPDATE_MESSAGE target id is missing', () => {
+    const withUserPrompt = sessionConversationReducer(createInitialSessionConversationState(), {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+
+    const nextState = sessionConversationReducer(withUserPrompt, {
+      type: 'UPDATE_MESSAGE',
+      message: {
+        id: 'missing-message',
+        role: 'agent',
+        content: 'No-op update',
+        createdAt: '2026-03-03T10:00:00.000Z'
+      }
+    })
+
+    expect(nextState).toBe(withUserPrompt)
   })
 
   it('returns current state for unknown events', () => {
