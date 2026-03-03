@@ -49,11 +49,9 @@ export function AgentsTab({ agents, isLoading = false, error = null }: AgentsTab
       <div className="space-y-3 pr-0">
         {isLoading ? (
           <p className="text-xs text-muted-foreground">Loading agents…</p>
-        ) : null}
-        {error ? (
+        ) : error ? (
           <p className="text-xs text-muted-foreground">Unable to refresh agents right now.</p>
-        ) : null}
-        {!isLoading && !error && agents.length === 0 ? (
+        ) : agents.length === 0 ? (
           <p className="text-xs text-muted-foreground">No agents in this space yet.</p>
         ) : null}
 

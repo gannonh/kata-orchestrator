@@ -1,4 +1,6 @@
-export type AgentStatus = 'idle' | 'running' | 'blocked' | 'complete'
+import type { SessionAgentStatus } from '../../shared/types/space'
+
+export type AgentStatus = SessionAgentStatus
 
 export type AgentTokenUsage = {
   prompt: number
@@ -15,6 +17,7 @@ export type AgentSummary = {
   tokenUsage: AgentTokenUsage
   currentTask: string
   lastUpdated: string
+  avatarColor?: string
   delegatedBy?: string
   children?: AgentSummary[]
 }

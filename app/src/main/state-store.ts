@@ -174,6 +174,8 @@ function normalizeAgentRoster(value: unknown): AppState['agentRoster'] {
   for (const [key, record] of Object.entries(value)) {
     if (isSessionAgentRecord(record) && record.id === key) {
       normalized[key] = record
+    } else {
+      console.warn('[StateStore] Dropping invalid agent roster entry:', key)
     }
   }
 

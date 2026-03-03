@@ -40,6 +40,7 @@ export function useSessionAgentRoster(activeSpaceId: string | null, activeSessio
 
     const kata = window.kata
     if (!kata?.sessionListBySpace || !kata?.sessionAgentRosterList) {
+      console.warn('[useSessionAgentRoster] IPC bridge methods missing. Preload may be misconfigured.')
       setState(EMPTY_STATE)
       return () => {
         isDisposed = true
@@ -54,21 +55,22 @@ export function useSessionAgentRoster(activeSpaceId: string | null, activeSessio
 
     void (async () => {
       try {
-        const sessions = await kata.sessionListBySpace({ spaceId: activeSpaceId })
-        const newestSession = sessions[0]
+        const targetSessionId = activeSessionId
+          ?? (await kata.sessionListBySpace({ spaceId: activeSpaceId }))[0]?.id
 
-        if (!newestSession) {
+        if (!targetSessionId) {
           setStateIfMounted(EMPTY_STATE)
           return
         }
 
-        const roster = await kata.sessionAgentRosterList({ sessionId: newestSession.id })
+        const roster = await kata.sessionAgentRosterList({ sessionId: targetSessionId })
         setStateIfMounted({
           agents: roster.map(mapSessionAgentRecordToSummary),
           isLoading: false,
           error: null
         })
       } catch (error) {
+        console.error('[useSessionAgentRoster] Failed to load agent roster:', error)
         setStateIfMounted({
           agents: [],
           isLoading: false,

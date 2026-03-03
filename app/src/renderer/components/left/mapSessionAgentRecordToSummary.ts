@@ -9,6 +9,7 @@ export function mapSessionAgentRecordToSummary(record: SessionAgentRecord): Agen
     name: record.name,
     role: record.role,
     status: record.status,
+    avatarColor: record.avatarColor,
     delegatedBy: record.delegatedBy,
     lastUpdated: record.updatedAt,
     currentTask: record.currentTask ?? DEFAULT_TASK,

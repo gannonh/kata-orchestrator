@@ -81,6 +81,7 @@ describe('useSessionAgentRoster', () => {
         name: 'MVP Planning Coordinator',
         role: 'Coordinates MVP planning tasks',
         status: 'running',
+        avatarColor: '#0f766e',
         delegatedBy: undefined,
         lastUpdated: '2026-03-01T00:05:00.000Z',
         currentTask: 'Coordinating wave execution',
@@ -92,6 +93,7 @@ describe('useSessionAgentRoster', () => {
         name: 'Kata Agents',
         role: 'System-managed agent group',
         status: 'idle',
+        avatarColor: '#0f766e',
         delegatedBy: undefined,
         lastUpdated: '2026-03-01T00:05:00.000Z',
         currentTask: 'Waiting for delegated work.',
@@ -237,6 +239,19 @@ describe('useSessionAgentRoster', () => {
     expect(mockSessionAgentRosterList).toHaveBeenCalledWith({ sessionId: 'session-newest' })
   })
 
+  it('uses activeSessionId directly and skips sessionListBySpace when provided', async () => {
+    mockSessionAgentRosterList.mockResolvedValue([createRosterRecord()])
+
+    const { result } = renderHook(() => useSessionAgentRoster('space-1', 'session-explicit'))
+    await flushAsyncWork()
+
+    expect(mockSessionListBySpace).not.toHaveBeenCalled()
+    expect(mockSessionAgentRosterList).toHaveBeenCalledWith({ sessionId: 'session-explicit' })
+    expect(result.current.agents).toHaveLength(1)
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.error).toBeNull()
+  })
+
   it('re-fetches roster when activeSessionId changes', async () => {
     mockSessionListBySpace.mockResolvedValue([createSession('session-newest')])
     mockSessionAgentRosterList.mockResolvedValue([createRosterRecord()])
@@ -251,7 +266,6 @@ describe('useSessionAgentRoster', () => {
     expect(mockSessionListBySpace).toHaveBeenCalledTimes(1)
     expect(result.current.agents).toHaveLength(1)
 
-    mockSessionListBySpace.mockResolvedValue([createSession('session-newest')])
     mockSessionAgentRosterList.mockResolvedValue([
       createRosterRecord({ id: 'agent-1' }),
       createRosterRecord({ id: 'agent-2', name: 'New Agent' })
@@ -260,7 +274,9 @@ describe('useSessionAgentRoster', () => {
     rerender({ spaceId: 'space-1', sessionId: 'session-newest' })
     await flushAsyncWork()
 
-    expect(mockSessionListBySpace).toHaveBeenCalledTimes(2)
+    // With explicit activeSessionId, sessionListBySpace is not called again
+    expect(mockSessionListBySpace).toHaveBeenCalledTimes(1)
+    expect(mockSessionAgentRosterList).toHaveBeenCalledWith({ sessionId: 'session-newest' })
     expect(result.current.agents).toHaveLength(2)
   })
 })

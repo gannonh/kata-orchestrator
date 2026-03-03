@@ -30,6 +30,7 @@ describe('mapSessionAgentRecordToSummary', () => {
       name: 'MVP Planning Coordinator',
       role: 'Coordinates MVP planning tasks',
       status: 'running',
+      avatarColor: '#0f766e',
       delegatedBy: 'Kata Agents',
       lastUpdated: '2026-03-01T00:05:00.000Z',
       currentTask: 'Preparing wave breakdown',
