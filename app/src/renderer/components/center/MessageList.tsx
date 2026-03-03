@@ -38,7 +38,7 @@ export function MessageList({ children, onRegisterScrollToMessage }: MessageList
       }
 
       const scrollTarget = findScrollRoot(list)
-      const target = scrollTarget.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`)
+      const target = scrollTarget.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
       if (!target) {
         return false
       }
