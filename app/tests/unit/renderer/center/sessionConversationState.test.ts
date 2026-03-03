@@ -239,15 +239,18 @@ describe('sessionConversationReducer', () => {
     expect(nextState).toBe(initialState)
   })
 
-  it('ignores RUN_FAILED when state is not pending', () => {
-    const initialState = createInitialSessionConversationState()
+  it('ignores RUN_FAILED when state is idle', () => {
+    const idleState = {
+      ...createInitialSessionConversationState(),
+      runState: 'idle' as const
+    }
 
-    const nextState = sessionConversationReducer(initialState, {
+    const nextState = sessionConversationReducer(idleState, {
       type: 'RUN_FAILED',
       error: 'Network timeout'
     })
 
-    expect(nextState).toBe(initialState)
+    expect(nextState).toBe(idleState)
   })
 
   it('ignores duplicate RUN_SUCCEEDED after state returns to idle', () => {

@@ -77,7 +77,7 @@ export function sessionConversationReducer(
       }
     }
     case 'RUN_FAILED':
-      if (state.runState !== 'pending') {
+      if (state.runState !== 'pending' && state.runState !== 'empty') {
         return state
       }
 

@@ -11,6 +11,8 @@ import {
   SESSION_AGENT_KINDS,
   createDefaultAppState
 } from '../../../../src/shared/types/space'
+import type { LatestRunDraft, PersistedSpecDocument } from '../../../../src/shared/types/spec-document'
+import type { RunRecord } from '../../../../src/shared/types/run'
 
 import type {
   SpaceRecord,
@@ -66,6 +68,7 @@ describe('createDefaultAppState', () => {
     expect(state.sessions).toEqual({})
     expect(state.runs).toEqual({})
     expect(state.agentRoster).toEqual({})
+    expect(state.specDocuments).toEqual({})
     expect(state.activeSpaceId).toBeNull()
     expect(state.activeSessionId).toBeNull()
   })
@@ -78,6 +81,7 @@ describe('createDefaultAppState', () => {
     expect(a.sessions).not.toBe(b.sessions)
     expect(a.runs).not.toBe(b.runs)
     expect(a.agentRoster).not.toBe(b.agentRoster)
+    expect(a.specDocuments).not.toBe(b.specDocuments)
   })
 })
 
@@ -262,6 +266,7 @@ describe('AppState type', () => {
       sessions: { 'session-1': session },
       runs: {},
       agentRoster: { 'agent-1': agent },
+      specDocuments: {},
       activeSpaceId: 'space-1',
       activeSessionId: 'session-1'
     }
@@ -270,7 +275,51 @@ describe('AppState type', () => {
     expect(Object.keys(state.sessions)).toHaveLength(1)
     expect(Object.keys(state.runs)).toHaveLength(0)
     expect(Object.keys(state.agentRoster)).toHaveLength(1)
+    expect(Object.keys(state.specDocuments)).toHaveLength(0)
     expect(state.activeSpaceId).toBe('space-1')
     expect(state.activeSessionId).toBe('session-1')
+  })
+})
+
+describe('KAT-161 persistence contracts', () => {
+  it('supports session-scoped persisted spec documents', () => {
+    const key = 'space-1:session-1'
+    const specDocument: PersistedSpecDocument = {
+      markdown: ['## Goal', 'Ship persisted specs'].join('\n'),
+      updatedAt: '2026-03-03T00:00:00.000Z',
+      appliedRunId: 'run-1',
+      appliedAt: '2026-03-03T00:01:00.000Z'
+    }
+
+    const state: AppState = {
+      ...createDefaultAppState(),
+      specDocuments: { [key]: specDocument }
+    }
+
+    expect(state.specDocuments[key]).toEqual(specDocument)
+  })
+
+  it('supports run draft metadata and draft-applied markers', () => {
+    const draft: LatestRunDraft = {
+      runId: 'run-1',
+      generatedAt: '2026-03-03T00:00:00.000Z',
+      content: '## Goal\nPersist this draft'
+    }
+
+    const run: RunRecord = {
+      id: 'run-1',
+      sessionId: 'session-1',
+      prompt: 'Persist this run draft',
+      status: 'completed',
+      model: 'gpt',
+      provider: 'openai',
+      createdAt: '2026-03-03T00:00:00.000Z',
+      messages: [],
+      draft,
+      draftAppliedAt: '2026-03-03T00:01:00.000Z'
+    }
+
+    expect(run.draft?.runId).toBe('run-1')
+    expect(run.draftAppliedAt).toBe('2026-03-03T00:01:00.000Z')
   })
 })

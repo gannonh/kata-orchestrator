@@ -1,4 +1,9 @@
+import type { LatestRunDraft } from './spec-document'
+
 export const RUN_STATUSES = ['queued', 'running', 'completed', 'failed'] as const
+
+export const INTERRUPTED_RUN_ERROR_MESSAGE =
+  'Recovered after app restart: in-flight run was interrupted'
 export type RunStatus = (typeof RUN_STATUSES)[number]
 
 export type PersistedMessage = {
@@ -19,5 +24,7 @@ export type RunRecord = {
   startedAt?: string
   completedAt?: string
   errorMessage?: string
+  draft?: LatestRunDraft
+  draftAppliedAt?: string
   messages: PersistedMessage[]
 }

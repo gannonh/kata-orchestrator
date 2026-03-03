@@ -127,6 +127,31 @@ describe('Orchestrator', () => {
     expect(state.runs[run.id].messages[1].role).toBe('agent')
   })
 
+  it('setRunDraft and markRunDraftApplied persist draft metadata for an existing run', async () => {
+    const { createRun, setRunDraft, markRunDraftApplied } = await import('../../../src/main/orchestrator')
+
+    const run = createRun(store, {
+      sessionId: 's-1',
+      prompt: 'test',
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic'
+    })
+
+    setRunDraft(store, run.id, {
+      runId: run.id,
+      generatedAt: '2026-03-01T00:01:00.000Z',
+      content: '## Goal\nPersist draft'
+    })
+    markRunDraftApplied(store, run.id, '2026-03-01T00:02:00.000Z')
+
+    expect(state.runs[run.id].draft).toEqual({
+      runId: run.id,
+      generatedAt: '2026-03-01T00:01:00.000Z',
+      content: '## Goal\nPersist draft'
+    })
+    expect(state.runs[run.id].draftAppliedAt).toBe('2026-03-01T00:02:00.000Z')
+  })
+
   it('updateRunStatus is a no-op for nonexistent runId', async () => {
     const { updateRunStatus } = await import('../../../src/main/orchestrator')
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -162,6 +187,56 @@ describe('Orchestrator', () => {
     expect(saveSpy).not.toHaveBeenCalled()
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining('Cannot append message to unknown run')
+    )
+    consoleSpy.mockRestore()
+  })
+
+  it('setRunDraft and markRunDraftApplied are no-ops for nonexistent runId', async () => {
+    const { setRunDraft, markRunDraftApplied } = await import('../../../src/main/orchestrator')
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const saveSpy = vi.fn()
+    const noopStore = {
+      load: () => ({ ...state }),
+      save: saveSpy
+    }
+
+    setRunDraft(noopStore, 'nonexistent-run-id', {
+      runId: 'nonexistent-run-id',
+      generatedAt: '2026-03-01T00:00:00.000Z',
+      content: '## Goal\nNo-op'
+    })
+    markRunDraftApplied(noopStore, 'nonexistent-run-id', '2026-03-01T00:00:01.000Z')
+
+    expect(saveSpy).not.toHaveBeenCalled()
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Cannot set draft for unknown run')
+    )
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Cannot mark draft-applied for unknown run')
+    )
+    consoleSpy.mockRestore()
+  })
+
+  it('setRunDraft rejects draft with mismatched runId', async () => {
+    const { createRun, setRunDraft } = await import('../../../src/main/orchestrator')
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const run = createRun(store, {
+      sessionId: 's-1',
+      prompt: 'test',
+      model: 'm',
+      provider: 'p'
+    })
+
+    setRunDraft(store, run.id, {
+      runId: 'different-run-id',
+      generatedAt: '2026-03-01T00:01:00.000Z',
+      content: '## Goal\nMismatch'
+    })
+
+    expect(state.runs[run.id].draft).toBeUndefined()
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Draft runId mismatch')
     )
     consoleSpy.mockRestore()
   })

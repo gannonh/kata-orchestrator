@@ -237,6 +237,107 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith('model:list')
   })
 
+  it('exposes bootstrap, active selection, and spec IPC methods', async () => {
+    await import('../../../src/preload/index')
+
+    const [, api] = exposeInMainWorld.mock.calls[0] as [
+      string,
+      {
+        appBootstrap: () => Promise<unknown>
+        spaceSetActive: (spaceId: string) => Promise<unknown>
+        sessionSetActive: (sessionId: string) => Promise<unknown>
+        specGet: (input: { spaceId: string; sessionId: string }) => Promise<unknown>
+        specSave: (input: {
+          spaceId: string
+          sessionId: string
+          markdown: string
+          appliedRunId?: string
+          appliedAt?: string
+        }) => Promise<unknown>
+        specApplyDraft: (input: {
+          spaceId: string
+          sessionId: string
+          draft: {
+            runId: string
+            generatedAt: string
+            content: string
+          }
+        }) => Promise<unknown>
+      }
+    ]
+
+    invoke.mockResolvedValueOnce({
+      spaces: {},
+      sessions: {},
+      specDocuments: {},
+      activeSpaceId: null,
+      activeSessionId: null
+    })
+    await expect(api.appBootstrap()).resolves.toEqual({
+      spaces: {},
+      sessions: {},
+      specDocuments: {},
+      activeSpaceId: null,
+      activeSessionId: null
+    })
+    expect(invoke).toHaveBeenCalledWith('app:bootstrap')
+
+    invoke.mockResolvedValueOnce({ activeSpaceId: 'space-2', activeSessionId: null })
+    await expect(api.spaceSetActive('space-2')).resolves.toEqual({ activeSpaceId: 'space-2', activeSessionId: null })
+    expect(invoke).toHaveBeenCalledWith('space:setActive', { spaceId: 'space-2' })
+
+    invoke.mockResolvedValueOnce({ activeSpaceId: 'space-1', activeSessionId: 'session-1' })
+    await expect(api.sessionSetActive('session-1')).resolves.toEqual({
+      activeSpaceId: 'space-1',
+      activeSessionId: 'session-1'
+    })
+    expect(invoke).toHaveBeenCalledWith('session:setActive', { sessionId: 'session-1' })
+
+    invoke.mockResolvedValueOnce({ markdown: '# Spec', updatedAt: '2026-03-03T00:00:00.000Z' })
+    await expect(api.specGet({ spaceId: 'space-1', sessionId: 'session-1' })).resolves.toEqual({
+      markdown: '# Spec',
+      updatedAt: '2026-03-03T00:00:00.000Z'
+    })
+    expect(invoke).toHaveBeenCalledWith('spec:get', { spaceId: 'space-1', sessionId: 'session-1' })
+
+    const saveInput = {
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      markdown: '# Saved',
+      appliedRunId: 'run-9',
+      appliedAt: '2026-03-03T00:10:00.000Z'
+    }
+    invoke.mockResolvedValueOnce({ ...saveInput, updatedAt: '2026-03-03T00:11:00.000Z' })
+    await expect(api.specSave(saveInput)).resolves.toEqual({
+      ...saveInput,
+      updatedAt: '2026-03-03T00:11:00.000Z'
+    })
+    expect(invoke).toHaveBeenCalledWith('spec:save', saveInput)
+
+    const applyDraftInput = {
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      draft: {
+        runId: 'run-10',
+        generatedAt: '2026-03-03T00:00:00.000Z',
+        content: '# Applied from draft'
+      }
+    }
+    invoke.mockResolvedValueOnce({
+      markdown: '# Applied from draft',
+      updatedAt: '2026-03-03T00:12:00.000Z',
+      appliedRunId: 'run-10',
+      appliedAt: '2026-03-03T00:12:00.000Z'
+    })
+    await expect(api.specApplyDraft(applyDraftInput)).resolves.toEqual({
+      markdown: '# Applied from draft',
+      updatedAt: '2026-03-03T00:12:00.000Z',
+      appliedRunId: 'run-10',
+      appliedAt: '2026-03-03T00:12:00.000Z'
+    })
+    expect(invoke).toHaveBeenCalledWith('spec:applyDraft', applyDraftInput)
+  })
+
   it('onRunEvent handler forwards event data to callback', async () => {
     await import('../../../src/preload/index')
 

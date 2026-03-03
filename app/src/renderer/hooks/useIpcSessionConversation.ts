@@ -6,6 +6,7 @@ import {
 } from '../components/center/sessionConversationState'
 import type { LatestRunDraft } from '../types/spec-document'
 import type { SessionRuntimeEvent } from '../types/session-runtime-adapter'
+import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../shared/types/run'
 
 const DEFAULT_RUN_MODEL = 'gpt-5.3-codex'
 const DEFAULT_RUN_PROVIDER = 'openai-codex'
@@ -91,13 +92,18 @@ export function useIpcSessionConversation(sessionId: string | null) {
             })
             if (msg.role === 'agent') {
               setLatestDraft(
-                buildLatestDraft({
-                  prompt: run.prompt,
-                  runId: run.id,
-                  generatedAt: msg.createdAt
-                })
+                run.draft ??
+                  buildLatestDraft({
+                    prompt: run.prompt,
+                    runId: run.id,
+                    generatedAt: msg.createdAt
+                  })
               )
             }
+          }
+
+          if (isReconciledInterruptedRunFallback(run.status, run.errorMessage)) {
+            dispatch({ type: 'RUN_FAILED', error: run.errorMessage })
           }
         }
       })
@@ -166,6 +172,13 @@ export function useIpcSessionConversation(sessionId: string | null) {
     submitPrompt,
     retry
   }
+}
+
+function isReconciledInterruptedRunFallback(
+  status: string,
+  errorMessage: string | undefined
+): errorMessage is string {
+  return status === 'failed' && errorMessage === INTERRUPTED_RUN_ERROR_MESSAGE
 }
 
 // TODO: replace with spec extraction pipeline output once connected.
