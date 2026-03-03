@@ -285,4 +285,44 @@ describe('LeftPanel', () => {
       fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
     }).not.toThrow()
   })
+
+  it('renders conversation entry index in agents tab and forwards jump events', () => {
+    const onJumpToMessage = vi.fn()
+    render(
+      <LeftPanel
+        conversationEntries={[
+          {
+            id: 'entry-m-1',
+            messageId: 'm-1',
+            label: 'Spec Updated',
+            timestamp: '10:00 AM',
+            role: 'agent'
+          }
+        ]}
+        onJumpToMessage={onJumpToMessage}
+      />
+    )
+
+    expect(screen.getByRole('heading', { name: 'Conversation Entries' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to message: Spec Updated at 10:00 AM' }))
+    expect(onJumpToMessage).toHaveBeenCalledWith('m-1')
+  })
+
+  it('does not render conversation entry index when jump callback is not provided', () => {
+    render(
+      <LeftPanel
+        conversationEntries={[
+          {
+            id: 'entry-m-1',
+            messageId: 'm-1',
+            label: 'Spec Updated',
+            timestamp: '10:00 AM',
+            role: 'agent'
+          }
+        ]}
+      />
+    )
+
+    expect(screen.queryByRole('heading', { name: 'Conversation Entries' })).toBeNull()
+  })
 })

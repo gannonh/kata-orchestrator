@@ -253,6 +253,40 @@ describe('useIpcSessionConversation', () => {
     })
   })
 
+  it('ignores duplicate message_appended events with the same message id', async () => {
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    act(() => {
+      result.current.submitPrompt('test')
+    })
+
+    const duplicateMessage = {
+      id: 'agent-dup-1',
+      role: 'agent' as const,
+      content: 'Draft ready.',
+      createdAt: '2026-03-01T00:00:01.000Z'
+    }
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'message_appended',
+        message: duplicateMessage
+      })
+    })
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'message_appended',
+        message: duplicateMessage
+      })
+    })
+
+    expect(result.current.state.messages.filter((message) => message.id === duplicateMessage.id)).toHaveLength(1)
+  })
+
   it('builds a draft with an empty prompt when message_appended arrives before submit', async () => {
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
@@ -409,7 +443,8 @@ describe('useIpcSessionConversation', () => {
         createdAt: '2026-03-01T00:00:00Z',
         messages: [
           { id: 'u1', role: 'user', content: 'hello', createdAt: '2026-03-01T00:00:00Z' },
-          { id: 'a1', role: 'agent', content: 'hi there', createdAt: '2026-03-01T00:00:01Z' }
+          { id: 'a1', role: 'agent', content: 'hi there', createdAt: '2026-03-01T00:00:01Z' },
+          { id: 'a2', role: 'agent', content: 'more details', createdAt: '2026-03-01T00:00:02Z' }
         ]
       }
     ])
@@ -425,9 +460,16 @@ describe('useIpcSessionConversation', () => {
     })
 
     expect(mockRunList).toHaveBeenCalledWith('s-1')
-    expect(result.current.state.messages).toHaveLength(2)
+    expect(result.current.state.messages).toHaveLength(3)
+    expect(result.current.state.messages[0].id).toBe('u1')
+    expect(result.current.state.messages[0].createdAt).toBe('2026-03-01T00:00:00Z')
+    expect(result.current.state.messages[1].id).toBe('a1')
+    expect(result.current.state.messages[1].createdAt).toBe('2026-03-01T00:00:01Z')
+    expect(result.current.state.messages[2].id).toBe('a2')
+    expect(result.current.state.messages[2].createdAt).toBe('2026-03-01T00:00:02Z')
     expect(result.current.state.messages[0].content).toBe('hello')
     expect(result.current.state.messages[1].content).toBe('hi there')
+    expect(result.current.state.messages[2].content).toBe('more details')
   })
 
   it('silently ignores replay errors', async () => {

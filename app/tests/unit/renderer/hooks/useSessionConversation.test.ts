@@ -1,16 +1,22 @@
 import { act, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useSessionConversation } from '../../../../src/renderer/hooks/useSessionConversation'
 
+const FIXED_NOW = '2026-03-03T00:00:00.000Z'
+const FIXED_AFTER_RUN = '2026-03-03T00:00:00.900Z'
+
 describe('useSessionConversation', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(FIXED_NOW))
+  })
+
   afterEach(() => {
     vi.useRealTimers()
   })
 
   it('moves to pending on submit and back to idle after success', () => {
-    vi.useFakeTimers()
-
     const { result } = renderHook(() => useSessionConversation())
 
     act(() => {
@@ -29,20 +35,18 @@ describe('useSessionConversation', () => {
         id: 'user-1',
         role: 'user',
         content: 'Create spec',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       },
       {
         id: 'agent-2',
         role: 'agent',
         content: 'Draft ready for review.',
-        createdAt: '1970-01-01T00:00:02.000Z'
+        createdAt: FIXED_AFTER_RUN
       }
     ])
   })
 
   it('publishes the latest draft payload when a run succeeds', () => {
-    vi.useFakeTimers()
-
     const { result } = renderHook(() => useSessionConversation())
 
     act(() => {
@@ -82,8 +86,6 @@ describe('useSessionConversation', () => {
   })
 
   it('clears the previous latest draft as soon as a new run starts', () => {
-    vi.useFakeTimers()
-
     const { result } = renderHook(() => useSessionConversation())
 
     act(() => {
@@ -102,8 +104,6 @@ describe('useSessionConversation', () => {
   })
 
   it('moves to error when the deterministic error trigger is submitted', () => {
-    vi.useFakeTimers()
-
     const { result } = renderHook(() => useSessionConversation())
 
     act(() => {
@@ -119,14 +119,12 @@ describe('useSessionConversation', () => {
         id: 'user-1',
         role: 'user',
         content: '/error provider timeout',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
 
   it('retries from error and reaches idle after the deterministic success timer', () => {
-    vi.useFakeTimers()
-
     const { result } = renderHook(() => useSessionConversation())
 
     act(() => {
@@ -158,24 +156,25 @@ describe('useSessionConversation', () => {
         id: 'user-1',
         role: 'user',
         content: '/error provider timeout',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       },
       {
         id: 'agent-2',
         role: 'agent',
         content: 'Draft ready for review.',
-        createdAt: '1970-01-01T00:00:02.000Z'
+        createdAt: FIXED_AFTER_RUN
       }
     ])
   })
 
   it('does not reschedule the active run when submit is called again while pending', () => {
-    vi.useFakeTimers()
-
     const { result } = renderHook(() => useSessionConversation())
 
     act(() => {
       result.current.submitPrompt('Create spec')
+    })
+
+    act(() => {
       vi.advanceTimersByTime(450)
       result.current.submitPrompt('Ignored while pending')
     })
@@ -198,20 +197,18 @@ describe('useSessionConversation', () => {
         id: 'user-1',
         role: 'user',
         content: 'Create spec',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       },
       {
         id: 'agent-2',
         role: 'agent',
         content: 'Draft ready for review.',
-        createdAt: '1970-01-01T00:00:02.000Z'
+        createdAt: FIXED_AFTER_RUN
       }
     ])
   })
 
   it('clears a pending timer on unmount without leaking a completion', () => {
-    vi.useFakeTimers()
-
     const { result, unmount } = renderHook(() => useSessionConversation())
 
     act(() => {
@@ -232,8 +229,6 @@ describe('useSessionConversation', () => {
   })
 
   it('does nothing when retry is called outside error state', () => {
-    vi.useFakeTimers()
-
     const { result } = renderHook(() => useSessionConversation())
 
     expect(result.current.state.runState).toBe('empty')
@@ -248,8 +243,6 @@ describe('useSessionConversation', () => {
   })
 
   it('keeps latestDraft cleared while retry is pending after an error', () => {
-    vi.useFakeTimers()
-
     const { result } = renderHook(() => useSessionConversation())
 
     act(() => {
