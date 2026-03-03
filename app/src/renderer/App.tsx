@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { HomeSpacesScreen } from './components/home/HomeSpacesScreen'
 import { AppShell } from './components/layout/AppShell'
@@ -8,6 +8,30 @@ export function App() {
   const [appView, setAppView] = useState<'workspace' | 'home'>('home')
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let isMounted = true
+
+    window.kata?.appBootstrap?.()
+      .then((bootstrapState) => {
+        if (!isMounted) {
+          return
+        }
+
+        if (bootstrapState.activeSpaceId && bootstrapState.activeSessionId) {
+          setActiveSpaceId(bootstrapState.activeSpaceId)
+          setActiveSessionId(bootstrapState.activeSessionId)
+          setAppView('workspace')
+        }
+      })
+      .catch(() => {
+        // Bootstrap failures should preserve default home startup behavior.
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const handleOpenSpace = useCallback((spaceId: string) => {
     setActiveSpaceId(spaceId)

@@ -21,6 +21,64 @@ describe('App', () => {
     cleanup()
   })
 
+  it('starts directly in workspace with persisted active IDs from bootstrap', async () => {
+    const appBootstrap = vi.fn().mockResolvedValue({
+      spaces: {},
+      sessions: {},
+      specDocuments: {},
+      activeSpaceId: 'space-test-1',
+      activeSessionId: 'session-persisted-1'
+    })
+    const sessionCreate = vi.fn()
+    window.kata = { ...window.kata, appBootstrap, sessionCreate }
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell-root')).toBeTruthy()
+    })
+    expect(appBootstrap).toHaveBeenCalledOnce()
+  })
+
+  it('does not create a new session on startup when bootstrap restores active session', async () => {
+    const appBootstrap = vi.fn().mockResolvedValue({
+      spaces: {},
+      sessions: {},
+      specDocuments: {},
+      activeSpaceId: 'space-test-1',
+      activeSessionId: 'session-persisted-1'
+    })
+    const sessionCreate = vi.fn()
+    window.kata = { ...window.kata, appBootstrap, sessionCreate }
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(appBootstrap).toHaveBeenCalledOnce()
+      expect(screen.getByTestId('app-shell-root')).toBeTruthy()
+    })
+    expect(sessionCreate).not.toHaveBeenCalled()
+  })
+
+  it('falls back to home when bootstrap does not provide active IDs', async () => {
+    const appBootstrap = vi.fn().mockResolvedValue({
+      spaces: {},
+      sessions: {},
+      specDocuments: {},
+      activeSpaceId: null,
+      activeSessionId: null
+    })
+    window.kata = { ...window.kata, appBootstrap }
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(appBootstrap).toHaveBeenCalledOnce()
+    })
+    expect(screen.getByRole('heading', { name: 'Home' })).toBeTruthy()
+    expect(screen.queryByRole('tablist', { name: 'Center panel tabs' })).toBeNull()
+  })
+
   it('renders home view by default on startup', () => {
     render(<App />)
 
