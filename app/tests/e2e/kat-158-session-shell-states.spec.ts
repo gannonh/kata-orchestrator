@@ -33,12 +33,21 @@ async function waitForTerminalRunStatus(
   throw new Error(`Run did not reach terminal state (Stopped/Error) within ${timeoutMs}ms`)
 }
 
+async function hasRunCredentials(appWindow: Page): Promise<boolean> {
+  const authStatus = await appWindow.evaluate(async () => {
+    return (await window.kata?.authStatus?.('openai-codex')) ?? 'none'
+  })
+
+  return authStatus === 'oauth' || authStatus === 'api_key'
+}
+
 test.describe('KAT-158 session shell run-state evidence @uat', () => {
   test('captures required empty/pending/error/idle screenshots via send and retry controls @uat', async ({
     appWindow
   }) => {
     await ensureWorkspaceShell(appWindow)
     await fs.mkdir(evidenceDir, { recursive: true })
+    const runCredentialsAvailable = await hasRunCredentials(appWindow)
 
     const messageInput = appWindow.getByLabel('Message input')
     const sendButton = appWindow.getByRole('button', { name: 'Send' })
@@ -71,9 +80,18 @@ test.describe('KAT-158 session shell run-state evidence @uat', () => {
 
     await expectRunStatus(appWindow, 'Thinking', 1_000)
     const terminalStateAfterRetry = await waitForTerminalRunStatus(appWindow, 10_000)
-    if (terminalStateAfterRetry !== 'Stopped') {
-      throw new Error(`Expected retry to recover to Stopped, got ${terminalStateAfterRetry}`)
+    if (runCredentialsAvailable && terminalStateAfterRetry !== 'Stopped') {
+      throw new Error(`Expected retry to recover to Stopped with credentials, got ${terminalStateAfterRetry}`)
     }
-    await appWindow.screenshot({ path: idleStatePath, fullPage: true })
+    if (!runCredentialsAvailable && terminalStateAfterRetry !== 'Error') {
+      throw new Error(`Expected retry to remain Error without credentials, got ${terminalStateAfterRetry}`)
+    }
+
+    if (terminalStateAfterRetry === 'Stopped') {
+      await appWindow.screenshot({ path: idleStatePath, fullPage: true })
+      return
+    }
+
+    await appWindow.screenshot({ path: errorStatePath, fullPage: true })
   })
 })
