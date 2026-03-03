@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useSpecDocument } from '../../../../src/renderer/hooks/useSpecDocument'
 
@@ -198,6 +198,23 @@ describe('useSpecDocument', () => {
       },
       tasks: []
     })
+  })
+
+  it('does not update state when localStorage.setItem throws', () => {
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    const setItemSpy = vi.spyOn(window.localStorage.__proto__, 'setItem').mockImplementation(() => {
+      throw new DOMException('QuotaExceededError')
+    })
+
+    act(() => {
+      result.current.setMarkdown('## Goal\nShould not persist')
+    })
+
+    expect(result.current.document.markdown).toBe('')
+    setItemSpy.mockRestore()
   })
 
   it('ignores unknown task ids when toggling', () => {
