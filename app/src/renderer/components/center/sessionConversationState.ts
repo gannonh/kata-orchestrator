@@ -147,6 +147,6 @@ function createMessage(
     id: `${role}-${sequence}`,
     role,
     content,
-    createdAt: new Date(sequence * 1000).toISOString()
+    createdAt: new Date().toISOString()
   }
 }

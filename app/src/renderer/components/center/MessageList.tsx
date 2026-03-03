@@ -38,9 +38,10 @@ export function MessageList({ children, onRegisterScrollToMessage }: MessageList
       }
 
       const scrollTarget = findScrollRoot(list)
-      const escapedMessageId = messageId.replace(/"/g, '\\"')
-      const target = scrollTarget.querySelector(`[data-message-id="${escapedMessageId}"]`)
-      if (!(target instanceof HTMLElement)) {
+      const target = Array.from(
+        scrollTarget.querySelectorAll<HTMLElement>('[data-message-id]')
+      ).find((element) => element.dataset.messageId === messageId)
+      if (!target) {
         return false
       }
 

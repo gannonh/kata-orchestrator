@@ -57,7 +57,6 @@ export function useIpcSessionConversation(sessionId: string | null) {
 
       if (event.type === 'message_updated') {
         dispatch({ type: 'APPEND_MESSAGE', message: event.message })
-        dispatch({ type: 'UPDATE_MESSAGE', message: event.message })
       }
     })
 

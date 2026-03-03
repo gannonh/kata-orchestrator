@@ -1,11 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createInitialSessionConversationState,
   sessionConversationReducer
 } from '../../../../src/renderer/components/center/sessionConversationState'
 
+const FIXED_NOW = '2026-03-03T00:00:00.000Z'
+
 describe('sessionConversationReducer', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(FIXED_NOW))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('empty -> pending and appends user message on SUBMIT_PROMPT', () => {
     const initialState = createInitialSessionConversationState()
 
@@ -21,7 +32,7 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -44,13 +55,13 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       },
       {
         id: 'agent-2',
         role: 'agent',
         content: 'Draft complete.',
-        createdAt: '1970-01-01T00:00:02.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -72,13 +83,13 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       },
       {
         id: 'agent-2',
         role: 'agent',
         content: 'Draft',
-        createdAt: '1970-01-01T00:00:02.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -127,7 +138,7 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -160,7 +171,7 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -188,7 +199,7 @@ describe('sessionConversationReducer', () => {
         id: 'user-1',
         role: 'user',
         content: 'Plan phase 2',
-        createdAt: '1970-01-01T00:00:01.000Z'
+        createdAt: FIXED_NOW
       }
     ])
   })
@@ -325,7 +336,7 @@ describe('sessionConversationReducer', () => {
     expect(nextState.messages[nextState.messages.length - 1]).toEqual(persistedMessage)
   })
 
-  it('ignores APPEND_MESSAGE when the message id already exists', () => {
+  it('upserts on APPEND_MESSAGE when the message id already exists', () => {
     const withUserPrompt = sessionConversationReducer(createInitialSessionConversationState(), {
       type: 'SUBMIT_PROMPT',
       prompt: 'Plan phase 2'
@@ -343,12 +354,20 @@ describe('sessionConversationReducer', () => {
       message: persistedMessage
     })
 
-    const duplicateAttempt = sessionConversationReducer(withMessage, {
+    const updatedMessage = {
+      ...persistedMessage,
+      content: 'Spec Updated v2'
+    }
+
+    const upsertResult = sessionConversationReducer(withMessage, {
       type: 'APPEND_MESSAGE',
-      message: persistedMessage
+      message: updatedMessage
     })
 
-    expect(duplicateAttempt.messages.filter((message) => message.id === persistedMessage.id)).toHaveLength(1)
+    expect(upsertResult.messages.filter((message) => message.id === persistedMessage.id)).toHaveLength(1)
+    expect(upsertResult.messages.find((message) => message.id === persistedMessage.id)?.content).toBe(
+      'Spec Updated v2'
+    )
   })
 
   it('updates an existing message by id on UPDATE_MESSAGE', () => {
