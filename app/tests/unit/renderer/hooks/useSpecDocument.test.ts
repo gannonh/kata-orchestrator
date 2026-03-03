@@ -5,6 +5,17 @@ const mockSpecGet = vi.fn()
 const mockSpecSave = vi.fn()
 const mockSpecApplyDraft = vi.fn()
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+
+  return { promise, resolve, reject }
+}
+
 async function loadHook() {
   const mod = await import('../../../../src/renderer/hooks/useSpecDocument')
   return mod.useSpecDocument
@@ -204,6 +215,25 @@ describe('useSpecDocument', () => {
     })
   })
 
+  it('falls back to an empty parsed document when specGet returns a non-object payload', async () => {
+    mockSpecGet.mockResolvedValueOnce(42 as any)
+
+    const useSpecDocument = await loadHook()
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    await waitFor(() => {
+      expect(result.current.document).toMatchObject({
+        markdown: '',
+        sections: {
+          goal: ''
+        },
+        tasks: []
+      })
+    })
+  })
+
   it('keeps local state when specSave rejects', async () => {
     mockSpecSave.mockRejectedValueOnce(new Error('ipc unavailable'))
 
@@ -218,6 +248,47 @@ describe('useSpecDocument', () => {
 
     expect(result.current.document.sections.goal).toBe('Persist locally')
     expect(mockSpecSave).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps fallback state when specGet rejects', async () => {
+    mockSpecGet.mockRejectedValueOnce(new Error('ipc unavailable'))
+
+    const useSpecDocument = await loadHook()
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    await waitFor(() => {
+      expect(result.current.document).toMatchObject({
+        markdown: '',
+        sections: {
+          goal: ''
+        },
+        tasks: []
+      })
+    })
+  })
+
+  it('keeps local state when specApplyDraft rejects', async () => {
+    mockSpecApplyDraft.mockRejectedValueOnce(new Error('ipc unavailable'))
+
+    const useSpecDocument = await loadHook()
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    act(() => {
+      result.current.applyDraft({
+        runId: 'run-77',
+        generatedAt: '2026-03-02T12:05:00.000Z',
+        content: ['## Goal', 'Persist local apply-draft fallback', '', '## Tasks', '- [ ] Keep local'].join('\n')
+      })
+    })
+
+    await waitFor(() => {
+      expect(result.current.document.appliedRunId).toBe('run-77')
+      expect(result.current.document.sections.goal).toBe('Persist local apply-draft fallback')
+    })
   })
 
   it('works when spec IPC methods are unavailable', async () => {
@@ -242,6 +313,87 @@ describe('useSpecDocument', () => {
 
     expect(result.current.document.appliedRunId).toBe('run-99')
     expect(result.current.document.tasks[0]?.status).toBe('in_progress')
+  })
+
+  it('ignores stale specGet results after switching sessions', async () => {
+    const first = createDeferred<{ markdown: string } | null>()
+    mockSpecGet
+      .mockImplementationOnce(() => first.promise)
+      .mockResolvedValueOnce({ markdown: '## Goal\nSession 2 persisted' })
+
+    const useSpecDocument = await loadHook()
+    const { result, rerender } = renderHook(
+      ({ spaceId, sessionId }: { spaceId: string; sessionId: string }) =>
+        useSpecDocument({ spaceId, sessionId }),
+      { initialProps: { spaceId: 'space-1', sessionId: 'session-1' } }
+    )
+
+    rerender({ spaceId: 'space-1', sessionId: 'session-2' })
+    first.resolve({ markdown: '## Goal\nStale session 1 value' })
+
+    await waitFor(() => {
+      expect(result.current.document.sections.goal).toBe('Session 2 persisted')
+    })
+  })
+
+  it('ignores stale specSave results after switching sessions', async () => {
+    const saveDeferred = createDeferred<{ markdown: string }>()
+    mockSpecSave.mockImplementationOnce(() => saveDeferred.promise)
+    mockSpecGet
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ markdown: '## Goal\nSession 2 canonical' })
+
+    const useSpecDocument = await loadHook()
+    const { result, rerender } = renderHook(
+      ({ spaceId, sessionId }: { spaceId: string; sessionId: string }) =>
+        useSpecDocument({ spaceId, sessionId }),
+      { initialProps: { spaceId: 'space-1', sessionId: 'session-1' } }
+    )
+
+    act(() => {
+      result.current.setMarkdown('## Goal\nSession 1 local write')
+    })
+
+    rerender({ spaceId: 'space-1', sessionId: 'session-2' })
+    saveDeferred.resolve({ markdown: '## Goal\nSession 1 stale save response' })
+
+    await waitFor(() => {
+      expect(result.current.document.sections.goal).toBe('Session 2 canonical')
+    })
+  })
+
+  it('falls back to local cached state when specSave returns malformed payload', async () => {
+    mockSpecSave.mockResolvedValueOnce({ markdown: 42 } as any)
+
+    const useSpecDocument = await loadHook()
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    act(() => {
+      result.current.setMarkdown('## Goal\nKeep local cache')
+    })
+
+    await waitFor(() => {
+      expect(result.current.document.sections.goal).toBe('Keep local cache')
+    })
+  })
+
+  it('ignores specGet resolution after unmount', async () => {
+    const deferred = createDeferred<{ markdown: string } | null>()
+    mockSpecGet.mockImplementationOnce(() => deferred.promise)
+
+    const useSpecDocument = await loadHook()
+    const { unmount } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    unmount()
+    deferred.resolve({ markdown: '## Goal\nShould be ignored' })
+
+    await act(async () => {
+      await deferred.promise
+    })
   })
 
   it('ignores unknown task ids when toggling', async () => {

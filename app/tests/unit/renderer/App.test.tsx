@@ -4,6 +4,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../../../src/renderer/App'
 import type { SpaceRecord } from '../../../src/shared/types/space'
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+
+  return { promise, resolve, reject }
+}
+
 const testSpace: SpaceRecord = {
   id: 'space-test-1',
   name: 'Test Space',
@@ -77,6 +88,48 @@ describe('App', () => {
     })
     expect(screen.getByRole('heading', { name: 'Home' })).toBeTruthy()
     expect(screen.queryByRole('tablist', { name: 'Center panel tabs' })).toBeNull()
+  })
+
+  it('falls back to home when bootstrap rejects', async () => {
+    const appBootstrap = vi.fn().mockRejectedValue(new Error('bootstrap unavailable'))
+    window.kata = { ...window.kata, appBootstrap }
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(appBootstrap).toHaveBeenCalledOnce()
+      expect(screen.getByRole('heading', { name: 'Home' })).toBeTruthy()
+    })
+    expect(screen.queryByRole('tablist', { name: 'Center panel tabs' })).toBeNull()
+  })
+
+  it('does not update state after unmount if bootstrap resolves late', async () => {
+    const deferred = createDeferred<{
+      spaces: Record<string, never>
+      sessions: Record<string, never>
+      specDocuments: Record<string, never>
+      activeSpaceId: string | null
+      activeSessionId: string | null
+    }>()
+    const appBootstrap = vi.fn().mockImplementation(() => deferred.promise)
+    window.kata = { ...window.kata, appBootstrap }
+
+    const { unmount } = render(<App />)
+    unmount()
+
+    deferred.resolve({
+      spaces: {},
+      sessions: {},
+      specDocuments: {},
+      activeSpaceId: 'space-test-1',
+      activeSessionId: 'session-persisted-1'
+    })
+
+    await expect(deferred.promise).resolves.toMatchObject({
+      activeSpaceId: 'space-test-1',
+      activeSessionId: 'session-persisted-1'
+    })
+    expect(appBootstrap).toHaveBeenCalledOnce()
   })
 
   it('renders home view by default on startup', () => {

@@ -726,6 +726,16 @@ describe('registerIpcHandlers', () => {
     })
   })
 
+  it('space:setActive rejects unknown space ids', async () => {
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('space:setActive')!
+    await expect(handler({}, { spaceId: 'missing-space' })).rejects.toThrow(
+      'Cannot set active space to unknown id: missing-space'
+    )
+  })
+
   it('session:setActive persists activeSessionId and matching activeSpaceId', async () => {
     const state = {
       ...createDefaultAppState(),
@@ -775,6 +785,16 @@ describe('registerIpcHandlers', () => {
       activeSpaceId: 'space-2',
       activeSessionId: 'session-1'
     })
+  })
+
+  it('session:setActive rejects unknown session ids', async () => {
+    const store = createMockStore(createDefaultAppState())
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('session:setActive')!
+    await expect(handler({}, { sessionId: 'missing-session' })).rejects.toThrow(
+      'Cannot set active session to unknown id: missing-session'
+    )
   })
 
   it('spec:get returns persisted spec document by <spaceId>:<sessionId> key', async () => {
@@ -828,6 +848,36 @@ describe('registerIpcHandlers', () => {
         })
       }
     })
+  })
+
+  it('spec:save preserves existing applied metadata when omitted from input', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      specDocuments: {
+        'space-1:session-1': {
+          markdown: '# Existing',
+          updatedAt: '2026-03-03T00:00:00.000Z',
+          appliedRunId: 'run-existing',
+          appliedAt: '2026-03-03T00:01:00.000Z'
+        }
+      }
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('spec:save')!
+    const result = await handler({}, {
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      markdown: '# Updated without explicit applied metadata'
+    })
+
+    expect(result).toEqual(expect.objectContaining({
+      markdown: '# Updated without explicit applied metadata',
+      appliedRunId: 'run-existing',
+      appliedAt: '2026-03-03T00:01:00.000Z',
+      updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
+    }))
   })
 
   it('spec:applyDraft saves markdown/applied metadata and marks run draft applied', async () => {
