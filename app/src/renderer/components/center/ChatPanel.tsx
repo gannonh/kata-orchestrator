@@ -34,15 +34,25 @@ export function ChatPanel({
     onConversationEntriesChange?.(conversationEntries)
   }, [conversationEntries, onConversationEntriesChange])
 
+  const decisionCards = useMemo(
+    () =>
+      state.messages.map((message) => {
+        const card = extractInlineDecisionCard(message)
+        const resolved = card ? isDecisionResolved(state.messages, card) : false
+        return { card, resolved }
+      }),
+    [state.messages]
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <MessageList onRegisterScrollToMessage={onRegisterScrollToMessage}>
-        {state.messages.map((message) => {
-          const decisionCard = extractInlineDecisionCard(message)
+        {state.messages.map((message, index) => {
+          const { card: decisionCard, resolved } = decisionCards[index]
           const decisionState =
             state.runState === 'pending'
               ? 'pending'
-              : decisionCard && isDecisionResolved(state.messages, decisionCard)
+              : resolved
                 ? 'resolved'
                 : 'available'
 

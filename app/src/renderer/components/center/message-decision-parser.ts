@@ -107,6 +107,28 @@ export function extractInlineDecisionCard(
   }
 }
 
+const ACTION_NORMALIZED_LABELS = BASE_ACTIONS.map((action) => normalizeSemanticLine(action.label))
+
+function isActionBulletLine(line: string): boolean {
+  if (!/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) return false
+  const normalized = normalizeSemanticLine(line.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ''))
+  return ACTION_NORMALIZED_LABELS.some((label) => normalized === label)
+}
+
+export function stripDecisionActionLines(content: string): string {
+  return content
+    .split(/\r?\n/)
+    .filter((line) => {
+      if (isActionBulletLine(line)) return false
+      if (/\bapprove\b.*\bthis\b.*\bplan\b.*\b1\b.*\bcheck\b.*\bclarifications\b/.test(normalizeSemanticLine(line)))
+        return false
+      return true
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trimEnd()
+}
+
 export function isDecisionResolved(messages: ConversationMessage[], card: InlineDecisionCard): boolean {
   const sourceIndex = messages.findIndex((message) => message.id === card.sourceMessageId)
   if (sourceIndex < 0) {

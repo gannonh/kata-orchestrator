@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   extractInlineDecisionCard,
-  isDecisionResolved
+  isDecisionResolved,
+  stripDecisionActionLines
 } from '../../../../src/renderer/components/center/message-decision-parser'
 import type { ConversationMessage } from '../../../../src/renderer/types/session-conversation'
 
@@ -156,6 +157,20 @@ describe('message-decision-parser', () => {
     const card = extractInlineDecisionCard(messages[0]!)
     expect(card).toBeTruthy()
     expect(isDecisionResolved(messages, card!)).toBe(true)
+  })
+
+  it('strips prompt and action bullet lines from content', () => {
+    const stripped = stripDecisionActionLines(proposal)
+    expect(stripped).not.toContain('Approve this plan with 1 check? Clarifications')
+    expect(stripped).not.toContain('- Approve the plan...')
+    expect(stripped).not.toContain('- Keep the last switch...')
+    expect(stripped).toContain('## Why')
+    expect(stripped).toContain('## How to keep Tech stable later')
+  })
+
+  it('returns content unchanged when no decision lines are present', () => {
+    const plain = '## Summary\n\nHere is the status update.'
+    expect(stripDecisionActionLines(plain)).toBe(plain)
   })
 
   it('returns false when the decision source message is not present in the conversation', () => {

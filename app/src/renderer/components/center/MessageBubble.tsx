@@ -3,7 +3,7 @@ import { cn } from '../../lib/cn'
 import { type ChatMessage } from '../../types/chat'
 import { type ConversationMessage } from '../../types/session-conversation'
 import { MessageActionRow } from './MessageActionRow'
-import type { InlineDecisionActionId, InlineDecisionCard } from './message-decision-parser'
+import { stripDecisionActionLines, type InlineDecisionActionId, type InlineDecisionCard } from './message-decision-parser'
 
 type BubbleMessage = ChatMessage | ConversationMessage
 type DecisionState = 'available' | 'pending' | 'resolved'
@@ -27,8 +27,9 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const isCollapsed = variant === 'collapsed' && Boolean(summary?.trim())
-  const displayContent = isCollapsed ? summary ?? '' : message.content
   const shouldRenderDecisionCard = message.role === 'agent' && Boolean(decisionCard)
+  const rawContent = isCollapsed ? summary ?? '' : message.content
+  const displayContent = shouldRenderDecisionCard ? stripDecisionActionLines(rawContent) : rawContent
   const isDecisionDisabled = decisionState === 'pending' || decisionState === 'resolved'
 
   return (
@@ -61,6 +62,7 @@ export function MessageBubble({
               onDecisionAction?.(actionId)
             }}
           />
+          {decisionState === 'pending' ? <p className="text-xs text-muted-foreground">Sending…</p> : null}
           {decisionState === 'resolved' ? <p className="text-xs text-muted-foreground">Decision sent</p> : null}
         </div>
       ) : null}
