@@ -66,9 +66,45 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
         })
       }
 
+      let activeAssistantMessageId: string | null = null
+      let activeAssistantCreatedAt: string | null = null
+
       if (unsubscribe) unsubscribe()
       unsubscribe = agent.subscribe((event: AgentEvent) => {
         if (aborted) return
+
+        if (event.type === 'message_start' && event.message) {
+          const msg = event.message as {
+            role: string
+          }
+
+          if (msg.role === 'assistant') {
+            activeAssistantMessageId = `agent-${Date.now()}`
+            activeAssistantCreatedAt = new Date().toISOString()
+          }
+        }
+
+        if (event.type === 'message_update' && event.message) {
+          const msg = event.message as {
+            role: string
+            content: Array<{ type: string; text?: string }>
+          }
+
+          if (msg.role === 'assistant' && activeAssistantMessageId && activeAssistantCreatedAt) {
+            const partialText = extractTextContent(msg.content)
+            if (partialText) {
+              config.onEvent({
+                type: 'message_updated',
+                message: {
+                  id: activeAssistantMessageId,
+                  role: 'agent',
+                  content: partialText,
+                  createdAt: activeAssistantCreatedAt
+                }
+              })
+            }
+          }
+        }
 
         if (event.type === 'message_end' && event.message) {
           const msg = event.message as {
@@ -84,16 +120,22 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
             }
             const text = extractTextContent(msg.content)
             if (text) {
+              if (!activeAssistantMessageId || !activeAssistantCreatedAt) {
+                activeAssistantMessageId = `agent-${Date.now()}`
+                activeAssistantCreatedAt = new Date().toISOString()
+              }
               config.onEvent({
                 type: 'message_appended',
                 message: {
-                  id: `agent-${Date.now()}`,
+                  id: activeAssistantMessageId,
                   role: 'agent',
                   content: text,
-                  createdAt: new Date().toISOString()
+                  createdAt: activeAssistantCreatedAt
                 }
               })
             }
+            activeAssistantMessageId = null
+            activeAssistantCreatedAt = null
           }
         }
 
@@ -101,6 +143,8 @@ export function createAgentRunner(config: AgentRunnerConfig): AgentRunner {
           if (!runFailed) {
             config.onEvent({ type: 'run_state_changed', runState: 'idle' })
           }
+          activeAssistantMessageId = null
+          activeAssistantCreatedAt = null
           if (unsubscribe) {
             unsubscribe()
             unsubscribe = null

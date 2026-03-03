@@ -55,6 +55,61 @@ describe('sessionConversationReducer', () => {
     ])
   })
 
+  it('keeps pending state and appends an agent message on RUN_STREAM_UPDATED', () => {
+    const pendingState = sessionConversationReducer(createInitialSessionConversationState(), {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+
+    const nextState = sessionConversationReducer(pendingState, {
+      type: 'RUN_STREAM_UPDATED',
+      response: 'Draft'
+    })
+
+    expect(nextState.runState).toBe('pending')
+    expect(nextState.messages).toEqual([
+      {
+        id: 'user-1',
+        role: 'user',
+        content: 'Plan phase 2',
+        createdAt: '1970-01-01T00:00:01.000Z'
+      },
+      {
+        id: 'agent-2',
+        role: 'agent',
+        content: 'Draft',
+        createdAt: '1970-01-01T00:00:02.000Z'
+      }
+    ])
+  })
+
+  it('updates the existing streamed agent message and avoids duplicate append on RUN_SUCCEEDED', () => {
+    const pendingState = sessionConversationReducer(createInitialSessionConversationState(), {
+      type: 'SUBMIT_PROMPT',
+      prompt: 'Plan phase 2'
+    })
+    const streamingState = sessionConversationReducer(pendingState, {
+      type: 'RUN_STREAM_UPDATED',
+      response: 'Draft'
+    })
+    const updatedStreamingState = sessionConversationReducer(streamingState, {
+      type: 'RUN_STREAM_UPDATED',
+      response: 'Draft complete'
+    })
+
+    expect(updatedStreamingState.messages).toHaveLength(2)
+    expect(updatedStreamingState.messages[1]?.content).toBe('Draft complete')
+
+    const nextState = sessionConversationReducer(updatedStreamingState, {
+      type: 'RUN_SUCCEEDED',
+      response: 'Draft complete.'
+    })
+
+    expect(nextState.runState).toBe('idle')
+    expect(nextState.messages).toHaveLength(2)
+    expect(nextState.messages[1]?.content).toBe('Draft complete.')
+  })
+
   it('pending -> idle without appending messages on RUN_COMPLETED', () => {
     const pendingState = sessionConversationReducer(createInitialSessionConversationState(), {
       type: 'SUBMIT_PROMPT',
@@ -162,6 +217,17 @@ describe('sessionConversationReducer', () => {
     expect(nextState).toBe(initialState)
   })
 
+  it('ignores RUN_STREAM_UPDATED when state is not pending', () => {
+    const initialState = createInitialSessionConversationState()
+
+    const nextState = sessionConversationReducer(initialState, {
+      type: 'RUN_STREAM_UPDATED',
+      response: 'Draft'
+    })
+
+    expect(nextState).toBe(initialState)
+  })
+
   it('ignores RUN_FAILED when state is not pending', () => {
     const initialState = createInitialSessionConversationState()
 
@@ -211,6 +277,29 @@ describe('sessionConversationReducer', () => {
     })
 
     expect(nextState).toBe(errorState)
+  })
+
+  it('resets to initial state on RESET_CONVERSATION', () => {
+    const errorState = sessionConversationReducer(
+      sessionConversationReducer(createInitialSessionConversationState(), {
+        type: 'SUBMIT_PROMPT',
+        prompt: 'Plan phase 2'
+      }),
+      {
+        type: 'RUN_FAILED',
+        error: 'Network timeout'
+      }
+    )
+
+    expect(errorState.runState).toBe('error')
+
+    const nextState = sessionConversationReducer(errorState, {
+      type: 'RESET_CONVERSATION'
+    })
+
+    expect(nextState.runState).toBe('empty')
+    expect(nextState.messages).toEqual([])
+    expect(nextState.errorMessage).toBeUndefined()
   })
 
   it('returns current state for unknown events', () => {

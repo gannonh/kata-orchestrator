@@ -53,7 +53,6 @@ Linear is the single source of truth for all desktop project management: task pr
 - Unit tests: `tests/unit/`
 - E2E/UAT tests: `tests/e2e/`
 
-
 ## Commands
 
 From repo root (preferred):
@@ -106,6 +105,7 @@ npm run dev:web
 ```
 
 This uses `vite.config.web.ts` which:
+
 - Serves only the renderer on port 5199 (no Electron main/preload)
 - Strips `frame-ancestors 'none'` from the CSP so the preview iframe can embed it
 
@@ -129,7 +129,7 @@ Port 5199 is hardcoded (`strictPort: true`) to avoid the mismatch where Vite aut
 
 ## Mandatory TDD
 
-1. Test Driven Development is mandatory for all code changes. 
+1. Test Driven Development is mandatory for all code changes.
 2. Write tests before implementation, ensure they fail, then implement the feature until tests pass.
 3. Use the Test Driven Development Agent Skill (`test-driven-development`) for guidance.
 
@@ -142,6 +142,7 @@ Design source of truth: `pencil/ui-01.pen` (Pencil MCP). Code source of truth: `
 Both systems share the same CSS variable names. The canonical values live in `app/src/renderer/app.css` (OkLCh format). Pencil stores hex equivalents.
 
 When a token changes:
+
 1. Update `app.css` first (OkLCh values)
 2. Convert to hex and push to Pencil via `set_variables`
 
@@ -158,12 +159,14 @@ Install these via `npx shadcn@latest add <name>` when a feature requires them. D
 ### Iteration Workflow
 
 **Pencil-first** (new screens, layout exploration):
+
 1. Design in Pencil using existing reusable components and `$variable` references
 2. `get_screenshot` the frame for visual reference
 3. Implement in React to match, using the same CSS variables
 4. Verify with side-by-side comparison
 
 **Code-first** (behavior-driven changes):
+
 1. Build the React component
 2. Update or create the corresponding Pencil frame to reflect the shipped state
 3. Keep Pencil as a living record, not a stale spec
@@ -185,10 +188,12 @@ Install these via `npx shadcn@latest add <name>` when a feature requires them. D
 ## Private Component Registry (React Source of Truth)
 
 Private shadcn-compatible component registry:
+
 - Repo: `https://github.com/gannonh/kata-shadcn`
 - Deploy: `https://shadcn-registry-eight.vercel.app`
 
 Rules:
+
 1. Prefer installing from `@kata-shadcn` before creating new one-off components.
 2. Shared component changes belong in `kata-shadcn` (source repo), not in generated downstream copies.
 3. Pushing to `main` in `kata-shadcn` triggers Vercel deployment; verify install behavior after deploy.
@@ -269,7 +274,7 @@ About, Alert & Dialog, Avatar, Blog, Button, Card, Chart, Contact, Content, CTA,
 
 ### Agent-browser (Electron) workflow
 
-Use this workflow when validating the desktop app with `agent-browser`.
+Use this workflow when validating/debugging the desktop app with `agent-browser`.
 
 1. Start Electron with CDP in a dedicated terminal and keep it running:
 
@@ -278,7 +283,7 @@ cd app
 npm run dev -- --remote-debugging-port=9222
 ```
 
-2. In a second terminal, attach `agent-browser` to that Electron instance:
+1. In a second terminal, attach `agent-browser` to that Electron instance:
 
 ```bash
 npx agent-browser close
@@ -288,7 +293,7 @@ npx agent-browser tab 0
 npx agent-browser snapshot -i
 ```
 
-3. Run interactions in the same attached session:
+1. Run interactions in the same attached session:
 
 ```bash
 npx agent-browser fill @e19 "test prompt"
@@ -298,9 +303,10 @@ npx agent-browser get text body
 npx agent-browser screenshot /tmp/kata-uat.png
 ```
 
-4. If refs become stale, re-run `snapshot -i` and use the new refs.
+1. If refs become stale, re-run `snapshot -i` and use the new refs.
 
 Notes:
+
 - Prefer the default `agent-browser` session for this project. If a named session fails to start, use default and reconnect with `connect 9222`.
 - If no elements are interactable, check tab selection first (`tab`, then `tab 0` for the renderer window).
 - If the Agentation overlay blocks clicks, toggle its `Block page interactions` control off before continuing.

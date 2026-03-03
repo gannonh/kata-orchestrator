@@ -1,3 +1,5 @@
+import type { LatestRunDraft } from './spec-document'
+
 export type ConversationRunState = 'empty' | 'pending' | 'error' | 'idle'
 
 export type ConversationMessageRole = 'user' | 'agent'
@@ -13,6 +15,7 @@ export interface SessionConversationState {
   runState: ConversationRunState
   messages: ConversationMessage[]
   errorMessage?: string
+  latestDraft?: LatestRunDraft
 }
 
 export type SubmitPromptEvent = {
@@ -22,6 +25,11 @@ export type SubmitPromptEvent = {
 
 export type RunSucceededEvent = {
   type: 'RUN_SUCCEEDED'
+  response: string
+}
+
+export type RunStreamUpdatedEvent = {
+  type: 'RUN_STREAM_UPDATED'
   response: string
 }
 
@@ -38,9 +46,15 @@ export type RunCompletedEvent = {
   type: 'RUN_COMPLETED'
 }
 
+export type ResetConversationEvent = {
+  type: 'RESET_CONVERSATION'
+}
+
 export type SessionConversationEvent =
   | SubmitPromptEvent
+  | RunStreamUpdatedEvent
   | RunSucceededEvent
   | RunFailedEvent
   | RetryFromErrorEvent
   | RunCompletedEvent
+  | ResetConversationEvent

@@ -26,15 +26,56 @@ export function sessionConversationReducer(
         runState: 'pending',
         messages: [...state.messages, createMessage(state, 'user', event.prompt)]
       }
-    case 'RUN_SUCCEEDED':
+    case 'RUN_STREAM_UPDATED': {
+      if (state.runState !== 'pending' || !event.response) {
+        return state
+      }
+
+      const lastMessage = state.messages[state.messages.length - 1]
+      if (lastMessage?.role === 'agent') {
+        return {
+          ...state,
+          messages: [
+            ...state.messages.slice(0, -1),
+            {
+              ...lastMessage,
+              content: event.response
+            }
+          ]
+        }
+      }
+
+      return {
+        ...state,
+        messages: [...state.messages, createMessage(state, 'agent', event.response)]
+      }
+    }
+    case 'RUN_SUCCEEDED': {
       if (state.runState !== 'pending') {
         return state
       }
 
+      const lastMessage = state.messages[state.messages.length - 1]
+      if (lastMessage?.role === 'agent') {
+        return {
+          ...state,
+          runState: 'idle',
+          messages: [
+            ...state.messages.slice(0, -1),
+            {
+              ...lastMessage,
+              content: event.response
+            }
+          ]
+        }
+      }
+
       return {
+        ...state,
         runState: 'idle',
         messages: [...state.messages, createMessage(state, 'agent', event.response)]
       }
+    }
     case 'RUN_FAILED':
       if (state.runState !== 'pending') {
         return state
@@ -64,6 +105,8 @@ export function sessionConversationReducer(
         ...state,
         runState: 'idle'
       }
+    case 'RESET_CONVERSATION':
+      return createInitialSessionConversationState()
     default:
       return state
   }

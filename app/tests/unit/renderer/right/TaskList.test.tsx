@@ -25,4 +25,10 @@ describe('TaskList', () => {
     expect(screen.getByText('Done')).toBeTruthy()
     expect(screen.getByText('Blocked')).toBeTruthy()
   })
+
+  it('renders empty-state copy when no tasks are available', () => {
+    render(<TaskList tasks={[]} />)
+
+    expect(screen.getByText('No tasks yet.')).toBeTruthy()
+  })
 })

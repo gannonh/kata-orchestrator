@@ -5,6 +5,7 @@ import { CenterPanel } from '../center/CenterPanel'
 import { ChatPanel } from '../center/ChatPanel'
 import { PanelResizer } from './PanelResizer'
 import { RightPanel } from './RightPanel'
+import type { LatestRunDraft } from '../../types/spec-document'
 
 const RESIZER_WIDTH = 10
 const LEFT_MIN = 320
@@ -58,6 +59,14 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
   const [centerRightOffset, setCenterRightOffset] = useState(0)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [availableWidth, setAvailableWidth] = useState(1440)
+  const activeSessionKey = activeSessionId ?? null
+  const [latestDraftState, setLatestDraftState] = useState<{
+    sessionId: string | null
+    draft: LatestRunDraft | undefined
+  }>({
+    sessionId: activeSessionKey,
+    draft: undefined
+  })
   const [theme, setTheme] = useState<Theme>(() => {
     const persistedTheme = globalThis.localStorage?.getItem(THEME_STORAGE_KEY)
     return persistedTheme === 'light' || persistedTheme === 'dark' ? persistedTheme : 'dark'
@@ -149,6 +158,25 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
       `${effectiveLeftWidth}px ${leftResizerWidth}px ${documentSplit.center}px ${RESIZER_WIDTH}px ${documentSplit.right}px`,
     [effectiveLeftWidth, leftResizerWidth, documentSplit.center, documentSplit.right]
   )
+  const latestDraft =
+    latestDraftState.sessionId === activeSessionKey
+      ? latestDraftState.draft
+      : undefined
+  const handleLatestDraftChange = useCallback(
+    (draft: LatestRunDraft | undefined) => {
+      setLatestDraftState((current) => {
+        if (current.sessionId === activeSessionKey && current.draft === draft) {
+          return current
+        }
+
+        return {
+          sessionId: activeSessionKey,
+          draft
+        }
+      })
+    },
+    [activeSessionKey]
+  )
 
   return (
     <main
@@ -189,7 +217,10 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
         )}
 
         <CenterPanel>
-          <ChatPanel sessionId={activeSessionId ?? null} />
+          <ChatPanel
+            sessionId={activeSessionId ?? null}
+            onLatestDraftChange={handleLatestDraftChange}
+          />
         </CenterPanel>
 
         <PanelResizer
@@ -204,7 +235,11 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
           data-testid="right-panel"
           className="overflow-hidden bg-background"
         >
-          <RightPanel />
+          <RightPanel
+            spaceId={activeSpaceId ?? null}
+            sessionId={activeSessionId ?? null}
+            latestDraft={latestDraft}
+          />
         </aside>
       </section>
     </main>
