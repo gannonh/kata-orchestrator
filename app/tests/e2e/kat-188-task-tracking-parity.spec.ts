@@ -10,6 +10,7 @@ const snapshotMock14Path = path.join(evidenceDir, 'mock14-task-tracking.png')
 const detailNoActivityPath = path.join(evidenceDir, 'task-detail-no-activity.png')
 const detailHighActivityPath = path.join(evidenceDir, 'task-detail-high-activity.png')
 const snapshotMock19Path = path.join(evidenceDir, 'mock19-wave-merge-strategy.png')
+const shouldCaptureEvidence = process.env.KATA_CAPTURE_EVIDENCE === '1'
 
 const RUN_ID = 'run-kat-188-e2e'
 const HIGH_ACTIVITY_DETAIL = "I'm starting implementation for the space creation flow."
@@ -294,8 +295,10 @@ test.describe('KAT-188 task tracking parity evidence @uat', () => {
 
       await expect(appWindow.getByText(HIGH_ACTIVITY_DETAIL)).toHaveCount(0)
 
-      await appWindow.screenshot({ path: snapshotMock14Path, fullPage: true })
-      await taskTrackingSection.screenshot({ path: detailNoActivityPath })
+      if (shouldCaptureEvidence) {
+        await appWindow.screenshot({ path: snapshotMock14Path, fullPage: true })
+        await taskTrackingSection.screenshot({ path: detailNoActivityPath })
+      }
 
       const highActivitySnapshot: TaskSnapshotPayload = {
         ...noActivitySnapshot,
@@ -322,8 +325,10 @@ test.describe('KAT-188 task tracking parity evidence @uat', () => {
       await expect(rightPanel.getByText(HIGH_ACTIVITY_DETAIL)).toBeVisible()
       await expect(rightPanel.getByLabel('Active specialist')).toBeVisible()
 
-      await taskTrackingSection.screenshot({ path: detailHighActivityPath })
-      await appWindow.screenshot({ path: snapshotMock19Path, fullPage: true })
+      if (shouldCaptureEvidence) {
+        await taskTrackingSection.screenshot({ path: detailHighActivityPath })
+        await appWindow.screenshot({ path: snapshotMock19Path, fullPage: true })
+      }
     } finally {
       await electronApp.evaluate(({ ipcMain }) => {
         try {
