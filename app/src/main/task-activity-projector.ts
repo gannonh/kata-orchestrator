@@ -109,7 +109,7 @@ export function createTaskActivityProjector(): TaskActivityProjector {
       }
 
       const now = new Date().toISOString()
-      const items = current.items.map((item) => {
+      const items: TaskTrackingItem[] = current.items.map((item): TaskTrackingItem => {
         if (item.status !== 'in_progress') {
           return { ...item }
         }
