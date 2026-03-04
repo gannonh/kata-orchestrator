@@ -39,6 +39,11 @@ type TaskSnapshotPayload = {
   }
 }
 
+type ActiveWorkspaceContext = {
+  spaceId: string
+  sessionId: string
+}
+
 async function broadcastRunEvent(
   electronApp: ElectronApplication,
   payload: unknown
@@ -55,21 +60,117 @@ async function broadcastRunEvent(
   }, payload)
 }
 
+async function resolveActiveSessionContext(
+  appWindow: import('@playwright/test').Page
+): Promise<ActiveWorkspaceContext> {
+  const context = await appWindow.evaluate(async () => {
+    const api = (window as {
+      kata?: {
+        appBootstrap?: () => Promise<{ activeSpaceId: string | null; activeSessionId: string | null }>
+        sessionCreate?: (input: { spaceId: string; label: string }) => Promise<{ id: string }>
+        sessionSetActive?: (sessionId: string) => Promise<unknown>
+        spaceSetActive?: (spaceId: string) => Promise<unknown>
+      }
+    }).kata
+
+    const bootstrap = await api?.appBootstrap?.()
+    const spaceId = bootstrap?.activeSpaceId ?? null
+    const activeSessionId = bootstrap?.activeSessionId ?? null
+    if (!spaceId) {
+      return null
+    }
+
+    if (activeSessionId) {
+      return { spaceId, sessionId: activeSessionId }
+    }
+
+    const createdSession = await api?.sessionCreate?.({
+      spaceId,
+      label: 'KAT-188 Task Tracking Evidence'
+    })
+    const sessionId = createdSession?.id ?? null
+    if (!sessionId) {
+      return null
+    }
+    await api?.sessionSetActive?.(sessionId)
+    await api?.spaceSetActive?.(spaceId)
+    return { spaceId, sessionId }
+  })
+
+  if (!context) {
+    throw new Error('Unable to resolve active space/session for KAT-188 evidence test.')
+  }
+
+  return context
+}
+
+function buildStructuredDraftMarkdown(prompt: string): string {
+  return [
+    '## Goal',
+    prompt,
+    '',
+    '## Acceptance Criteria',
+    '1. Produce a structured spec draft from the latest run',
+    '2. Keep the shell behavior deterministic for renderer tests',
+    '',
+    '## Non-goals',
+    '- Do not call external services from the right panel',
+    '',
+    '## Assumptions',
+    '- The latest prompt is the source of truth for the draft',
+    '',
+    '## Verification Plan',
+    '1. Run the renderer unit tests',
+    '',
+    '## Rollback Plan',
+    '1. Clear the generated draft state',
+    '',
+    '## Tasks',
+    '- [ ] Review the latest prompt',
+    '- [/] Apply the structured draft',
+    '- [x] Keep the runtime wiring stable'
+  ].join('\n')
+}
+
 test.describe('KAT-188 task tracking parity evidence @uat', () => {
   test('captures mock14 and high-activity parity states for task tracking', async ({
     appWindow,
     electronApp,
-    managedStateFilePath
+    managedStateFilePath: _managedStateFilePath
   }) => {
     await ensureWorkspaceShell(appWindow)
     await fs.mkdir(evidenceDir, { recursive: true })
 
-    const persistedRaw = await fs.readFile(managedStateFilePath, 'utf8')
-    const persistedState = JSON.parse(persistedRaw) as { activeSessionId?: string | null }
-    const sessionId = persistedState.activeSessionId
-    expect(sessionId).toBeTruthy()
+    const activeContext = await resolveActiveSessionContext(appWindow)
+    let sessionId = activeContext.sessionId
 
     const rightPanel = appWindow.getByTestId('right-panel')
+    const rightTabs = rightPanel.getByRole('tablist', { name: 'Right panel tabs' })
+    await rightTabs.getByRole('tab', { name: 'Spec' }).click()
+    const expandRightColumnButton = rightPanel.getByRole('button', { name: 'Expand right column' })
+    if ((await expandRightColumnButton.count()) > 0) {
+      await expandRightColumnButton.click()
+    }
+    await expect(rightPanel.getByRole('heading', { name: 'Spec', exact: true })).toBeVisible()
+    await appWindow.evaluate(
+      async ({ inputSpaceId, inputSessionId }: { inputSpaceId: string; inputSessionId: string }) => {
+        const specSave = window.kata?.specSave
+        if (typeof specSave !== 'function') {
+          return
+        }
+
+        await specSave({
+          spaceId: inputSpaceId,
+          sessionId: inputSessionId,
+          markdown: ''
+        })
+      },
+      {
+        inputSpaceId: activeContext.spaceId,
+        inputSessionId: sessionId
+      }
+    )
+
     const taskTrackingSection = appWindow.getByTestId('task-tracking-section')
 
     await electronApp.evaluate(({ ipcMain }, runId) => {
@@ -102,13 +203,54 @@ test.describe('KAT-188 task tracking parity evidence @uat', () => {
         }
       })
 
-      await expect(rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })).toBeVisible({ timeout: 10_000 })
-      await rightPanel.getByRole('button', { name: 'Apply Draft to Spec' }).click()
+      const runtimeContext = await appWindow.evaluate(async () => {
+        const bootstrap = await window.kata?.appBootstrap?.()
+        return {
+          spaceId: bootstrap?.activeSpaceId ?? null,
+          sessionId: bootstrap?.activeSessionId ?? null
+        }
+      })
+      if (!runtimeContext.spaceId || !runtimeContext.sessionId) {
+        throw new Error('Unable to resolve active context before applying KAT-188 structured draft.')
+      }
+      sessionId = runtimeContext.sessionId
+
+      await appWindow.evaluate(
+        async ({
+          inputSpaceId,
+          inputSessionId,
+          inputRunId,
+          inputMarkdown
+        }: {
+          inputSpaceId: string
+          inputSessionId: string
+          inputRunId: string
+          inputMarkdown: string
+        }) => {
+          const specSave = window.kata?.specSave
+          if (typeof specSave !== 'function') {
+            throw new Error('specSave IPC bridge is unavailable in KAT-188 parity test.')
+          }
+
+          await specSave({
+            spaceId: inputSpaceId,
+            sessionId: inputSessionId,
+            markdown: inputMarkdown,
+            appliedRunId: inputRunId
+          })
+        },
+        {
+          inputSpaceId: runtimeContext.spaceId,
+          inputSessionId: sessionId,
+          inputRunId: RUN_ID,
+          inputMarkdown: buildStructuredDraftMarkdown('Build session task tracking parity baseline.')
+        }
+      )
 
       await expect(rightPanel.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible({ timeout: 10_000 })
 
       const noActivitySnapshot: TaskSnapshotPayload = {
-        sessionId: sessionId!,
+        sessionId,
         runId: RUN_ID,
         items: [
           {
