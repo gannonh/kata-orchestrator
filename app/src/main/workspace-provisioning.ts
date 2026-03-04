@@ -5,6 +5,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 
 import type { CreateSpaceInput, ProvisioningMethod } from '../shared/types/space'
+import { GIT_ENV_KEYS_TO_CLEAR } from '../shared/git-env'
 
 export type WorkspaceProvisioningErrorCategory = 'validation' | 'git' | 'filesystem'
 
@@ -48,14 +49,6 @@ export type ProvisionedWorkspace = {
 }
 
 const execFileAsync = promisify(execFile)
-const GIT_ENV_KEYS_TO_CLEAR = [
-  'GIT_DIR',
-  'GIT_WORK_TREE',
-  'GIT_COMMON_DIR',
-  'GIT_INDEX_FILE',
-  'GIT_OBJECT_DIRECTORY',
-  'GIT_ALTERNATE_OBJECT_DIRECTORIES'
-] as const
 
 function sanitizedGitEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env }

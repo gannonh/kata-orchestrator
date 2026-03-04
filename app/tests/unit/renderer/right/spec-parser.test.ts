@@ -184,6 +184,24 @@ describe('parseStructuredSpec', () => {
     ])
   })
 
+  it('ignores unrecognized section headings without crashing', () => {
+    const markdown = [
+      '## Goal',
+      'Ship the parser',
+      '',
+      '## Unknown Section',
+      'This content should be ignored',
+      '',
+      '## Tasks',
+      '- [ ] Build parser'
+    ].join('\n')
+
+    const parsed = parseStructuredSpec(markdown)
+
+    expect(parsed.sections.goal).toBe('Ship the parser')
+    expect(parsed.tasks).toHaveLength(1)
+  })
+
   it('skips non-checkbox lines in tasks sections', () => {
     const markdown = [
       '## Tasks',

@@ -16,6 +16,7 @@ import {
   createDefaultAppState
 } from '../shared/types/space'
 import { extractRepoLabel } from '../shared/repo-label'
+import { toStableTaskId } from '../shared/task-id'
 import { resolveSpaceName } from './space-name'
 import type { StateStore } from './state-store'
 import {
@@ -411,23 +412,6 @@ function parseTaskSeedItemsFromMarkdown(markdown: string): TaskActivitySeedItem[
   }
 
   return seeds
-}
-
-function toStableTaskId(title: string, seenIds: Map<string, number>): string {
-  const slug =
-    title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'task'
-
-  const nextCount = (seenIds.get(slug) ?? 0) + 1
-  seenIds.set(slug, nextCount)
-
-  if (nextCount === 1) {
-    return `task-${slug}`
-  }
-
-  return `task-${slug}-${nextCount}`
 }
 
 function taskStatusForMarker(marker: string): 'not_started' | 'in_progress' | 'complete' {
@@ -969,7 +953,7 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
             taskActivityProjector.onMessageActivity({
               sessionId,
               runId: run.id,
-              detail: runtimeEvent.message.content
+              detail: runtimeEvent.message.content?.slice(0, 200)
             })
           )
         }

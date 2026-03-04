@@ -3,6 +3,7 @@ import type {
   SpecTaskStatus,
   StructuredSpecDocument
 } from '../../types/spec-document'
+import { toStableTaskId } from '@shared/task-id'
 
 interface IndexedLine {
   content: string
@@ -140,23 +141,6 @@ function normalizeTasks(lines: IndexedLine[]): SpecTaskItem[] {
   })
 
   return tasks
-}
-
-function toStableTaskId(title: string, seenIds: Map<string, number>): string {
-  const slug =
-    title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'task'
-
-  const nextCount = (seenIds.get(slug) ?? 0) + 1
-  seenIds.set(slug, nextCount)
-
-  if (nextCount === 1) {
-    return `task-${slug}`
-  }
-
-  return `task-${slug}-${nextCount}`
 }
 
 function statusForMarker(marker: string): SpecTaskStatus {

@@ -57,7 +57,7 @@ describe('RightPanel draft flow', () => {
               activityLevel: 'high',
               activityDetail: 'Starting implementation for the space creation flow.',
               activeAgentId: 'spec',
-              updatedAt: '2026-03-02T12:00:30.000Z'
+              updatedAt: '2026-03-04T00:00:00.000Z'
             }
           ],
           counts: { not_started: 0, in_progress: 1, blocked: 0, complete: 0 }

@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import { expect, test, type ElectronApplication } from './fixtures/electron'
 import { ensureWorkspaceShell } from './helpers/shell-view'
+import type { TaskActivitySnapshot } from '../../src/shared/types/task-tracking'
 
 const evidenceDir = path.resolve(process.cwd(), 'test-results/kat-188')
 
@@ -20,25 +21,7 @@ const TASK_TITLES = [
   'Keep the runtime wiring stable'
 ]
 
-type TaskSnapshotPayload = {
-  sessionId: string
-  runId: string
-  items: Array<{
-    id: string
-    title: string
-    status: 'not_started' | 'in_progress' | 'blocked' | 'complete'
-    activityLevel: 'none' | 'low' | 'high'
-    activityDetail?: string
-    activeAgentId?: string
-    updatedAt: string
-  }>
-  counts: {
-    not_started: number
-    in_progress: number
-    blocked: number
-    complete: number
-  }
-}
+type TaskSnapshotPayload = TaskActivitySnapshot
 
 type ActiveWorkspaceContext = {
   spaceId: string

@@ -46,7 +46,9 @@ function buildSummary(snapshot: TaskActivitySnapshot): string {
   }
 
   const waitingCount = snapshot.counts.not_started + snapshot.counts.blocked
-  segments.push(`${waitingCount} waiting`)
+  if (waitingCount > 0) {
+    segments.push(`${waitingCount} waiting`)
+  }
 
   return segments.join(' · ')
 }

@@ -76,9 +76,6 @@ npm run test:ci:local
 # Run desktop CI-equivalent checks only
 npm run -w app test:ci:local
 
-# Run CI-tagged desktop E2E
-npm run test:app:e2e:ci
-
 # Run full desktop UAT E2E
 npm run test:app:e2e
 ```
@@ -91,7 +88,6 @@ npm run test
 npm run test:coverage
 npm run test:ci:local
 npm run test:e2e:quality-gate
-npm run test:e2e:ci
 npm run test:e2e
 ```
 

@@ -8,6 +8,7 @@ import { _electron as electron, type ElectronApplication } from '@playwright/tes
 import { expect, test } from './fixtures/electron'
 import { writeKat101Evidence } from './helpers/evidence'
 import { ensureHomeSpacesView } from './helpers/shell-view'
+import { GIT_ENV_KEYS_TO_CLEAR } from '../../src/shared/git-env'
 
 type SpaceListEntry = {
   id: string
@@ -33,14 +34,6 @@ type PersistedState = {
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const mainEntry = path.resolve(__dirname, '../../dist/main/index.js')
-const GIT_ENV_KEYS_TO_CLEAR = [
-  'GIT_DIR',
-  'GIT_WORK_TREE',
-  'GIT_COMMON_DIR',
-  'GIT_INDEX_FILE',
-  'GIT_OBJECT_DIRECTORY',
-  'GIT_ALTERNATE_OBJECT_DIRECTORIES'
-] as const
 
 function buildGitEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {

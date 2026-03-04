@@ -195,13 +195,14 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
   )
   const handleTaskActivitySnapshotChange = useCallback(
     (snapshot: TaskActivitySnapshot | undefined) => {
+      const snapshotSessionId = snapshot?.sessionId ?? activeSessionKey
       setTaskActivitySnapshotState((current) => {
-        if (current.sessionId === activeSessionKey && current.snapshot === snapshot) {
+        if (current.sessionId === snapshotSessionId && current.snapshot === snapshot) {
           return current
         }
 
         return {
-          sessionId: activeSessionKey,
+          sessionId: snapshotSessionId,
           snapshot
         }
       })

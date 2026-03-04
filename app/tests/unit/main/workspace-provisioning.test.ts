@@ -10,15 +10,7 @@ import {
   WorkspaceProvisioningError,
   provisionManagedWorkspace
 } from '../../../src/main/workspace-provisioning'
-
-const GIT_ENV_KEYS_TO_CLEAR = [
-  'GIT_DIR',
-  'GIT_WORK_TREE',
-  'GIT_COMMON_DIR',
-  'GIT_INDEX_FILE',
-  'GIT_OBJECT_DIRECTORY',
-  'GIT_ALTERNATE_OBJECT_DIRECTORIES'
-] as const
+import { GIT_ENV_KEYS_TO_CLEAR } from '../../../src/shared/git-env'
 
 function buildGitEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, ...extra }

@@ -82,6 +82,73 @@ describe('task activity projector', () => {
     })
   })
 
+  it('preserves non-in_progress tasks unchanged when a run settles', () => {
+    const projector = createTaskActivityProjector()
+    projector.onRunPending({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      tasks: [
+        { id: 'task-a', title: 'Task A', status: 'complete' },
+        { id: 'task-b', title: 'Task B', status: 'complete' }
+      ]
+    })
+
+    const settled = projector.onRunSettled({
+      sessionId: 'session-1',
+      runId: 'run-1'
+    })
+
+    expect(settled?.items[0]).toMatchObject({
+      id: 'task-a',
+      status: 'complete'
+    })
+    expect(settled?.items[1]).toMatchObject({
+      id: 'task-b',
+      status: 'complete'
+    })
+  })
+
+  it('returns a snapshot clone via getSnapshot for a known session', () => {
+    const projector = createTaskActivityProjector()
+    projector.onRunPending({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      tasks: [{ id: 'task-a', title: 'Task A' }]
+    })
+
+    const snapshot = projector.getSnapshot('session-1')
+    expect(snapshot?.sessionId).toBe('session-1')
+    expect(snapshot?.items).toHaveLength(1)
+  })
+
+  it('returns null from getSnapshot for unknown session', () => {
+    const projector = createTaskActivityProjector()
+    expect(projector.getSnapshot('missing')).toBeNull()
+  })
+
+  it('returns null from getSnapshot when runId does not match', () => {
+    const projector = createTaskActivityProjector()
+    projector.onRunPending({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      tasks: [{ id: 'task-a', title: 'Task A' }]
+    })
+
+    expect(projector.getSnapshot('session-1', 'run-wrong')).toBeNull()
+  })
+
+  it('returns snapshot from getSnapshot when runId matches', () => {
+    const projector = createTaskActivityProjector()
+    projector.onRunPending({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      tasks: [{ id: 'task-a', title: 'Task A' }]
+    })
+
+    const snapshot = projector.getSnapshot('session-1', 'run-1')
+    expect(snapshot?.runId).toBe('run-1')
+  })
+
   it('returns null when receiving activity for unknown session/run combinations', () => {
     const projector = createTaskActivityProjector()
 

@@ -78,9 +78,9 @@ export function SpecSections({
     return {
       ...task,
       displayStatus: preferSnapshotStatus ? snapshotTask.status : task.status,
-      activityLevel: snapshotTask.activityLevel,
-      activityDetail: snapshotTask.activityDetail,
-      activeAgentId: snapshotTask.activeAgentId
+      activityLevel: preferSnapshotStatus ? snapshotTask.activityLevel : undefined,
+      activityDetail: preferSnapshotStatus ? snapshotTask.activityDetail : undefined,
+      activeAgentId: preferSnapshotStatus ? snapshotTask.activeAgentId : undefined
     }
   })
 

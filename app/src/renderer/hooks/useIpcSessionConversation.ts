@@ -21,6 +21,8 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
   )
   const [latestDraft, setLatestDraft] = useState<LatestRunDraft | undefined>(undefined)
   const lastPromptRef = useRef<string | null>(null)
+  const sessionIdRef = useRef(sessionId)
+  sessionIdRef.current = sessionId
 
   useLayoutEffect(() => {
     lastPromptRef.current = null
@@ -64,7 +66,9 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
       }
 
       if (event.type === 'task_activity_snapshot') {
-        dispatch({ type: 'TASK_ACTIVITY_SNAPSHOT_RECEIVED', snapshot: event.snapshot })
+        if (event.snapshot.sessionId === sessionIdRef.current) {
+          dispatch({ type: 'TASK_ACTIVITY_SNAPSHOT_RECEIVED', snapshot: event.snapshot })
+        }
       }
     })
 

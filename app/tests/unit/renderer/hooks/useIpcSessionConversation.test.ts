@@ -990,6 +990,193 @@ describe('useIpcSessionConversation', () => {
     expect(mockRunList).not.toHaveBeenCalled()
   })
 
+  it('ignores task activity snapshots from a different session', async () => {
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'task_activity_snapshot',
+        snapshot: {
+          sessionId: 's-other',
+          runId: 'run-other',
+          items: [],
+          counts: { not_started: 0, in_progress: 0, blocked: 0, complete: 0 }
+        }
+      })
+    })
+
+    expect(result.current.state.taskActivitySnapshot).toBeUndefined()
+  })
+
+  it('discards stale spec replay when session changes before specGet resolves', async () => {
+    let resolveFirstSpecGet: ((doc: any) => void) | null = null
+
+    mockSpecGet.mockImplementationOnce(() => {
+      return new Promise((resolve) => {
+        resolveFirstSpecGet = resolve
+      })
+    })
+    // Second session's specGet returns null immediately
+    mockSpecGet.mockResolvedValueOnce(null)
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result, rerender } = renderHook(
+      ({ sessionId }) => useIpcSessionConversation(sessionId, 'space-1'),
+      { initialProps: { sessionId: 's-1' } }
+    )
+
+    rerender({ sessionId: 's-2' })
+
+    await act(async () => {
+      resolveFirstSpecGet?.({
+        markdown: '## Tasks\n- [/] Stale task',
+        updatedAt: '2026-03-04T19:00:00.000Z',
+        appliedRunId: 'run-stale',
+        appliedAt: '2026-03-04T19:00:00.000Z'
+      })
+      await Promise.resolve()
+    })
+
+    expect(result.current.state.taskActivitySnapshot).toBeUndefined()
+  })
+
+  it('returns undefined snapshot when persisted spec document is invalid', async () => {
+    mockSpecGet.mockResolvedValue({ notASpec: true })
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1', 'space-1'))
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    expect(result.current.state.taskActivitySnapshot).toBeUndefined()
+  })
+
+  it('returns undefined snapshot when persisted spec has no tasks', async () => {
+    mockSpecGet.mockResolvedValue({
+      markdown: '## Goal\nJust a goal, no tasks section',
+      updatedAt: '2026-03-04T19:00:00.000Z',
+      appliedRunId: 'run-notasks',
+      appliedAt: '2026-03-04T19:00:00.000Z'
+    })
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1', 'space-1'))
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    expect(result.current.state.taskActivitySnapshot).toBeUndefined()
+  })
+
+  it('generates a fallback runId when persisted spec has no appliedRunId', async () => {
+    mockSpecGet.mockResolvedValue({
+      markdown: '## Tasks\n- [x] Done task',
+      updatedAt: '2026-03-04T19:00:00.000Z',
+      appliedAt: '2026-03-04T19:00:00.000Z'
+    })
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1', 'space-1'))
+
+    await waitFor(() => {
+      expect(result.current.state.taskActivitySnapshot?.runId).toBe('spec-s-1')
+    })
+  })
+
+  it('skips non-checkbox lines in parseTaskItemsFromMarkdown', async () => {
+    mockSpecGet.mockResolvedValue({
+      markdown: [
+        '## Tasks',
+        'This is a description line',
+        '- [/] Real task'
+      ].join('\n'),
+      updatedAt: '2026-03-04T19:00:00.000Z',
+      appliedRunId: 'run-desc',
+      appliedAt: '2026-03-04T19:00:00.000Z'
+    })
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1', 'space-1'))
+
+    await waitFor(() => {
+      expect(result.current.state.taskActivitySnapshot?.items).toHaveLength(1)
+      expect(result.current.state.taskActivitySnapshot?.items[0].title).toBe('Real task')
+    })
+  })
+
+  it('falls back to slug "task" when title contains only special characters', async () => {
+    mockSpecGet.mockResolvedValue({
+      markdown: ['## Tasks', '- [ ] !!!'].join('\n'),
+      updatedAt: '2026-03-04T19:00:00.000Z',
+      appliedRunId: 'run-special',
+      appliedAt: '2026-03-04T19:00:00.000Z'
+    })
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1', 'space-1'))
+
+    await waitFor(() => {
+      expect(result.current.state.taskActivitySnapshot?.items).toHaveLength(1)
+      expect(result.current.state.taskActivitySnapshot?.items[0].id).toBe('task-task')
+    })
+  })
+
+  it('disambiguates duplicate task titles with numeric suffixes', async () => {
+    mockSpecGet.mockResolvedValue({
+      markdown: ['## Tasks', '- [ ] Build', '- [/] Build', '- [x] Build'].join('\n'),
+      updatedAt: '2026-03-04T19:00:00.000Z',
+      appliedRunId: 'run-dup',
+      appliedAt: '2026-03-04T19:00:00.000Z'
+    })
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1', 'space-1'))
+
+    await waitFor(() => {
+      expect(result.current.state.taskActivitySnapshot?.items).toHaveLength(3)
+      expect(result.current.state.taskActivitySnapshot?.items.map((i) => i.id)).toEqual([
+        'task-build',
+        'task-build-2',
+        'task-build-3'
+      ])
+    })
+  })
+
+  it('silently handles specGet rejection without crashing', async () => {
+    mockSpecGet.mockRejectedValue(new Error('spec storage corrupt'))
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1', 'space-1'))
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    expect(result.current.state.taskActivitySnapshot).toBeUndefined()
+  })
+
   it('skips replay when kata.runList is unavailable', async () => {
     ;(window as any).kata = {
       runSubmit: mockRunSubmit,

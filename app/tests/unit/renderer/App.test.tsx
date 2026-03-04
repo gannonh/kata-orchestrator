@@ -263,4 +263,37 @@ describe('App', () => {
 
     expect(sessionCreate).toHaveBeenCalledTimes(1)
   })
+
+  it('uses activeSessionId from spaceSetActive when present, skipping session list lookup', async () => {
+    const spaceList = vi.fn().mockResolvedValue([testSpace])
+    const spaceSetActive = vi.fn().mockResolvedValue({
+      activeSpaceId: 'space-test-1',
+      activeSessionId: 'session-preexisting'
+    })
+    const sessionListBySpace = vi.fn()
+    const sessionCreate = vi.fn()
+
+    window.kata = {
+      ...window.kata,
+      spaceList,
+      spaceSetActive,
+      sessionListBySpace,
+      sessionCreate
+    }
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Space')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell-root')).toBeTruthy()
+    })
+
+    expect(sessionListBySpace).not.toHaveBeenCalled()
+    expect(sessionCreate).not.toHaveBeenCalled()
+  })
 })
