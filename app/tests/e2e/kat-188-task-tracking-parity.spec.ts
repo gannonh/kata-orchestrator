@@ -82,7 +82,13 @@ test.describe('KAT-188 task tracking parity evidence @uat', () => {
     }, RUN_ID)
 
     try {
+      await broadcastRunEvent(electronApp, {
+        type: 'run_state_changed',
+        runState: 'idle'
+      })
+
       await appWindow.getByLabel('Message input').fill('Build session task tracking parity baseline.')
+      await expect(appWindow.getByRole('button', { name: 'Send' })).toBeEnabled({ timeout: 10_000 })
       await appWindow.getByRole('button', { name: 'Send' }).click()
 
       await broadcastRunEvent(electronApp, {
