@@ -9,10 +9,12 @@ import { MessageBubble } from './MessageBubble'
 import { type DecisionState, extractInlineDecisionCard, type InlineDecisionCard, isDecisionResolved } from './message-decision-parser'
 import { type ScrollToMessage, MessageList } from './MessageList'
 import { RunStatusBadge } from './RunStatusBadge'
+import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 type ChatPanelProps = {
   sessionId: string | null
   onLatestDraftChange?: (draft: LatestRunDraft | undefined) => void
+  onTaskActivitySnapshotChange?: (snapshot: TaskActivitySnapshot | undefined) => void
   onConversationEntriesChange?: (entries: ConversationEntry[]) => void
   onRegisterScrollToMessage?: (scrollToMessage: ScrollToMessage) => void
 }
@@ -20,6 +22,7 @@ type ChatPanelProps = {
 export function ChatPanel({
   sessionId,
   onLatestDraftChange,
+  onTaskActivitySnapshotChange,
   onConversationEntriesChange,
   onRegisterScrollToMessage
 }: ChatPanelProps) {
@@ -33,6 +36,10 @@ export function ChatPanel({
   useEffect(() => {
     onConversationEntriesChange?.(conversationEntries)
   }, [conversationEntries, onConversationEntriesChange])
+
+  useEffect(() => {
+    onTaskActivitySnapshotChange?.(state.taskActivitySnapshot)
+  }, [onTaskActivitySnapshotChange, state.taskActivitySnapshot])
 
   const decisionCardMap = useMemo(
     () => {

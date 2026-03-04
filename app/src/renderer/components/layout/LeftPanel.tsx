@@ -19,12 +19,14 @@ import { cn } from '../../lib/cn'
 import { Button } from '../ui/button'
 import { ScrollArea } from '../ui/scroll-area'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
+import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 type LeftPanelTab = 'agents' | 'context' | 'changes' | 'files'
 
 type LeftPanelProps = {
   activeSpaceId?: string | null
   activeSessionId?: string | null
+  taskActivitySnapshot?: TaskActivitySnapshot
   collapsed?: boolean
   onCollapsedChange?: (collapsed: boolean) => void
   theme?: 'dark' | 'light'
@@ -71,6 +73,7 @@ function nextPreviewState(current: PreviewState): PreviewState {
 export function LeftPanel({
   activeSpaceId,
   activeSessionId,
+  taskActivitySnapshot,
   collapsed,
   onCollapsedChange,
   theme,
@@ -231,6 +234,7 @@ export function LeftPanel({
               title={project.sessionTitle}
               subtitle={project.repositorySubtitle}
               tasks={statusTasks}
+              taskActivitySnapshot={taskActivitySnapshot}
               previewState={previewState}
               onCyclePreviewState={() => setPreviewState((current) => nextPreviewState(current))}
               onSelectPreviewState={(state) => setPreviewState(state)}

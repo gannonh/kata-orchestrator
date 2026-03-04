@@ -114,6 +114,44 @@ describe('ChatPanel', () => {
     expect(onLatestDraftChange).toHaveBeenCalledWith(nextState.latestDraft)
   })
 
+  it('calls onTaskActivitySnapshotChange when task activity snapshot changes', () => {
+    const onTaskActivitySnapshotChange = vi.fn()
+    const initialState = idleState({ taskActivitySnapshot: undefined })
+    const nextState = idleState({
+      taskActivitySnapshot: {
+        sessionId: 's-1',
+        runId: 'run-1',
+        items: [],
+        counts: { not_started: 0, in_progress: 1, blocked: 0, complete: 0 }
+      }
+    })
+
+    let currentState = initialState
+    mockHook.mockImplementation(() => ({
+      state: currentState,
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    }))
+
+    const { rerender } = render(
+      <ChatPanel
+        sessionId="sess-42"
+        onTaskActivitySnapshotChange={onTaskActivitySnapshotChange}
+      />
+    )
+
+    currentState = nextState
+    rerender(
+      <ChatPanel
+        sessionId="sess-42"
+        onTaskActivitySnapshotChange={onTaskActivitySnapshotChange}
+      />
+    )
+
+    expect(onTaskActivitySnapshotChange).toHaveBeenCalledWith(undefined)
+    expect(onTaskActivitySnapshotChange).toHaveBeenCalledWith(nextState.taskActivitySnapshot)
+  })
+
   it('renders messages from hook state', () => {
     mockHook.mockReturnValue({
       state: idleState({
