@@ -121,6 +121,7 @@ function normalizeListItems(lines: IndexedLine[]): string[] {
 
 function normalizeTasks(lines: IndexedLine[]): SpecTaskItem[] {
   const tasks: SpecTaskItem[] = []
+  const seenIds = new Map<string, number>()
 
   lines.forEach(({ content, lineIndex }) => {
     const match = content.match(/^\s*(?:(?:[-*+]\s+|\d+[.)]\s+))?\[( |\/|x|X)\]\s+(.*?)\s*$/)
@@ -128,15 +129,34 @@ function normalizeTasks(lines: IndexedLine[]): SpecTaskItem[] {
       return
     }
 
+    const title = match[2]
+
     tasks.push({
-      id: `task-${tasks.length + 1}`,
-      title: match[2],
+      id: toStableTaskId(title, seenIds),
+      title,
       status: statusForMarker(match[1]),
       markdownLineIndex: lineIndex
     })
   })
 
   return tasks
+}
+
+function toStableTaskId(title: string, seenIds: Map<string, number>): string {
+  const slug =
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'task'
+
+  const nextCount = (seenIds.get(slug) ?? 0) + 1
+  seenIds.set(slug, nextCount)
+
+  if (nextCount === 1) {
+    return `task-${slug}`
+  }
+
+  return `task-${slug}-${nextCount}`
 }
 
 function statusForMarker(marker: string): SpecTaskStatus {
