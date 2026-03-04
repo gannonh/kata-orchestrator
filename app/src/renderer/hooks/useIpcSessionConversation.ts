@@ -23,9 +23,11 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
   const lastPromptRef = useRef<string | null>(null)
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
+  const liveSnapshotReceivedRef = useRef(false)
 
   useLayoutEffect(() => {
     lastPromptRef.current = null
+    liveSnapshotReceivedRef.current = false
     setLatestDraft(undefined)
     dispatch({ type: 'RESET_CONVERSATION' })
   }, [sessionId])
@@ -67,6 +69,7 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
 
       if (event.type === 'task_activity_snapshot') {
         if (event.snapshot.sessionId === sessionIdRef.current) {
+          liveSnapshotReceivedRef.current = true
           dispatch({ type: 'TASK_ACTIVITY_SNAPSHOT_RECEIVED', snapshot: event.snapshot })
         }
       }
@@ -91,7 +94,7 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
           }
 
           const snapshot = buildTaskActivitySnapshotFromPersistedSpecDocument(sessionId, persistedDocument)
-          if (snapshot) {
+          if (snapshot && !liveSnapshotReceivedRef.current) {
             dispatch({ type: 'TASK_ACTIVITY_SNAPSHOT_RECEIVED', snapshot })
           }
         })
