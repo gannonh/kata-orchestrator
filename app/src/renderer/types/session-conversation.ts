@@ -1,4 +1,5 @@
 import type { LatestRunDraft } from './spec-document'
+import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 export type ConversationRunState = 'empty' | 'pending' | 'error' | 'idle'
 
@@ -16,6 +17,7 @@ export interface SessionConversationState {
   messages: ConversationMessage[]
   errorMessage?: string
   latestDraft?: LatestRunDraft
+  taskActivitySnapshot?: TaskActivitySnapshot
 }
 
 export type SubmitPromptEvent = {
@@ -56,6 +58,11 @@ export type RunCompletedEvent = {
   type: 'RUN_COMPLETED'
 }
 
+export type TaskActivitySnapshotReceivedEvent = {
+  type: 'TASK_ACTIVITY_SNAPSHOT_RECEIVED'
+  snapshot: TaskActivitySnapshot
+}
+
 export type ResetConversationEvent = {
   type: 'RESET_CONVERSATION'
 }
@@ -69,4 +76,5 @@ export type SessionConversationEvent =
   | RunFailedEvent
   | RetryFromErrorEvent
   | RunCompletedEvent
+  | TaskActivitySnapshotReceivedEvent
   | ResetConversationEvent

@@ -58,6 +58,11 @@ export function useIpcSessionConversation(sessionId: string | null) {
 
       if (event.type === 'message_updated') {
         dispatch({ type: 'APPEND_MESSAGE', message: event.message })
+        return
+      }
+
+      if (event.type === 'task_activity_snapshot') {
+        dispatch({ type: 'TASK_ACTIVITY_SNAPSHOT_RECEIVED', snapshot: event.snapshot })
       }
     })
 

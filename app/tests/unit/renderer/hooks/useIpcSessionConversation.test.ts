@@ -93,13 +93,86 @@ describe('useIpcSessionConversation', () => {
       })
     })
 
+    act(() => {
+      onRunEventCallback?.({
+        type: 'task_activity_snapshot',
+        snapshot: {
+          sessionId: 's-1',
+          runId: 'run-agent-1',
+          items: [],
+          counts: {
+            not_started: 0,
+            in_progress: 1,
+            blocked: 0,
+            complete: 0
+          }
+        }
+      })
+    })
+
     expect(result.current.state.latestDraft?.runId).toBe('run-agent-1')
+    expect(result.current.state.taskActivitySnapshot?.runId).toBe('run-agent-1')
 
     rerender({ sessionId: 's-2' })
 
     expect(result.current.state.runState).toBe('empty')
     expect(result.current.state.messages).toEqual([])
     expect(result.current.state.latestDraft).toBeUndefined()
+    expect(result.current.state.taskActivitySnapshot).toBeUndefined()
+  })
+
+  it('stores task activity snapshots emitted by runtime events', async () => {
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'task_activity_snapshot',
+        snapshot: {
+          sessionId: 's-1',
+          runId: 'run-1',
+          items: [
+            {
+              id: 'task-a',
+              title: 'Task A',
+              status: 'in_progress',
+              activityLevel: 'high',
+              activityDetail: 'Starting task A',
+              updatedAt: '2026-03-01T00:00:01.000Z'
+            }
+          ],
+          counts: {
+            not_started: 0,
+            in_progress: 1,
+            blocked: 0,
+            complete: 0
+          }
+        }
+      })
+    })
+
+    expect(result.current.state.taskActivitySnapshot).toEqual({
+      sessionId: 's-1',
+      runId: 'run-1',
+      items: [
+        {
+          id: 'task-a',
+          title: 'Task A',
+          status: 'in_progress',
+          activityLevel: 'high',
+          activityDetail: 'Starting task A',
+          updatedAt: '2026-03-01T00:00:01.000Z'
+        }
+      ],
+      counts: {
+        not_started: 0,
+        in_progress: 1,
+        blocked: 0,
+        complete: 0
+      }
+    })
   })
 
   it('ignores stale replay results from the previous session after a session switch', async () => {
