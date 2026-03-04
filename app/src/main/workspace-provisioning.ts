@@ -137,8 +137,16 @@ async function pathExists(fsApi: FsApi, target: string): Promise<boolean> {
   try {
     await fsApi.access(target)
     return true
-  } catch {
-    return false
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false
+    }
+    throw toWorkspaceProvisioningError(
+      'filesystem',
+      `Cannot access path: ${target}`,
+      'Check filesystem permissions.',
+      err
+    )
   }
 }
 

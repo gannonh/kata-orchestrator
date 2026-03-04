@@ -623,6 +623,30 @@ describe('WorkspaceProvisioningError', () => {
     })
   })
 
+  it('throws a provisioning error when pathExists encounters a non-ENOENT error', async () => {
+    const eaccesError = Object.assign(new Error('EACCES'), { code: 'EACCES' })
+    const mockFsApi = createMockFsApi()
+    mockFsApi.access.mockRejectedValue(eaccesError)
+
+    await expect(provisionManagedWorkspace({
+      workspaceBaseDir: '/tmp/ws',
+      repoCacheBaseDir: '/tmp/cache',
+      input: {
+        workspaceMode: 'managed',
+        provisioningMethod: 'copy-local',
+        sourceLocalPath: '/Users/me/dev/kata-cloud',
+        repoUrl: 'https://github.com/org/repo',
+        branch: 'main'
+      },
+      runGit: vi.fn(),
+      fsApi: mockFsApi
+    })).rejects.toMatchObject({
+      category: 'filesystem',
+      message: expect.stringContaining('Cannot access path'),
+      remediation: 'Check filesystem permissions.'
+    })
+  })
+
   it('preserves already-typed provisioning errors and handles non-Error failures', async () => {
     const typedError = new WorkspaceProvisioningError('git', 'typed failure', 'fix it')
     const typedRunGit = vi.fn().mockRejectedValue(typedError)

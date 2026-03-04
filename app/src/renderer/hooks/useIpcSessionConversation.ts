@@ -8,6 +8,7 @@ import type { LatestRunDraft } from '../types/spec-document'
 import type { SessionRuntimeEvent } from '../types/session-runtime-adapter'
 import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../shared/types/run'
 import { isPersistedSpecDocument } from '../../shared/types/spec-document'
+import { toStableTaskId } from '@shared/task-id'
 import type { TaskActivitySnapshot, TaskTrackingItem } from '@shared/types/task-tracking'
 
 const DEFAULT_RUN_MODEL = 'gpt-5.3-codex'
@@ -98,8 +99,8 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
             dispatch({ type: 'TASK_ACTIVITY_SNAPSHOT_RECEIVED', snapshot })
           }
         })
-        .catch(() => {
-          // Keep task tracking empty when persisted spec state cannot be restored.
+        .catch((err: unknown) => {
+          console.error('[useIpcSessionConversation] Failed to restore persisted task tracking:', err)
         })
     }
 
@@ -270,16 +271,9 @@ function parseTaskItemsFromMarkdown(markdown: string): Array<{
 
     const marker = taskMatch[1]
     const title = taskMatch[2]
-    const slug =
-      title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'task'
-    const nextCount = (seenIds.get(slug) ?? 0) + 1
-    seenIds.set(slug, nextCount)
 
     tasks.push({
-      id: nextCount === 1 ? `task-${slug}` : `task-${slug}-${nextCount}`,
+      id: toStableTaskId(title, seenIds),
       title,
       status: marker === '/' ? 'in_progress' : marker.toLowerCase() === 'x' ? 'complete' : 'not_started'
     })

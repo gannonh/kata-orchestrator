@@ -149,6 +149,44 @@ describe('task activity projector', () => {
     expect(snapshot?.runId).toBe('run-1')
   })
 
+  it('returns null from onRunSettled for unknown session', () => {
+    const projector = createTaskActivityProjector()
+    expect(projector.onRunSettled({ sessionId: 'missing', runId: 'r' })).toBeNull()
+  })
+
+  it('returns null from onRunSettled when runId does not match', () => {
+    const projector = createTaskActivityProjector()
+    projector.onRunPending({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      tasks: [{ id: 'task-a', title: 'Task A' }]
+    })
+    expect(projector.onRunSettled({ sessionId: 'session-1', runId: 'run-wrong' })).toBeNull()
+  })
+
+  it('returns snapshot without mutating tasks when no in_progress task exists during message activity', () => {
+    const projector = createTaskActivityProjector()
+    projector.onRunPending({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      tasks: [
+        { id: 'task-a', title: 'Task A', status: 'complete' },
+        { id: 'task-b', title: 'Task B', status: 'complete' }
+      ]
+    })
+
+    const snapshot = projector.onMessageActivity({
+      sessionId: 'session-1',
+      runId: 'run-1',
+      detail: 'still going'
+    })
+
+    expect(snapshot).not.toBeNull()
+    expect(snapshot?.items[0].status).toBe('complete')
+    expect(snapshot?.items[0].activityDetail).toBeUndefined()
+    expect(snapshot?.items[1].status).toBe('complete')
+  })
+
   it('returns null when receiving activity for unknown session/run combinations', () => {
     const projector = createTaskActivityProjector()
 

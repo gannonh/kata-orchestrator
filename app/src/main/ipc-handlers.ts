@@ -433,6 +433,7 @@ function resolveTaskSeedItemsForRun(
 ): TaskActivitySeedItem[] {
   const session = state.sessions[sessionId]
   if (!session) {
+    console.warn(`[task-seed] Session ${sessionId} not found in state during run ${runId}; task tracking will be empty`)
     return []
   }
 
@@ -834,8 +835,10 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     try {
       const { stdout } = await execFileAsync('git', ['branch', '--list', '--format=%(refname:short)'], { cwd: repoPath })
       return stdout.trim().split('\n').filter(Boolean)
-    } catch {
-      return { error: 'Could not read branches.' }
+    } catch (err) {
+      console.error('[IPC] git:listBranches failed:', err)
+      const detail = err instanceof Error ? err.message : 'Unknown error'
+      return { error: `Could not read branches: ${detail}` }
     }
   })
 
@@ -846,11 +849,14 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       ])
       try {
         return JSON.parse(stdout)
-      } catch {
+      } catch (parseErr) {
+        console.error('[IPC] github:listRepos JSON parse failed:', parseErr)
         return { error: 'Failed to parse GitHub CLI response.' }
       }
-    } catch {
-      return { error: 'GitHub CLI not available. Install and authenticate with `gh auth login`.' }
+    } catch (err) {
+      console.error('[IPC] github:listRepos failed:', err)
+      const detail = err instanceof Error ? err.message : 'Unknown error'
+      return { error: `GitHub CLI error: ${detail}` }
     }
   })
 
@@ -863,8 +869,10 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
         'api', `repos/${input.owner}/${input.repo}/branches`, '--jq', '.[].name'
       ])
       return stdout.trim().split('\n').filter(Boolean)
-    } catch {
-      return { error: 'Could not fetch branches from GitHub.' }
+    } catch (err) {
+      console.error('[IPC] github:listBranches failed:', err)
+      const detail = err instanceof Error ? err.message : 'Unknown error'
+      return { error: `Could not fetch branches from GitHub: ${detail}` }
     }
   })
 
@@ -965,7 +973,7 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
             taskActivityProjector.onMessageActivity({
               sessionId,
               runId: run.id,
-              detail: runtimeEvent.message.content?.slice(0, 200)
+              detail: runtimeEvent.message.content?.slice(0, 200) ?? ''
             })
           )
         }

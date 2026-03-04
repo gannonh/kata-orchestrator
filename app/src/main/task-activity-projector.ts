@@ -40,8 +40,9 @@ export function createTaskActivityProjector(): TaskActivityProjector {
   const snapshotsBySession = new Map<string, TaskActivitySnapshot>()
 
   const saveSnapshot = (snapshot: TaskActivitySnapshot): TaskActivitySnapshot => {
-    snapshotsBySession.set(snapshot.sessionId, snapshot)
-    return cloneSnapshot(snapshot)
+    const withCounts = { ...snapshot, counts: buildCounts(snapshot.items) }
+    snapshotsBySession.set(withCounts.sessionId, withCounts)
+    return cloneSnapshot(withCounts)
   }
 
   return {
@@ -69,7 +70,7 @@ export function createTaskActivityProjector(): TaskActivityProjector {
         sessionId: input.sessionId,
         runId: input.runId,
         items,
-        counts: buildCounts(items)
+        counts: { not_started: 0, in_progress: 0, blocked: 0, complete: 0 }
       })
     },
 
@@ -82,10 +83,7 @@ export function createTaskActivityProjector(): TaskActivityProjector {
       const next = cloneSnapshot(current)
       const targetIndex = findFirstInProgressTaskIndex(next.items)
       if (targetIndex < 0) {
-        return saveSnapshot({
-          ...next,
-          counts: buildCounts(next.items)
-        })
+        return saveSnapshot(next)
       }
 
       const now = new Date().toISOString()
@@ -96,10 +94,7 @@ export function createTaskActivityProjector(): TaskActivityProjector {
       target.activeAgentId = input.activeAgentId
       target.updatedAt = now
 
-      return saveSnapshot({
-        ...next,
-        counts: buildCounts(next.items)
-      })
+      return saveSnapshot(next)
     },
 
     onRunSettled(input) {
@@ -125,8 +120,7 @@ export function createTaskActivityProjector(): TaskActivityProjector {
 
       return saveSnapshot({
         ...current,
-        items,
-        counts: buildCounts(items)
+        items
       })
     },
 

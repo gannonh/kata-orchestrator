@@ -1370,7 +1370,7 @@ describe('registerIpcHandlers', () => {
       registerIpcHandlers(createMockStore())
       const handler = getHandlersByChannel().get('git:listBranches')!
       const result = await handler(null, '/bad/path')
-      expect(result).toEqual({ error: 'Could not read branches.' })
+      expect(result).toEqual({ error: 'Could not read branches: git failed' })
     })
 
     it('returns error object when repoPath is not a string', async () => {
@@ -1399,7 +1399,7 @@ describe('registerIpcHandlers', () => {
       registerIpcHandlers(createMockStore())
       const handler = getHandlersByChannel().get('github:listRepos')!
       const result = await handler(null)
-      expect(result).toEqual({ error: 'GitHub CLI not available. Install and authenticate with `gh auth login`.' })
+      expect(result).toEqual({ error: 'GitHub CLI error: gh not found' })
     })
 
     it('returns parse error object when gh output is malformed JSON', async () => {
@@ -1431,7 +1431,7 @@ describe('registerIpcHandlers', () => {
       registerIpcHandlers(createMockStore())
       const handler = getHandlersByChannel().get('github:listBranches')!
       const result = await handler(null, { owner: 'org', repo: 'repo' })
-      expect(result).toEqual({ error: 'Could not fetch branches from GitHub.' })
+      expect(result).toEqual({ error: 'Could not fetch branches from GitHub: gh api failed' })
     })
 
     it('returns error object when input is missing owner or repo', async () => {
