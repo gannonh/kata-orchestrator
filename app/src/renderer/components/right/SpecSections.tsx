@@ -1,10 +1,12 @@
 import type { StructuredSpecDocument } from '../../types/spec-document'
+import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { StatusBadge } from '../shared/StatusBadge'
 import { TaskList } from './TaskList'
 
 type SpecSectionsProps = {
   document: StructuredSpecDocument
+  taskActivitySnapshot?: TaskActivitySnapshot
   onToggleTask: (taskId: string) => void
   onEditMarkdown: () => void
   commentStatusNote: string
@@ -46,10 +48,27 @@ function SectionList({ title, items, ordered = false }: SectionListProps) {
 
 export function SpecSections({
   document,
+  taskActivitySnapshot,
   onToggleTask,
   onEditMarkdown,
   commentStatusNote
 }: SpecSectionsProps) {
+  const snapshotTaskById = new Map(taskActivitySnapshot?.items.map((task) => [task.id, task]))
+  const mergedTasks = document.tasks.map((task) => {
+    const snapshotTask = snapshotTaskById.get(task.id)
+    if (!snapshotTask) {
+      return task
+    }
+
+    return {
+      ...task,
+      displayStatus: snapshotTask.status,
+      activityLevel: snapshotTask.activityLevel,
+      activityDetail: snapshotTask.activityDetail,
+      activeAgentId: snapshotTask.activeAgentId
+    }
+  })
+
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-3">
@@ -107,7 +126,7 @@ export function SpecSections({
         </CardHeader>
         <CardContent>
           <TaskList
-            tasks={document.tasks}
+            tasks={mergedTasks}
             onToggleTask={onToggleTask}
           />
         </CardContent>

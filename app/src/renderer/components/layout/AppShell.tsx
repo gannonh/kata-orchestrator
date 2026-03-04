@@ -288,6 +288,7 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
             spaceId={activeSpaceId ?? null}
             sessionId={activeSessionId ?? null}
             latestDraft={latestDraft}
+            taskActivitySnapshot={taskActivitySnapshot}
           />
         </aside>
       </section>

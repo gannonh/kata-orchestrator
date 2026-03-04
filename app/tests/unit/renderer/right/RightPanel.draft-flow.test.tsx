@@ -46,6 +46,22 @@ describe('RightPanel draft flow', () => {
         project={mockProject}
         spaceId="space-1"
         sessionId="session-1"
+        taskActivitySnapshot={{
+          sessionId: 'session-1',
+          runId: 'run-1',
+          items: [
+            {
+              id: 'task-parse-spec-sections',
+              title: 'Parse spec sections',
+              status: 'in_progress',
+              activityLevel: 'high',
+              activityDetail: 'Starting implementation for the space creation flow.',
+              activeAgentId: 'spec',
+              updatedAt: '2026-03-02T12:00:30.000Z'
+            }
+          ],
+          counts: { not_started: 0, in_progress: 1, blocked: 0, complete: 0 }
+        }}
         latestDraft={{
           runId: 'run-1',
           generatedAt: '2026-03-02T12:00:00.000Z',
@@ -85,6 +101,7 @@ describe('RightPanel draft flow', () => {
       })
       expect(screen.getByText('Build a prompt-to-spec demo')).toBeTruthy()
       expect(screen.getByRole('heading', { name: 'Goal' })).toBeTruthy()
+      expect(screen.getByText('Starting implementation for the space creation flow.')).toBeTruthy()
     })
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Parse spec sections' }))

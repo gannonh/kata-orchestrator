@@ -5,6 +5,7 @@ import { mockProject } from '../../mock/project'
 import { useSpecDocument } from '../../hooks/useSpecDocument'
 import type { ProjectSpec } from '../../types/project'
 import type { LatestRunDraft } from '../../types/spec-document'
+import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 import { cn } from '../../lib/cn'
 import { SpecTab } from '../right/SpecTab'
 import { DynamicPanelTabs } from '../shared/DynamicPanelTabs'
@@ -20,6 +21,7 @@ type RightPanelProps = {
   spaceId?: string | null
   sessionId?: string | null
   latestDraft?: LatestRunDraft
+  taskActivitySnapshot?: TaskActivitySnapshot
 }
 
 const COMMENT_STATUS_NOTE =
@@ -29,7 +31,8 @@ export function RightPanel({
   project = mockProject,
   spaceId,
   sessionId,
-  latestDraft
+  latestDraft,
+  taskActivitySnapshot
 }: RightPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -117,6 +120,7 @@ export function RightPanel({
         specState={{
           mode: 'structured_view',
           document: specDocument.document,
+          taskActivitySnapshot,
           onToggleTask: specDocument.toggleTask,
           onEditMarkdown: () => {
             setDraftMarkdown(specDocument.document.markdown)
@@ -133,7 +137,8 @@ export function RightPanel({
     isEditing,
     latestDraft,
     project,
-    specDocument
+    specDocument,
+    taskActivitySnapshot
   ])
 
   return (

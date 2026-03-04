@@ -1,5 +1,6 @@
 import type { ProjectSpec } from '../../types/project'
 import type { LatestRunDraft, StructuredSpecDocument } from '../../types/spec-document'
+import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
 import { Textarea } from '../ui/textarea'
@@ -22,6 +23,7 @@ type StructuredSpecTabState =
   | {
       mode: 'structured_view'
       document: StructuredSpecDocument
+      taskActivitySnapshot?: TaskActivitySnapshot
       onToggleTask: (taskId: string) => void
       onEditMarkdown: () => void
       commentStatusNote: string
@@ -114,6 +116,7 @@ export function SpecTab({ project, specState }: SpecTabProps) {
     return (
       <SpecSections
         document={specState.document}
+        taskActivitySnapshot={specState.taskActivitySnapshot}
         onToggleTask={specState.onToggleTask}
         onEditMarkdown={specState.onEditMarkdown}
         commentStatusNote={specState.commentStatusNote}

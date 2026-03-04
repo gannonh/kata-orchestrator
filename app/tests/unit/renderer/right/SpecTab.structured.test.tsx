@@ -67,7 +67,7 @@ describe('SpecTab structured states', () => {
             },
             tasks: [
               {
-                id: 'task-1',
+                id: 'task-parse-spec',
                 title: 'Parse spec',
                 status: 'not_started',
                 markdownLineIndex: 4
@@ -75,6 +75,22 @@ describe('SpecTab structured states', () => {
             ],
             updatedAt: '2026-03-02T12:00:00.000Z',
             appliedRunId: 'run-1'
+          },
+          taskActivitySnapshot: {
+            sessionId: 'session-1',
+            runId: 'run-1',
+            items: [
+              {
+                id: 'task-parse-spec',
+                title: 'Parse spec',
+                status: 'in_progress',
+                activityLevel: 'high',
+                activityDetail: "I'm starting implementation for the space creation flow.",
+                activeAgentId: 'spec',
+                updatedAt: '2026-03-02T12:01:00.000Z'
+              }
+            ],
+            counts: { not_started: 0, in_progress: 1, blocked: 0, complete: 0 }
           },
           onToggleTask,
           onEditMarkdown,
@@ -90,11 +106,13 @@ describe('SpecTab structured states', () => {
     expect(screen.getByRole('heading', { name: 'Verification Plan' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Rollback Plan' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Tasks' })).toBeTruthy()
+    expect(screen.getByText("I'm starting implementation for the space creation flow.")).toBeTruthy()
+    expect(screen.getByLabelText('Active specialist')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Parse spec' }))
     fireEvent.click(screen.getByRole('button', { name: 'Edit markdown' }))
 
-    expect(onToggleTask).toHaveBeenCalledWith('task-1')
+    expect(onToggleTask).toHaveBeenCalledWith('task-parse-spec')
     expect(onEditMarkdown).toHaveBeenCalledTimes(1)
   })
 
