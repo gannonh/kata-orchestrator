@@ -4,6 +4,8 @@ import type { ProjectTask } from '../../types/project'
 import { cn } from '../../lib/cn'
 import { Button } from '../ui/button'
 import { LEFT_STATUS_ROW_CAP, type SegmentTone, buildLeftStatusProgress } from './left-status-progress'
+import { TaskTrackingSection } from './TaskTrackingSection'
+import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 const FALLBACK_TITLE = 'Build Kata Cloud MVP'
 const FALLBACK_SUBTITLE = 'gannonh/kata-cloud'
@@ -12,6 +14,7 @@ type LeftStatusSectionProps = {
   title?: string
   subtitle?: string
   tasks: ProjectTask[]
+  taskActivitySnapshot?: TaskActivitySnapshot
   onCyclePreviewState?: () => void
   onSelectPreviewState?: (state: 0 | 1 | 2 | 3) => void
   previewState?: 0 | 1 | 2 | 3
@@ -61,6 +64,7 @@ export function LeftStatusSection({
   title,
   subtitle,
   tasks,
+  taskActivitySnapshot,
   onCyclePreviewState,
   onSelectPreviewState,
   previewState = 0
@@ -157,6 +161,8 @@ export function LeftStatusSection({
           })}
         </div>
       </div>
+
+      {taskActivitySnapshot ? <TaskTrackingSection snapshot={taskActivitySnapshot} /> : null}
     </section>
   )
 }

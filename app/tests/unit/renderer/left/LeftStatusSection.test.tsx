@@ -115,4 +115,37 @@ describe('LeftStatusSection', () => {
     expect(screen.getByText('1 of 2 complete.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Cycle status preview state' })).toBeNull()
   })
+
+  it('renders task tracking section when a runtime snapshot is provided', () => {
+    render(
+      <LeftStatusSection
+        tasks={[{ id: 't1', title: 'Task 1', status: 'todo' }]}
+        taskActivitySnapshot={{
+          sessionId: 'session-1',
+          runId: 'run-1',
+          items: [
+            {
+              id: 'task-a',
+              title: 'Implement parser',
+              status: 'in_progress',
+              activityLevel: 'high',
+              activityDetail: 'Working on parser details',
+              activeAgentId: 'agent-impl',
+              updatedAt: '2026-03-04T00:00:00.000Z'
+            }
+          ],
+          counts: {
+            not_started: 0,
+            in_progress: 1,
+            blocked: 0,
+            complete: 0
+          }
+        }}
+      />
+    )
+
+    expect(screen.getByLabelText('Task tracking')).toBeTruthy()
+    expect(screen.getByText('Implement parser')).toBeTruthy()
+    expect(screen.getByText('Working on parser details')).toBeTruthy()
+  })
 })
