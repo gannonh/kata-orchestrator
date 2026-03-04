@@ -48,6 +48,22 @@ export type ProvisionedWorkspace = {
 }
 
 const execFileAsync = promisify(execFile)
+const GIT_ENV_KEYS_TO_CLEAR = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES'
+] as const
+
+function sanitizedGitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  for (const key of GIT_ENV_KEYS_TO_CLEAR) {
+    delete env[key]
+  }
+  return env
+}
 
 function assertAbsolutePath(value: string, fieldName: string): void {
   if (!path.isAbsolute(value)) {
@@ -217,7 +233,10 @@ export async function provisionManagedWorkspace(
 
   const runGit: GitRunner = args.runGit ?? (async ({ cwd, args: gitArgs }) => {
     try {
-      await execFileAsync('git', gitArgs, { cwd })
+      await execFileAsync('git', gitArgs, {
+        cwd,
+        env: sanitizedGitEnv()
+      })
     } catch (error) {
       const maybeError = error as NodeJS.ErrnoException & { stderr?: string | Buffer }
       const stderr = typeof maybeError.stderr === 'string'

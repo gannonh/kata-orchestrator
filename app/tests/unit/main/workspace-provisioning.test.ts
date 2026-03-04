@@ -11,6 +11,27 @@ import {
   provisionManagedWorkspace
 } from '../../../src/main/workspace-provisioning'
 
+const GIT_ENV_KEYS_TO_CLEAR = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES'
+] as const
+
+function buildGitEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...extra }
+  for (const key of GIT_ENV_KEYS_TO_CLEAR) {
+    delete env[key]
+  }
+  return env
+}
+
+function execGit(cwd: string, args: string[]): void {
+  execFileSync('git', args, { cwd, env: buildGitEnv() })
+}
+
 type MockFsApi = {
   mkdir: ReturnType<typeof vi.fn>
   cp: ReturnType<typeof vi.fn>
@@ -468,13 +489,12 @@ describe('provisionManagedWorkspace validation', () => {
     const branchName = `main-${path.basename(tempRoot)}`
 
     await fs.mkdir(sourceRepoPath, { recursive: true })
-    execFileSync('git', ['init'], { cwd: sourceRepoPath })
+    execGit(sourceRepoPath, ['init'])
     await fs.writeFile(path.join(sourceRepoPath, 'README.md'), '# source\n')
-    execFileSync('git', ['add', 'README.md'], { cwd: sourceRepoPath })
-    execFileSync(
-      'git',
+    execGit(sourceRepoPath, ['add', 'README.md'])
+    execGit(
+      sourceRepoPath,
       ['-c', 'user.name=Kata', '-c', 'user.email=kata@local', 'commit', '-m', 'Initial commit'],
-      { cwd: sourceRepoPath }
     )
 
     const result = await provisionManagedWorkspace({
@@ -492,6 +512,55 @@ describe('provisionManagedWorkspace validation', () => {
     await expect(fs.access(path.join(repoCacheBaseDir, 'source-repo'))).resolves.toBeUndefined()
     expect(result.rootPath).toContain(path.join('workspaces', 'source-repo-'))
     await fs.rm(tempRoot, { recursive: true, force: true })
+  })
+
+  it('ignores inherited git hook environment when using default git runner', async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'kata-managed-workspace-env-'))
+    const workspaceBaseDir = path.join(tempRoot, 'workspaces')
+    const repoCacheBaseDir = path.join(tempRoot, 'repos')
+    const branchName = `main-${path.basename(tempRoot)}`
+    const originalGitDir = process.env.GIT_DIR
+    const originalGitWorkTree = process.env.GIT_WORK_TREE
+    const originalGitCommonDir = process.env.GIT_COMMON_DIR
+
+    process.env.GIT_DIR = '/definitely/not-a-repo/.git'
+    process.env.GIT_WORK_TREE = '/definitely/not-a-repo'
+    process.env.GIT_COMMON_DIR = '/definitely/not-a-repo/.git'
+
+    try {
+      const result = await provisionManagedWorkspace({
+        workspaceBaseDir,
+        repoCacheBaseDir,
+        input: {
+          workspaceMode: 'managed',
+          provisioningMethod: 'new-repo',
+          newRepoParentDir: repoCacheBaseDir,
+          newRepoFolderName: 'env-isolated',
+          repoUrl: '',
+          branch: branchName
+        }
+      })
+
+      await expect(fs.access(path.join(repoCacheBaseDir, 'env-isolated', '.git'))).resolves.toBeUndefined()
+      expect(result.rootPath).toContain(path.join('workspaces', 'env-isolated-'))
+    } finally {
+      if (typeof originalGitDir === 'undefined') {
+        delete process.env.GIT_DIR
+      } else {
+        process.env.GIT_DIR = originalGitDir
+      }
+      if (typeof originalGitWorkTree === 'undefined') {
+        delete process.env.GIT_WORK_TREE
+      } else {
+        process.env.GIT_WORK_TREE = originalGitWorkTree
+      }
+      if (typeof originalGitCommonDir === 'undefined') {
+        delete process.env.GIT_COMMON_DIR
+      } else {
+        process.env.GIT_COMMON_DIR = originalGitCommonDir
+      }
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
   })
 })
 

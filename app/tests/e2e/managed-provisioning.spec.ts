@@ -33,23 +33,46 @@ type PersistedState = {
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const mainEntry = path.resolve(__dirname, '../../dist/main/index.js')
+const GIT_ENV_KEYS_TO_CLEAR = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_COMMON_DIR',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES'
+] as const
+
+function buildGitEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 'Kata',
+    GIT_AUTHOR_EMAIL: 'kata@local',
+    GIT_COMMITTER_NAME: 'Kata',
+    GIT_COMMITTER_EMAIL: 'kata@local'
+  }
+  for (const key of GIT_ENV_KEYS_TO_CLEAR) {
+    delete env[key]
+  }
+  return env
+}
 
 function runGit(cwd: string, args: string[]): string {
   return execFileSync('git', args, {
     cwd,
-    env: {
-      ...process.env,
-      GIT_AUTHOR_NAME: 'Kata',
-      GIT_AUTHOR_EMAIL: 'kata@local',
-      GIT_COMMITTER_NAME: 'Kata',
-      GIT_COMMITTER_EMAIL: 'kata@local'
-    }
+    env: buildGitEnv()
   }).toString('utf8')
 }
 
 function ensureMainBranch(cwd: string): void {
   const currentBranch = runGit(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']).trim()
-  if (currentBranch !== 'main') {
+  if (currentBranch === 'main') {
+    return
+  }
+
+  try {
+    runGit(cwd, ['show-ref', '--verify', '--quiet', 'refs/heads/main'])
+    runGit(cwd, ['checkout', 'main'])
+  } catch {
     runGit(cwd, ['checkout', '-b', 'main'])
   }
 }
