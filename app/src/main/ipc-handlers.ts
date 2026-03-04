@@ -628,8 +628,20 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       throw new Error(`Cannot set active space to unknown id: ${spaceId}`)
     }
 
-    const activeSession = state.activeSessionId ? state.sessions[state.activeSessionId] : undefined
-    const activeSessionId = activeSession && activeSession.spaceId === spaceId ? state.activeSessionId : null
+    // First check if the current active session belongs to this space.
+    const currentSession = state.activeSessionId ? state.sessions[state.activeSessionId] : undefined
+    let activeSessionId = currentSession && currentSession.spaceId === spaceId ? state.activeSessionId : null
+
+    // If not, find the most recent session for this space so reopening
+    // a workspace restores where the user left off.
+    if (!activeSessionId) {
+      const spaceSessions = Object.values(state.sessions)
+        .filter((s) => s.spaceId === spaceId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      if (spaceSessions.length > 0) {
+        activeSessionId = spaceSessions[0].id
+      }
+    }
 
     stateStore.save({
       ...state,

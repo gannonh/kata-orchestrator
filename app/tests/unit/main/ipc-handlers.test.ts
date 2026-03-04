@@ -724,6 +724,69 @@ describe('registerIpcHandlers', () => {
     })
   })
 
+  it('space:setActive restores most recent session when switching back to a space', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1',
+          name: 'Space 1',
+          repoUrl: 'https://github.com/org/repo1',
+          rootPath: '/tmp/repo1',
+          branch: 'main',
+          orchestrationMode: 'team' as const,
+          createdAt: '2026-03-03T00:00:00.000Z',
+          status: 'active' as const
+        },
+        'space-2': {
+          id: 'space-2',
+          name: 'Space 2',
+          repoUrl: 'https://github.com/org/repo2',
+          rootPath: '/tmp/repo2',
+          branch: 'main',
+          orchestrationMode: 'team' as const,
+          createdAt: '2026-03-03T00:00:00.000Z',
+          status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-a1': {
+          id: 'session-a1',
+          spaceId: 'space-1',
+          label: 'Older session',
+          createdAt: '2026-03-03T00:00:00.000Z'
+        },
+        'session-a2': {
+          id: 'session-a2',
+          spaceId: 'space-1',
+          label: 'Newer session',
+          createdAt: '2026-03-03T01:00:00.000Z'
+        },
+        'session-b1': {
+          id: 'session-b1',
+          spaceId: 'space-2',
+          label: 'Space 2 session',
+          createdAt: '2026-03-03T00:30:00.000Z'
+        }
+      },
+      activeSpaceId: 'space-2',
+      activeSessionId: 'session-b1'
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('space:setActive')!
+    await expect(handler({}, { spaceId: 'space-1' })).resolves.toEqual({
+      activeSpaceId: 'space-1',
+      activeSessionId: 'session-a2'
+    })
+    expect(store.save).toHaveBeenCalledWith({
+      ...state,
+      activeSpaceId: 'space-1',
+      activeSessionId: 'session-a2'
+    })
+  })
+
   it('space:setActive rejects unknown space ids', async () => {
     const store = createMockStore(createDefaultAppState())
     registerIpcHandlers(store)

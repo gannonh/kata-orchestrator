@@ -199,37 +199,36 @@ test.describe('KAT-188 task tracking parity evidence @uat', () => {
       }
       sessionId = runtimeContext.sessionId
 
+      // Persist the structured draft so that after reload the spec panel
+      // renders in structured_view mode (requires non-empty markdown with
+      // an appliedRunId).
+      const draftMarkdown = buildStructuredDraftMarkdown(
+        'Build session task tracking parity baseline.'
+      )
       await appWindow.evaluate(
-        async ({
-          inputSpaceId,
-          inputSessionId,
-          inputRunId,
-          inputMarkdown
-        }: {
-          inputSpaceId: string
-          inputSessionId: string
-          inputRunId: string
-          inputMarkdown: string
-        }) => {
-          const specSave = window.kata?.specSave
-          if (typeof specSave !== 'function') {
-            throw new Error('specSave IPC bridge is unavailable in KAT-188 parity test.')
-          }
-
-          await specSave({
-            spaceId: inputSpaceId,
-            sessionId: inputSessionId,
-            markdown: inputMarkdown,
-            appliedRunId: inputRunId
+        async ({ sid, ssid, md, rid }: { sid: string; ssid: string; md: string; rid: string }) => {
+          await window.kata?.specSave?.({
+            spaceId: sid,
+            sessionId: ssid,
+            markdown: md,
+            appliedRunId: rid
           })
         },
         {
-          inputSpaceId: runtimeContext.spaceId,
-          inputSessionId: sessionId,
-          inputRunId: RUN_ID,
-          inputMarkdown: buildStructuredDraftMarkdown('Build session task tracking parity baseline.')
+          sid: runtimeContext.spaceId,
+          ssid: sessionId,
+          md: draftMarkdown,
+          rid: RUN_ID
         }
       )
+
+      // useSpecDocument only fetches on mount. Reload the page to
+      // remount all hooks so the persisted draft gets picked up.
+      await appWindow.reload({ waitUntil: 'load' })
+      await appWindow.waitForSelector('#root > *', { state: 'attached' })
+      await expect(appWindow.getByTestId('app-shell-root')).toBeVisible({ timeout: 10_000 })
+
+      await rightTabs.getByRole('tab', { name: 'Spec' }).click()
 
       await expect(rightPanel.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible({ timeout: 10_000 })
 
@@ -242,21 +241,21 @@ test.describe('KAT-188 task tracking parity evidence @uat', () => {
             title: TASK_TITLES[0],
             status: 'not_started',
             activityLevel: 'none',
-            updatedAt: '2026-03-04T12:00:10.000Z'
+            updatedAt: '2099-01-01T00:00:10.000Z'
           },
           {
             id: 'task-apply-the-structured-draft',
             title: TASK_TITLES[1],
             status: 'in_progress',
             activityLevel: 'none',
-            updatedAt: '2026-03-04T12:00:11.000Z'
+            updatedAt: '2099-01-01T00:00:11.000Z'
           },
           {
             id: 'task-keep-the-runtime-wiring-stable',
             title: TASK_TITLES[2],
             status: 'complete',
             activityLevel: 'none',
-            updatedAt: '2026-03-04T12:00:12.000Z'
+            updatedAt: '2099-01-01T00:00:12.000Z'
           }
         ],
         counts: { not_started: 1, in_progress: 1, blocked: 0, complete: 1 }
