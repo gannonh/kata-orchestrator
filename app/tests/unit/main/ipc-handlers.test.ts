@@ -1443,6 +1443,16 @@ describe('registerIpcHandlers', () => {
       onEvent({ type: 'run_state_changed', runState: 'pending' })
       expect(mockUpdateRunStatus).toHaveBeenCalledWith(store, 'run-ev-1', 'running')
       expect(mockSend).toHaveBeenCalledWith('run:event', expect.objectContaining({ type: 'run_state_changed', runState: 'pending' }))
+      expect(mockSend).toHaveBeenCalledWith(
+        'run:event',
+        expect.objectContaining({
+          type: 'task_activity_snapshot',
+          snapshot: expect.objectContaining({
+            sessionId: 'sess-1',
+            runId: 'run-ev-1'
+          })
+        })
+      )
 
       // Test message_appended
       onEvent({
@@ -1460,6 +1470,16 @@ describe('registerIpcHandlers', () => {
         generatedAt: '2026-03-01T00:00:01Z',
         content: 'response text'
       })
+      expect(mockSend).toHaveBeenCalledWith(
+        'run:event',
+        expect.objectContaining({
+          type: 'task_activity_snapshot',
+          snapshot: expect.objectContaining({
+            sessionId: 'sess-1',
+            runId: 'run-ev-1'
+          })
+        })
+      )
 
       // Test idle -> completed transition (also removes from activeRunners)
       onEvent({ type: 'run_state_changed', runState: 'idle' })
