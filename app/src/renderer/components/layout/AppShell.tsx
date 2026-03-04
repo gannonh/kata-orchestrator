@@ -265,6 +265,7 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
         <CenterPanel>
           <ChatPanel
             sessionId={activeSessionId ?? null}
+            spaceId={activeSpaceId ?? null}
             onLatestDraftChange={handleLatestDraftChange}
             onTaskActivitySnapshotChange={handleTaskActivitySnapshotChange}
             onConversationEntriesChange={setConversationEntries}

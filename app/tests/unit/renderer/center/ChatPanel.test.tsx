@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionConversationState } from '../../../../src/renderer/types/session-conversation'
 
 const mockHook = vi.fn<
-  [string | null],
+  [string | null, (string | null)?],
   {
     state: SessionConversationState
     submitPrompt: (prompt: string) => void
@@ -13,7 +13,7 @@ const mockHook = vi.fn<
 >()
 
 vi.mock('../../../../src/renderer/hooks/useIpcSessionConversation', () => ({
-  useIpcSessionConversation: (...args: [string | null]) => mockHook(...args),
+  useIpcSessionConversation: (...args: [string | null, (string | null)?]) => mockHook(...args),
 }))
 
 const decisionProposal = [
@@ -74,7 +74,7 @@ describe('ChatPanel', () => {
 
     render(<ChatPanel sessionId="sess-42" />)
 
-    expect(mockHook).toHaveBeenCalledWith('sess-42')
+    expect(mockHook).toHaveBeenCalledWith('sess-42', null)
   })
 
   it('calls onLatestDraftChange when latestDraft changes', () => {

@@ -38,11 +38,34 @@ export function App() {
     setActiveSessionId(null)
     setAppView('workspace')
 
-    window.kata?.sessionCreate?.({ spaceId, label: 'Chat' })
-      .then((session) => setActiveSessionId(session.id))
-      .catch(() => {
-        // Session creation failed — ChatPanel stays inert until retry
-      })
+    void (async () => {
+      try {
+        const setActiveResult = await window.kata?.spaceSetActive?.(spaceId)
+        if (setActiveResult?.activeSessionId) {
+          setActiveSessionId(setActiveResult.activeSessionId)
+          return
+        }
+
+        const sessions = await window.kata?.sessionListBySpace?.({ spaceId })
+        const latestSession = Array.isArray(sessions) ? sessions[0] : undefined
+        if (latestSession?.id) {
+          try {
+            await window.kata?.sessionSetActive?.(latestSession.id)
+          } catch {
+            // Best-effort persist; keep local state if activation persistence fails.
+          }
+          setActiveSessionId(latestSession.id)
+          return
+        }
+
+        const createdSession = await window.kata?.sessionCreate?.({ spaceId, label: 'Chat' })
+        if (createdSession?.id) {
+          setActiveSessionId(createdSession.id)
+        }
+      } catch {
+        // Session restoration/creation failed — ChatPanel stays inert until retry.
+      }
+    })()
   }, [])
 
   const handleOpenHome = useCallback(() => {

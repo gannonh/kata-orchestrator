@@ -7,11 +7,13 @@ import {
 import type { LatestRunDraft } from '../types/spec-document'
 import type { SessionRuntimeEvent } from '../types/session-runtime-adapter'
 import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../shared/types/run'
+import { isPersistedSpecDocument } from '../../shared/types/spec-document'
+import type { TaskActivitySnapshot, TaskTrackingItem } from '@shared/types/task-tracking'
 
 const DEFAULT_RUN_MODEL = 'gpt-5.3-codex'
 const DEFAULT_RUN_PROVIDER = 'openai-codex'
 
-export function useIpcSessionConversation(sessionId: string | null) {
+export function useIpcSessionConversation(sessionId: string | null, spaceId: string | null = null) {
   const [state, dispatch] = useReducer(
     sessionConversationReducer,
     undefined,
@@ -76,6 +78,24 @@ export function useIpcSessionConversation(sessionId: string | null) {
     if (!kata?.runList) return
     let isCurrentSession = true
 
+    if (spaceId && typeof kata.specGet === 'function') {
+      kata
+        .specGet({ spaceId, sessionId })
+        .then((persistedDocument) => {
+          if (!isCurrentSession) {
+            return
+          }
+
+          const snapshot = buildTaskActivitySnapshotFromPersistedSpecDocument(sessionId, persistedDocument)
+          if (snapshot) {
+            dispatch({ type: 'TASK_ACTIVITY_SNAPSHOT_RECEIVED', snapshot })
+          }
+        })
+        .catch(() => {
+          // Keep task tracking empty when persisted spec state cannot be restored.
+        })
+    }
+
     kata
       .runList(sessionId)
       .then((runs) => {
@@ -125,7 +145,7 @@ export function useIpcSessionConversation(sessionId: string | null) {
     return () => {
       isCurrentSession = false
     }
-  }, [sessionId])
+  }, [sessionId, spaceId])
 
   const submitPrompt = useCallback(
     (prompt: string) => {
@@ -177,6 +197,103 @@ export function useIpcSessionConversation(sessionId: string | null) {
     submitPrompt,
     retry
   }
+}
+
+function buildTaskActivitySnapshotFromPersistedSpecDocument(
+  sessionId: string,
+  persistedDocument: unknown
+): TaskActivitySnapshot | undefined {
+  if (!persistedDocument || !isPersistedSpecDocument(persistedDocument)) {
+    return undefined
+  }
+
+  const tasks = parseTaskItemsFromMarkdown(persistedDocument.markdown)
+  if (tasks.length === 0) {
+    return undefined
+  }
+
+  const updatedAt = persistedDocument.updatedAt
+  const items: TaskTrackingItem[] = tasks.map((task) => ({
+    ...task,
+    activityLevel: 'none',
+    updatedAt
+  }))
+
+  return {
+    sessionId,
+    runId: persistedDocument.appliedRunId ?? `spec-${sessionId}`,
+    items,
+    counts: buildTaskCounts(items)
+  }
+}
+
+function parseTaskItemsFromMarkdown(markdown: string): Array<{
+  id: string
+  title: string
+  status: TaskTrackingItem['status']
+}> {
+  const lines = markdown.split(/\r?\n/)
+  const taskLines: string[] = []
+  let isTasksSection = false
+
+  for (const line of lines) {
+    const headingMatch = line.match(/^##\s+(.+?)\s*$/)
+    if (headingMatch) {
+      const normalizedHeading = headingMatch[1].trim().replace(/\s+/g, ' ').toLowerCase()
+      isTasksSection = normalizedHeading === 'tasks'
+      if (isTasksSection) {
+        taskLines.length = 0
+      }
+      continue
+    }
+
+    if (isTasksSection) {
+      taskLines.push(line)
+    }
+  }
+
+  const tasks: Array<{ id: string; title: string; status: TaskTrackingItem['status'] }> = []
+  const seenIds = new Map<string, number>()
+
+  for (const line of taskLines) {
+    const taskMatch = line.match(/^\s*(?:(?:[-*+]\s+|\d+[.)]\s+))?\[( |\/|x|X)\]\s+(.*?)\s*$/)
+    if (!taskMatch) {
+      continue
+    }
+
+    const marker = taskMatch[1]
+    const title = taskMatch[2]
+    const slug =
+      title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'task'
+    const nextCount = (seenIds.get(slug) ?? 0) + 1
+    seenIds.set(slug, nextCount)
+
+    tasks.push({
+      id: nextCount === 1 ? `task-${slug}` : `task-${slug}-${nextCount}`,
+      title,
+      status: marker === '/' ? 'in_progress' : marker.toLowerCase() === 'x' ? 'complete' : 'not_started'
+    })
+  }
+
+  return tasks
+}
+
+function buildTaskCounts(items: TaskTrackingItem[]): TaskActivitySnapshot['counts'] {
+  const counts: TaskActivitySnapshot['counts'] = {
+    not_started: 0,
+    in_progress: 0,
+    blocked: 0,
+    complete: 0
+  }
+
+  for (const item of items) {
+    counts[item.status] += 1
+  }
+
+  return counts
 }
 
 function isReconciledInterruptedRunFallback(

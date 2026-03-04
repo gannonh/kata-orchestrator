@@ -163,7 +163,9 @@ describe('App', () => {
     expect(shell.getAttribute('data-active-space-id')).not.toBe('')
 
     // Session must be created for the opened space
-    expect(sessionCreate).toHaveBeenCalledWith({ spaceId: 'space-test-1', label: 'Chat' })
+    await waitFor(() => {
+      expect(sessionCreate).toHaveBeenCalledWith({ spaceId: 'space-test-1', label: 'Chat' })
+    })
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
     expect(screen.getByRole('heading', { name: 'Home' })).toBeTruthy()
@@ -206,5 +208,59 @@ describe('App', () => {
       expect(screen.getByTestId('app-shell-root')).toBeTruthy()
     })
     expect(sessionCreate).toHaveBeenCalledOnce()
+  })
+
+  it('reuses an existing session when reopening a space from Home', async () => {
+    const spaceList = vi.fn().mockResolvedValue([testSpace])
+    const createdSession = {
+      id: 'session-1',
+      spaceId: 'space-test-1',
+      label: 'Chat',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    }
+    const spaceSetActive = vi.fn().mockResolvedValue({ activeSpaceId: 'space-test-1', activeSessionId: null })
+    const sessionListBySpace = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([createdSession])
+    const sessionSetActive = vi.fn().mockResolvedValue({
+      activeSpaceId: 'space-test-1',
+      activeSessionId: 'session-1'
+    })
+    const sessionCreate = vi.fn().mockResolvedValue(createdSession)
+    window.kata = {
+      ...window.kata,
+      spaceList,
+      spaceSetActive,
+      sessionListBySpace,
+      sessionSetActive,
+      sessionCreate
+    }
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Space')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell-root')).toBeTruthy()
+      expect(sessionCreate).toHaveBeenCalledTimes(1)
+      expect(sessionCreate).toHaveBeenCalledWith({ spaceId: 'space-test-1', label: 'Chat' })
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Open Home spaces view' })[0])
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Home' })).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell-root')).toBeTruthy()
+      expect(sessionSetActive).toHaveBeenCalledWith('session-1')
+    })
+
+    expect(sessionCreate).toHaveBeenCalledTimes(1)
   })
 })

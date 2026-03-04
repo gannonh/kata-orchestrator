@@ -37,11 +37,12 @@ export function RightPanel({
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [draftMarkdown, setDraftMarkdown] = useState('')
+  const hasStructuredSpec = Boolean(spaceId && sessionId)
   const specDocument = useSpecDocument({
     spaceId: spaceId ?? 'inactive-space',
-    sessionId: sessionId ?? 'inactive-session'
+    sessionId: sessionId ?? 'inactive-session',
+    enabled: hasStructuredSpec
   })
-  const hasStructuredSpec = Boolean(spaceId && sessionId)
 
   useLayoutEffect(() => {
     setIsEditing(false)
@@ -88,7 +89,7 @@ export function RightPanel({
       )
     }
 
-    if (latestDraft && specDocument.document.appliedRunId !== latestDraft.runId) {
+    if (latestDraft && !specDocument.document.appliedRunId) {
       return (
         <SpecTab
           project={project}

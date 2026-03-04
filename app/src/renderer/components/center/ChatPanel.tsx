@@ -13,6 +13,7 @@ import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 type ChatPanelProps = {
   sessionId: string | null
+  spaceId?: string | null
   onLatestDraftChange?: (draft: LatestRunDraft | undefined) => void
   onTaskActivitySnapshotChange?: (snapshot: TaskActivitySnapshot | undefined) => void
   onConversationEntriesChange?: (entries: ConversationEntry[]) => void
@@ -21,12 +22,13 @@ type ChatPanelProps = {
 
 export function ChatPanel({
   sessionId,
+  spaceId,
   onLatestDraftChange,
   onTaskActivitySnapshotChange,
   onConversationEntriesChange,
   onRegisterScrollToMessage
 }: ChatPanelProps) {
-  const { state, submitPrompt, retry } = useIpcSessionConversation(sessionId)
+  const { state, submitPrompt, retry } = useIpcSessionConversation(sessionId, spaceId ?? null)
   const conversationEntries = useMemo(() => buildConversationEntries(state.messages), [state.messages])
 
   useEffect(() => {

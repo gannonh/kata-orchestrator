@@ -7,6 +7,7 @@ import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../../../src/shared/types/run'
 let onRunEventCallback: ((event: SessionRuntimeEvent) => void) | null = null
 const mockRunSubmit = vi.fn().mockResolvedValue({ runId: 'run-1' })
 const mockRunList = vi.fn().mockResolvedValue([])
+const mockSpecGet = vi.fn().mockResolvedValue(null)
 const mockOnRunEvent = vi.fn((cb: (event: SessionRuntimeEvent) => void) => {
   onRunEventCallback = cb
   return () => {
@@ -20,6 +21,7 @@ beforeEach(() => {
   ;(window as any).kata = {
     runSubmit: mockRunSubmit,
     runList: mockRunList,
+    specGet: mockSpecGet,
     onRunEvent: mockOnRunEvent
   }
 })
@@ -29,6 +31,7 @@ afterEach(() => {
   // Reset implementations to defaults so rejection setups don't bleed across tests
   mockRunSubmit.mockResolvedValue({ runId: 'run-1' })
   mockRunList.mockResolvedValue([])
+  mockSpecGet.mockResolvedValue(null)
   delete (window as any).kata
 })
 
@@ -544,6 +547,63 @@ describe('useIpcSessionConversation', () => {
     expect(result.current.state.messages[0].content).toBe('hello')
     expect(result.current.state.messages[1].content).toBe('hi there')
     expect(result.current.state.messages[2].content).toBe('more details')
+  })
+
+  it('rehydrates task activity snapshot from persisted spec document on session load', async () => {
+    mockSpecGet.mockResolvedValue({
+      markdown: [
+        '## Goal',
+        'Persisted goal',
+        '## Tasks',
+        '- [ ] Template task to ignore',
+        '',
+        '## Acceptance Criteria',
+        '1. Keep the latest tasks block',
+        '',
+        '## Tasks',
+        '- [/] Apply the structured draft',
+        '- [x] Keep the runtime wiring stable'
+      ].join('\n'),
+      updatedAt: '2026-03-04T19:00:00.000Z',
+      appliedRunId: 'run-applied',
+      appliedAt: '2026-03-04T19:00:00.000Z'
+    })
+
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1', 'space-1'))
+
+    await waitFor(() => {
+      expect(result.current.state.taskActivitySnapshot).toEqual({
+        sessionId: 's-1',
+        runId: 'run-applied',
+        items: [
+          {
+            id: 'task-apply-the-structured-draft',
+            title: 'Apply the structured draft',
+            status: 'in_progress',
+            activityLevel: 'none',
+            updatedAt: '2026-03-04T19:00:00.000Z'
+          },
+          {
+            id: 'task-keep-the-runtime-wiring-stable',
+            title: 'Keep the runtime wiring stable',
+            status: 'complete',
+            activityLevel: 'none',
+            updatedAt: '2026-03-04T19:00:00.000Z'
+          }
+        ],
+        counts: {
+          not_started: 0,
+          in_progress: 1,
+          blocked: 0,
+          complete: 1
+        }
+      })
+    })
+
+    expect(mockSpecGet).toHaveBeenCalledWith({ spaceId: 'space-1', sessionId: 's-1' })
   })
 
   it('prefers persisted run draft metadata when replay restores latestDraft', async () => {

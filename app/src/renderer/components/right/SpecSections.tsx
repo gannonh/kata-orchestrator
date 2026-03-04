@@ -46,6 +46,15 @@ function SectionList({ title, items, ordered = false }: SectionListProps) {
   )
 }
 
+function toTimestamp(value: string | undefined): number | null {
+  if (!value) {
+    return null
+  }
+
+  const parsed = Date.parse(value)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
 export function SpecSections({
   document,
   taskActivitySnapshot,
@@ -54,15 +63,21 @@ export function SpecSections({
   commentStatusNote
 }: SpecSectionsProps) {
   const snapshotTaskById = new Map(taskActivitySnapshot?.items.map((task) => [task.id, task]))
+  const documentUpdatedAt = toTimestamp(document.updatedAt)
   const mergedTasks = document.tasks.map((task) => {
     const snapshotTask = snapshotTaskById.get(task.id)
     if (!snapshotTask) {
       return task
     }
 
+    const snapshotUpdatedAt = toTimestamp(snapshotTask.updatedAt)
+    const preferSnapshotStatus =
+      snapshotUpdatedAt !== null &&
+      (documentUpdatedAt === null || snapshotUpdatedAt >= documentUpdatedAt)
+
     return {
       ...task,
-      displayStatus: snapshotTask.status,
+      displayStatus: preferSnapshotStatus ? snapshotTask.status : task.status,
       activityLevel: snapshotTask.activityLevel,
       activityDetail: snapshotTask.activityDetail,
       activeAgentId: snapshotTask.activeAgentId

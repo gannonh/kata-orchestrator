@@ -481,6 +481,41 @@ describe('provisionManagedWorkspace validation', () => {
     })
   })
 
+  it('falls back to forced worktree creation when branch is already checked out in another worktree', async () => {
+    const runGit = vi.fn(async ({ args }: { cwd: string, args: string[] }) => {
+      if (args[0] === 'worktree' && args[1] === 'add' && !args.includes('--force')) {
+        throw new Error("Preparing worktree (checking out 'main')\nfatal: 'main' is already used by worktree")
+      }
+    })
+
+    await provisionManagedWorkspace({
+      workspaceBaseDir: '/tmp/workspaces',
+      repoCacheBaseDir: '/tmp/repos',
+      input: {
+        workspaceMode: 'managed',
+        provisioningMethod: 'copy-local',
+        sourceLocalPath: '/Users/me/dev/kata-cloud',
+        repoUrl: 'https://github.com/org/repo',
+        branch: 'main'
+      },
+      runGit,
+      fsApi: createMockFsApi(['/tmp/repos/kata-cloud'])
+    })
+
+    expect(runGit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/tmp/repos/kata-cloud',
+        args: ['worktree', 'add', expect.any(String), 'main']
+      })
+    )
+    expect(runGit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/tmp/repos/kata-cloud',
+        args: ['worktree', 'add', '--force', expect.any(String), 'main']
+      })
+    )
+  })
+
   it('uses default fs cp path for copy-local provisioning', async () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'kata-managed-workspace-copy-'))
     const sourceRepoPath = path.join(tempRoot, 'source-repo')

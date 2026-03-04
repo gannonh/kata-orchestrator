@@ -162,6 +162,39 @@ async function runGitChecked(
   }
 }
 
+function isBranchAlreadyUsedByWorktreeError(error: unknown): boolean {
+  const details = error instanceof Error ? error.message : String(error)
+  return /is already used by worktree/i.test(details)
+}
+
+async function addWorkspaceWorktree(
+  runGit: GitRunner,
+  cacheRepoPath: string,
+  workspaceRepoPath: string,
+  branch: string
+): Promise<void> {
+  try {
+    await runGitChecked(
+      runGit,
+      { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, branch] },
+      'Failed to create workspace worktree',
+      'Verify branch exists or create it before provisioning.'
+    )
+    return
+  } catch (error) {
+    if (!isBranchAlreadyUsedByWorktreeError(error)) {
+      throw error
+    }
+  }
+
+  await runGitChecked(
+    runGit,
+    { cwd: cacheRepoPath, args: ['worktree', 'add', '--force', workspaceRepoPath, branch] },
+    'Failed to create workspace worktree',
+    'The selected branch is already checked out in another worktree and forced checkout failed. Resolve conflicting worktrees or retry provisioning.'
+  )
+}
+
 async function fetchAllRemotes(runGit: GitRunner, cacheRepoPath: string, required: boolean): Promise<void> {
   try {
     await runGit({ cwd: cacheRepoPath, args: ['fetch', '--all', '--prune'] })
@@ -289,12 +322,7 @@ export async function provisionManagedWorkspace(
     await detachCacheHead(runGit, cacheRepoPath)
 
     await fsApi.mkdir(workspaceRootPath, { recursive: true })
-    await runGitChecked(
-      runGit,
-      { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
-      'Failed to create workspace worktree',
-      'Verify branch exists or create it before provisioning.'
-    )
+    await addWorkspaceWorktree(runGit, cacheRepoPath, workspaceRepoPath, args.input.branch)
 
     return {
       rootPath: workspaceRepoPath,
@@ -321,12 +349,7 @@ export async function provisionManagedWorkspace(
     await detachCacheHead(runGit, cacheRepoPath)
 
     await fsApi.mkdir(workspaceRootPath, { recursive: true })
-    await runGitChecked(
-      runGit,
-      { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
-      'Failed to create workspace worktree',
-      'Verify branch exists or create it before provisioning.'
-    )
+    await addWorkspaceWorktree(runGit, cacheRepoPath, workspaceRepoPath, args.input.branch)
 
     return {
       rootPath: workspaceRepoPath,
@@ -399,12 +422,7 @@ export async function provisionManagedWorkspace(
   await detachCacheHead(runGit, cacheRepoPath)
 
   await fsApi.mkdir(workspaceRootPath, { recursive: true })
-  await runGitChecked(
-    runGit,
-    { cwd: cacheRepoPath, args: ['worktree', 'add', workspaceRepoPath, args.input.branch] },
-    'Failed to create workspace worktree',
-    'Verify branch exists or create it before provisioning.'
-  )
+  await addWorkspaceWorktree(runGit, cacheRepoPath, workspaceRepoPath, args.input.branch)
 
   return {
     rootPath: workspaceRepoPath,

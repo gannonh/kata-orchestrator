@@ -369,8 +369,7 @@ function buildSpecDocumentKey(spaceId: string, sessionId: string): string {
 
 function parseTaskSeedItemsFromMarkdown(markdown: string): TaskActivitySeedItem[] {
   const lines = markdown.split(/\r?\n/)
-  const seeds: TaskActivitySeedItem[] = []
-  const seenIds = new Map<string, number>()
+  const taskLines: string[] = []
   let isTasksSection = false
 
   for (const line of lines) {
@@ -378,6 +377,10 @@ function parseTaskSeedItemsFromMarkdown(markdown: string): TaskActivitySeedItem[
     if (headingMatch) {
       const normalizedHeading = headingMatch[1].trim().replace(/\s+/g, ' ').toLowerCase()
       isTasksSection = normalizedHeading === 'tasks'
+      if (isTasksSection) {
+        // Keep only the latest Tasks section to avoid duplicating instructional scaffolding.
+        taskLines.length = 0
+      }
       continue
     }
 
@@ -385,6 +388,13 @@ function parseTaskSeedItemsFromMarkdown(markdown: string): TaskActivitySeedItem[
       continue
     }
 
+    taskLines.push(line)
+  }
+
+  const seeds: TaskActivitySeedItem[] = []
+  const seenIds = new Map<string, number>()
+
+  for (const line of taskLines) {
     const taskMatch = line.match(/^\s*(?:(?:[-*+]\s+|\d+[.)]\s+))?\[( |\/|x|X)\]\s+(.*?)\s*$/)
     if (!taskMatch) {
       continue

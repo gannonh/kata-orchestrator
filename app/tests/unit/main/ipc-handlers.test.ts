@@ -1491,6 +1491,94 @@ describe('registerIpcHandlers', () => {
       expect(abortResult).toBe(false)
     })
 
+    it('seeds task activity from the latest Tasks section when markdown contains multiple Tasks headings', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({
+        id: 'run-ev-tasks',
+        sessionId: 'sess-1',
+        prompt: 'hello',
+        status: 'queued',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        messages: []
+      })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore({
+        ...createDefaultAppState(),
+        spaces: {
+          'space-1': {
+            id: 'space-1',
+            name: 'Space 1',
+            repoUrl: 'https://github.com/org/repo1',
+            rootPath: '/tmp/repo1',
+            branch: 'main',
+            orchestrationMode: 'team',
+            createdAt: '2026-03-03T00:00:00.000Z',
+            status: 'active'
+          }
+        },
+        sessions: {
+          'sess-1': {
+            id: 'sess-1',
+            spaceId: 'space-1',
+            label: 'Session 1',
+            createdAt: '2026-03-03T00:00:00.000Z'
+          }
+        },
+        specDocuments: {
+          'space-1:sess-1': {
+            markdown: [
+              '## Goal',
+              'Example scaffolding:',
+              '## Tasks',
+              '- [ ] Template task to ignore',
+              '',
+              '## Acceptance Criteria',
+              '1. Keep a single canonical tasks block',
+              '',
+              '## Tasks',
+              '- [/] Real in-progress task',
+              '- [x] Real complete task'
+            ].join('\n'),
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            appliedRunId: 'run-old',
+            appliedAt: '2026-03-03T00:00:00.000Z'
+          }
+        }
+      })
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      const mockSend = vi.fn()
+      const mockEvent = { sender: { send: mockSend } }
+      await handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
+      onEvent({ type: 'run_state_changed', runState: 'pending' })
+
+      const snapshotEvent = mockSend.mock.calls
+        .map(([, payload]) => payload)
+        .find(
+          (payload): payload is { type: 'task_activity_snapshot'; snapshot: { items: Array<{ title: string }> } } =>
+            Boolean(
+              payload &&
+                typeof payload === 'object' &&
+                'type' in payload &&
+                payload.type === 'task_activity_snapshot' &&
+                'snapshot' in payload
+            )
+        )
+
+      expect(snapshotEvent).toBeTruthy()
+      expect(snapshotEvent?.snapshot.items.map((item) => item.title)).toEqual([
+        'Real in-progress task',
+        'Real complete task'
+      ])
+    })
+
     it('onEvent callback updates run status to failed on error state change', async () => {
       const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
       mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
