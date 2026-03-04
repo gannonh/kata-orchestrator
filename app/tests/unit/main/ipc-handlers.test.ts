@@ -724,6 +724,69 @@ describe('registerIpcHandlers', () => {
     })
   })
 
+  it('space:setActive restores most recent session when switching back to a space', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1',
+          name: 'Space 1',
+          repoUrl: 'https://github.com/org/repo1',
+          rootPath: '/tmp/repo1',
+          branch: 'main',
+          orchestrationMode: 'team' as const,
+          createdAt: '2026-03-03T00:00:00.000Z',
+          status: 'active' as const
+        },
+        'space-2': {
+          id: 'space-2',
+          name: 'Space 2',
+          repoUrl: 'https://github.com/org/repo2',
+          rootPath: '/tmp/repo2',
+          branch: 'main',
+          orchestrationMode: 'team' as const,
+          createdAt: '2026-03-03T00:00:00.000Z',
+          status: 'active' as const
+        }
+      },
+      sessions: {
+        'session-a1': {
+          id: 'session-a1',
+          spaceId: 'space-1',
+          label: 'Older session',
+          createdAt: '2026-03-03T00:00:00.000Z'
+        },
+        'session-a2': {
+          id: 'session-a2',
+          spaceId: 'space-1',
+          label: 'Newer session',
+          createdAt: '2026-03-03T01:00:00.000Z'
+        },
+        'session-b1': {
+          id: 'session-b1',
+          spaceId: 'space-2',
+          label: 'Space 2 session',
+          createdAt: '2026-03-03T00:30:00.000Z'
+        }
+      },
+      activeSpaceId: 'space-2',
+      activeSessionId: 'session-b1'
+    }
+    const store = createMockStore(state)
+    registerIpcHandlers(store)
+
+    const handler = getHandlersByChannel().get('space:setActive')!
+    await expect(handler({}, { spaceId: 'space-1' })).resolves.toEqual({
+      activeSpaceId: 'space-1',
+      activeSessionId: 'session-a2'
+    })
+    expect(store.save).toHaveBeenCalledWith({
+      ...state,
+      activeSpaceId: 'space-1',
+      activeSessionId: 'session-a2'
+    })
+  })
+
   it('space:setActive rejects unknown space ids', async () => {
     const store = createMockStore(createDefaultAppState())
     registerIpcHandlers(store)
@@ -1307,7 +1370,7 @@ describe('registerIpcHandlers', () => {
       registerIpcHandlers(createMockStore())
       const handler = getHandlersByChannel().get('git:listBranches')!
       const result = await handler(null, '/bad/path')
-      expect(result).toEqual({ error: 'Could not read branches.' })
+      expect(result).toEqual({ error: 'Could not read branches: git failed' })
     })
 
     it('returns error object when repoPath is not a string', async () => {
@@ -1336,7 +1399,7 @@ describe('registerIpcHandlers', () => {
       registerIpcHandlers(createMockStore())
       const handler = getHandlersByChannel().get('github:listRepos')!
       const result = await handler(null)
-      expect(result).toEqual({ error: 'GitHub CLI not available. Install and authenticate with `gh auth login`.' })
+      expect(result).toEqual({ error: 'GitHub CLI error: gh not found' })
     })
 
     it('returns parse error object when gh output is malformed JSON', async () => {
@@ -1368,7 +1431,7 @@ describe('registerIpcHandlers', () => {
       registerIpcHandlers(createMockStore())
       const handler = getHandlersByChannel().get('github:listBranches')!
       const result = await handler(null, { owner: 'org', repo: 'repo' })
-      expect(result).toEqual({ error: 'Could not fetch branches from GitHub.' })
+      expect(result).toEqual({ error: 'Could not fetch branches from GitHub: gh api failed' })
     })
 
     it('returns error object when input is missing owner or repo', async () => {
@@ -1443,6 +1506,16 @@ describe('registerIpcHandlers', () => {
       onEvent({ type: 'run_state_changed', runState: 'pending' })
       expect(mockUpdateRunStatus).toHaveBeenCalledWith(store, 'run-ev-1', 'running')
       expect(mockSend).toHaveBeenCalledWith('run:event', expect.objectContaining({ type: 'run_state_changed', runState: 'pending' }))
+      expect(mockSend).toHaveBeenCalledWith(
+        'run:event',
+        expect.objectContaining({
+          type: 'task_activity_snapshot',
+          snapshot: expect.objectContaining({
+            sessionId: 'sess-1',
+            runId: 'run-ev-1'
+          })
+        })
+      )
 
       // Test message_appended
       onEvent({
@@ -1460,6 +1533,16 @@ describe('registerIpcHandlers', () => {
         generatedAt: '2026-03-01T00:00:01Z',
         content: 'response text'
       })
+      expect(mockSend).toHaveBeenCalledWith(
+        'run:event',
+        expect.objectContaining({
+          type: 'task_activity_snapshot',
+          snapshot: expect.objectContaining({
+            sessionId: 'sess-1',
+            runId: 'run-ev-1'
+          })
+        })
+      )
 
       // Test idle -> completed transition (also removes from activeRunners)
       onEvent({ type: 'run_state_changed', runState: 'idle' })
@@ -1469,6 +1552,292 @@ describe('registerIpcHandlers', () => {
       const abortHandler = getHandlersByChannel().get('run:abort')!
       const abortResult = await abortHandler(null, { runId: 'run-ev-1' })
       expect(abortResult).toBe(false)
+    })
+
+    it('seeds task activity from the latest Tasks section when markdown contains multiple Tasks headings', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({
+        id: 'run-ev-tasks',
+        sessionId: 'sess-1',
+        prompt: 'hello',
+        status: 'queued',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        messages: []
+      })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore({
+        ...createDefaultAppState(),
+        spaces: {
+          'space-1': {
+            id: 'space-1',
+            name: 'Space 1',
+            repoUrl: 'https://github.com/org/repo1',
+            rootPath: '/tmp/repo1',
+            branch: 'main',
+            orchestrationMode: 'team',
+            createdAt: '2026-03-03T00:00:00.000Z',
+            status: 'active'
+          }
+        },
+        sessions: {
+          'sess-1': {
+            id: 'sess-1',
+            spaceId: 'space-1',
+            label: 'Session 1',
+            createdAt: '2026-03-03T00:00:00.000Z'
+          }
+        },
+        specDocuments: {
+          'space-1:sess-1': {
+            markdown: [
+              '## Goal',
+              'Example scaffolding:',
+              '## Tasks',
+              '- [ ] Template task to ignore',
+              '',
+              '## Acceptance Criteria',
+              '1. Keep a single canonical tasks block',
+              '',
+              '## Tasks',
+              '- [/] Real in-progress task',
+              '- [x] Real complete task'
+            ].join('\n'),
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            appliedRunId: 'run-old',
+            appliedAt: '2026-03-03T00:00:00.000Z'
+          }
+        }
+      })
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      const mockSend = vi.fn()
+      const mockEvent = { sender: { send: mockSend } }
+      await handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
+      onEvent({ type: 'run_state_changed', runState: 'pending' })
+
+      const snapshotEvent = mockSend.mock.calls
+        .map(([, payload]) => payload)
+        .find(
+          (payload): payload is { type: 'task_activity_snapshot'; snapshot: { items: Array<{ title: string }> } } =>
+            Boolean(
+              payload &&
+                typeof payload === 'object' &&
+                'type' in payload &&
+                payload.type === 'task_activity_snapshot' &&
+                'snapshot' in payload
+            )
+        )
+
+      expect(snapshotEvent).toBeTruthy()
+      expect(snapshotEvent?.snapshot.items.map((item) => item.title)).toEqual([
+        'Real in-progress task',
+        'Real complete task'
+      ])
+    })
+
+    it('seeds tasks from spec including not_started markers and skips non-checkbox lines', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({ id: 'run-ns-1', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore({
+        ...createDefaultAppState(),
+        spaces: {
+          'space-1': {
+            id: 'space-1',
+            label: 'Test Space',
+            repoPath: '/tmp/test',
+            createdAt: '2026-03-01T00:00:00.000Z',
+            status: 'active'
+          }
+        },
+        sessions: {
+          'sess-1': {
+            id: 'sess-1',
+            spaceId: 'space-1',
+            label: 'Session 1',
+            createdAt: '2026-03-03T00:00:00.000Z'
+          }
+        },
+        specDocuments: {
+          'space-1:sess-1': {
+            markdown: [
+              '## Tasks',
+              'Some description text',
+              '- [ ] Not started task',
+              '- [/] In progress task'
+            ].join('\n'),
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            appliedRunId: 'run-old',
+            appliedAt: '2026-03-03T00:00:00.000Z'
+          }
+        }
+      })
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      const mockSend = vi.fn()
+      const mockEvent = { sender: { send: mockSend } }
+      await handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
+      onEvent({ type: 'run_state_changed', runState: 'pending' })
+
+      const snapshotEvent = mockSend.mock.calls
+        .map(([, payload]) => payload)
+        .find(
+          (payload): payload is { type: 'task_activity_snapshot'; snapshot: { items: Array<{ title: string; status: string }> } } =>
+            Boolean(
+              payload &&
+                typeof payload === 'object' &&
+                'type' in payload &&
+                payload.type === 'task_activity_snapshot' &&
+                'snapshot' in payload
+            )
+        )
+
+      expect(snapshotEvent).toBeTruthy()
+      expect(snapshotEvent?.snapshot.items.map((item) => item.title)).toEqual([
+        'Not started task',
+        'In progress task'
+      ])
+    })
+
+    it('falls back to run draft content when no spec document exists', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({ id: 'run-draft-1', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore({
+        ...createDefaultAppState(),
+        spaces: {
+          'space-1': {
+            id: 'space-1',
+            label: 'Test Space',
+            repoPath: '/tmp/test',
+            createdAt: '2026-03-01T00:00:00.000Z',
+            status: 'active'
+          }
+        },
+        sessions: {
+          'sess-1': {
+            id: 'sess-1',
+            spaceId: 'space-1',
+            label: 'Session 1',
+            createdAt: '2026-03-03T00:00:00.000Z'
+          }
+        },
+        runs: {
+          'run-draft-1': {
+            id: 'run-draft-1',
+            sessionId: 'sess-1',
+            prompt: 'hello',
+            status: 'queued',
+            model: 'm',
+            provider: 'p',
+            createdAt: '2026-03-01T00:00:00.000Z',
+            messages: [],
+            draft: {
+              runId: 'run-draft-1',
+              generatedAt: '2026-03-01T00:00:00.000Z',
+              content: [
+                '## Tasks',
+                '- [ ] Draft task one',
+                '- [x] Draft task two'
+              ].join('\n')
+            }
+          }
+        }
+      })
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      const mockSend = vi.fn()
+      const mockEvent = { sender: { send: mockSend } }
+      await handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
+      onEvent({ type: 'run_state_changed', runState: 'pending' })
+
+      const snapshotEvent = mockSend.mock.calls
+        .map(([, payload]) => payload)
+        .find(
+          (payload): payload is { type: 'task_activity_snapshot'; snapshot: { items: Array<{ title: string }> } } =>
+            Boolean(
+              payload &&
+                typeof payload === 'object' &&
+                'type' in payload &&
+                payload.type === 'task_activity_snapshot' &&
+                'snapshot' in payload
+            )
+        )
+
+      expect(snapshotEvent).toBeTruthy()
+      expect(snapshotEvent?.snapshot.items.map((item) => item.title)).toEqual([
+        'Draft task one',
+        'Draft task two'
+      ])
+    })
+
+    it('returns empty tasks when session has no spec document and no run draft', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({ id: 'run-empty-1', sessionId: 'sess-1', prompt: 'hello', status: 'queued', model: 'm', provider: 'p', createdAt: '2026-03-01T00:00:00.000Z', messages: [] })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore({
+        ...createDefaultAppState(),
+        spaces: {
+          'space-1': {
+            id: 'space-1',
+            label: 'Test Space',
+            repoPath: '/tmp/test',
+            createdAt: '2026-03-01T00:00:00.000Z',
+            status: 'active'
+          }
+        },
+        sessions: {
+          'sess-1': {
+            id: 'sess-1',
+            spaceId: 'space-1',
+            label: 'Session 1',
+            createdAt: '2026-03-03T00:00:00.000Z'
+          }
+        }
+      })
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      const mockSend = vi.fn()
+      const mockEvent = { sender: { send: mockSend } }
+      await handler(mockEvent, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })
+
+      const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
+      onEvent({ type: 'run_state_changed', runState: 'pending' })
+
+      const snapshotEvent = mockSend.mock.calls
+        .map(([, payload]) => payload)
+        .find(
+          (payload): payload is { type: 'task_activity_snapshot'; snapshot: { items: unknown[] } } =>
+            Boolean(
+              payload &&
+                typeof payload === 'object' &&
+                'type' in payload &&
+                payload.type === 'task_activity_snapshot' &&
+                'snapshot' in payload
+            )
+        )
+
+      expect(snapshotEvent?.snapshot.items).toEqual([])
     })
 
     it('onEvent callback updates run status to failed on error state change', async () => {

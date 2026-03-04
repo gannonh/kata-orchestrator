@@ -154,6 +154,9 @@ test.describe('KAT-161 relaunch resume persistence @uat', () => {
 
     const relaunchStateFilePath = path.join(managedTestRootDir, 'state-kat-161-relaunch.json')
     await fsPromises.copyFile(managedStateFilePath, relaunchStateFilePath)
+    const relaunchState = await readPersistedState(relaunchStateFilePath)
+    relaunchState.runs = {}
+    await fsPromises.writeFile(relaunchStateFilePath, JSON.stringify(relaunchState, null, 2), 'utf8')
 
     const launchArgs = process.env.CI
       ? ['--no-sandbox', '--disable-setuid-sandbox', mainEntry]

@@ -16,6 +16,7 @@ import {
   createDefaultAppState
 } from '../shared/types/space'
 import { extractRepoLabel } from '../shared/repo-label'
+import { toStableTaskId } from '../shared/task-id'
 import { resolveSpaceName } from './space-name'
 import type { StateStore } from './state-store'
 import {
@@ -29,6 +30,10 @@ import {
   setRunDraft,
   getRunsForSession
 } from './orchestrator'
+import {
+  createTaskActivityProjector,
+  type TaskActivitySeedItem
+} from './task-activity-projector'
 import { createAgentRunner } from './agent-runner'
 import type { AgentRunner } from './agent-runner'
 import type { AuthStorage } from './auth-storage'
@@ -363,6 +368,88 @@ function buildSpecDocumentKey(spaceId: string, sessionId: string): string {
   return `${spaceId}:${sessionId}`
 }
 
+function parseTaskSeedItemsFromMarkdown(markdown: string): TaskActivitySeedItem[] {
+  const lines = markdown.split(/\r?\n/)
+  const taskLines: string[] = []
+  let isTasksSection = false
+
+  for (const line of lines) {
+    const headingMatch = line.match(/^##\s+(.+?)\s*$/)
+    if (headingMatch) {
+      const normalizedHeading = headingMatch[1].trim().replace(/\s+/g, ' ').toLowerCase()
+      isTasksSection = normalizedHeading === 'tasks'
+      if (isTasksSection) {
+        // Keep only the latest Tasks section to avoid duplicating instructional scaffolding.
+        taskLines.length = 0
+      }
+      continue
+    }
+
+    if (!isTasksSection) {
+      continue
+    }
+
+    taskLines.push(line)
+  }
+
+  const seeds: TaskActivitySeedItem[] = []
+  const seenIds = new Map<string, number>()
+
+  for (const line of taskLines) {
+    const taskMatch = line.match(/^\s*(?:(?:[-*+]\s+|\d+[.)]\s+))?\[( |\/|x|X)\]\s+(.*?)\s*$/)
+    if (!taskMatch) {
+      continue
+    }
+
+    const title = taskMatch[2]
+    const marker = taskMatch[1]
+
+    seeds.push({
+      id: toStableTaskId(title, seenIds),
+      title,
+      status: taskStatusForMarker(marker)
+    })
+  }
+
+  return seeds
+}
+
+function taskStatusForMarker(marker: string): 'not_started' | 'in_progress' | 'complete' {
+  if (marker === '/') {
+    return 'in_progress'
+  }
+
+  if (marker.toLowerCase() === 'x') {
+    return 'complete'
+  }
+
+  return 'not_started'
+}
+
+function resolveTaskSeedItemsForRun(
+  state: AppState,
+  runId: string,
+  sessionId: string
+): TaskActivitySeedItem[] {
+  const session = state.sessions[sessionId]
+  if (!session) {
+    console.warn(`[task-seed] Session ${sessionId} not found in state during run ${runId}; task tracking will be empty`)
+    return []
+  }
+
+  const specDocument = state.specDocuments[buildSpecDocumentKey(session.spaceId, sessionId)]
+  if (specDocument?.markdown) {
+    return parseTaskSeedItemsFromMarkdown(specDocument.markdown)
+  }
+
+  const run = state.runs[runId]
+  if (run?.draft?.content) {
+    return parseTaskSeedItemsFromMarkdown(run.draft.content)
+  }
+
+  return []
+}
+
 function createBaselineSessionAgentRoster(sessionId: string, createdAt: string): SessionAgentRecord[] {
   return [
     {
@@ -542,8 +629,20 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       throw new Error(`Cannot set active space to unknown id: ${spaceId}`)
     }
 
-    const activeSession = state.activeSessionId ? state.sessions[state.activeSessionId] : undefined
-    const activeSessionId = activeSession && activeSession.spaceId === spaceId ? state.activeSessionId : null
+    // First check if the current active session belongs to this space.
+    const currentSession = state.activeSessionId ? state.sessions[state.activeSessionId] : undefined
+    let activeSessionId = currentSession && currentSession.spaceId === spaceId ? state.activeSessionId : null
+
+    // If not, find the most recent session for this space so reopening
+    // a workspace restores where the user left off.
+    if (!activeSessionId) {
+      const spaceSessions = Object.values(state.sessions)
+        .filter((s) => s.spaceId === spaceId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      if (spaceSessions.length > 0) {
+        activeSessionId = spaceSessions[0].id
+      }
+    }
 
     stateStore.save({
       ...state,
@@ -736,8 +835,10 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     try {
       const { stdout } = await execFileAsync('git', ['branch', '--list', '--format=%(refname:short)'], { cwd: repoPath })
       return stdout.trim().split('\n').filter(Boolean)
-    } catch {
-      return { error: 'Could not read branches.' }
+    } catch (err) {
+      console.error('[IPC] git:listBranches failed:', err)
+      const detail = err instanceof Error ? err.message : 'Unknown error'
+      return { error: `Could not read branches: ${detail}` }
     }
   })
 
@@ -748,11 +849,14 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       ])
       try {
         return JSON.parse(stdout)
-      } catch {
+      } catch (parseErr) {
+        console.error('[IPC] github:listRepos JSON parse failed:', parseErr)
         return { error: 'Failed to parse GitHub CLI response.' }
       }
-    } catch {
-      return { error: 'GitHub CLI not available. Install and authenticate with `gh auth login`.' }
+    } catch (err) {
+      console.error('[IPC] github:listRepos failed:', err)
+      const detail = err instanceof Error ? err.message : 'Unknown error'
+      return { error: `GitHub CLI error: ${detail}` }
     }
   })
 
@@ -765,14 +869,17 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
         'api', `repos/${input.owner}/${input.repo}/branches`, '--jq', '.[].name'
       ])
       return stdout.trim().split('\n').filter(Boolean)
-    } catch {
-      return { error: 'Could not fetch branches from GitHub.' }
+    } catch (err) {
+      console.error('[IPC] github:listBranches failed:', err)
+      const detail = err instanceof Error ? err.message : 'Unknown error'
+      return { error: `Could not fetch branches from GitHub: ${detail}` }
     }
   })
 
   // Run/Auth/Model handlers
 
   const activeRunners = new Map<string, AgentRunner>()
+  const taskActivityProjector = createTaskActivityProjector()
 
   ipcMain.removeHandler(RUN_SUBMIT_CHANNEL)
   ipcMain.handle(RUN_SUBMIT_CHANNEL, async (event, input: unknown) => {
@@ -801,23 +908,74 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       apiKey,
       systemPrompt: 'You are a helpful AI assistant.',
       onEvent: (runtimeEvent: SessionRuntimeEvent) => {
-        try {
-          const enrichedEvent =
-            runtimeEvent.type === 'message_appended' || runtimeEvent.type === 'message_updated'
-              ? { ...runtimeEvent, runId: run.id }
-              : runtimeEvent
-          event.sender.send(RUN_EVENT_CHANNEL, enrichedEvent)
-        } catch (err) {
-          if (event.sender.isDestroyed()) {
-            const orphanedRunner = activeRunners.get(run.id)
-            if (orphanedRunner) {
-              orphanedRunner.abort()
-              activeRunners.delete(run.id)
-              updateRunStatus(stateStore, run.id, 'failed', 'Renderer window closed')
+        const sendRuntimeEventToRenderer = (nextEvent: SessionRuntimeEvent) => {
+          try {
+            const enrichedEvent =
+              nextEvent.type === 'message_appended' || nextEvent.type === 'message_updated'
+                ? { ...nextEvent, runId: run.id }
+                : nextEvent
+            event.sender.send(RUN_EVENT_CHANNEL, enrichedEvent)
+            return true
+          } catch (err) {
+            if (event.sender.isDestroyed()) {
+              const orphanedRunner = activeRunners.get(run.id)
+              if (orphanedRunner) {
+                orphanedRunner.abort()
+                activeRunners.delete(run.id)
+                updateRunStatus(stateStore, run.id, 'failed', 'Renderer window closed')
+              }
+              return false
             }
+            console.error('[IPC] Failed to send run event to renderer:', err)
+            return false
+          }
+        }
+
+        const emitTaskSnapshot = (snapshot: ReturnType<typeof taskActivityProjector.getSnapshot>) => {
+          if (!snapshot) {
             return
           }
-          console.error('[IPC] Failed to send run event to renderer:', err)
+
+          sendRuntimeEventToRenderer({
+            type: 'task_activity_snapshot',
+            snapshot
+          })
+        }
+
+        if (!sendRuntimeEventToRenderer(runtimeEvent)) {
+          return
+        }
+
+        if (runtimeEvent.type === 'run_state_changed' && runtimeEvent.runState === 'pending') {
+          const currentState = stateStore.load()
+          const taskSeedItems = resolveTaskSeedItemsForRun(currentState, run.id, sessionId)
+          const snapshot = taskActivityProjector.onRunPending({
+            sessionId,
+            runId: run.id,
+            tasks: taskSeedItems
+          })
+          emitTaskSnapshot(snapshot)
+        } else if (
+          runtimeEvent.type === 'run_state_changed' &&
+          (runtimeEvent.runState === 'idle' || runtimeEvent.runState === 'error')
+        ) {
+          emitTaskSnapshot(
+            taskActivityProjector.onRunSettled({
+              sessionId,
+              runId: run.id
+            })
+          )
+        } else if (
+          runtimeEvent.type === 'message_updated' ||
+          runtimeEvent.type === 'message_appended'
+        ) {
+          emitTaskSnapshot(
+            taskActivityProjector.onMessageActivity({
+              sessionId,
+              runId: run.id,
+              detail: runtimeEvent.message.content?.slice(0, 200) ?? ''
+            })
+          )
         }
 
         if (runtimeEvent.type === 'message_appended') {

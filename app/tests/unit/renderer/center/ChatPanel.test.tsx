@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionConversationState } from '../../../../src/renderer/types/session-conversation'
 
 const mockHook = vi.fn<
-  [string | null],
+  [string | null, (string | null)?],
   {
     state: SessionConversationState
     submitPrompt: (prompt: string) => void
@@ -13,7 +13,7 @@ const mockHook = vi.fn<
 >()
 
 vi.mock('../../../../src/renderer/hooks/useIpcSessionConversation', () => ({
-  useIpcSessionConversation: (...args: [string | null]) => mockHook(...args),
+  useIpcSessionConversation: (...args: [string | null, (string | null)?]) => mockHook(...args),
 }))
 
 const decisionProposal = [
@@ -74,7 +74,7 @@ describe('ChatPanel', () => {
 
     render(<ChatPanel sessionId="sess-42" />)
 
-    expect(mockHook).toHaveBeenCalledWith('sess-42')
+    expect(mockHook).toHaveBeenCalledWith('sess-42', null)
   })
 
   it('calls onLatestDraftChange when latestDraft changes', () => {
@@ -112,6 +112,44 @@ describe('ChatPanel', () => {
 
     expect(onLatestDraftChange).toHaveBeenCalledWith(undefined)
     expect(onLatestDraftChange).toHaveBeenCalledWith(nextState.latestDraft)
+  })
+
+  it('calls onTaskActivitySnapshotChange when task activity snapshot changes', () => {
+    const onTaskActivitySnapshotChange = vi.fn()
+    const initialState = idleState({ taskActivitySnapshot: undefined })
+    const nextState = idleState({
+      taskActivitySnapshot: {
+        sessionId: 's-1',
+        runId: 'run-1',
+        items: [],
+        counts: { not_started: 0, in_progress: 1, blocked: 0, complete: 0 }
+      }
+    })
+
+    let currentState = initialState
+    mockHook.mockImplementation(() => ({
+      state: currentState,
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    }))
+
+    const { rerender } = render(
+      <ChatPanel
+        sessionId="sess-42"
+        onTaskActivitySnapshotChange={onTaskActivitySnapshotChange}
+      />
+    )
+
+    currentState = nextState
+    rerender(
+      <ChatPanel
+        sessionId="sess-42"
+        onTaskActivitySnapshotChange={onTaskActivitySnapshotChange}
+      />
+    )
+
+    expect(onTaskActivitySnapshotChange).toHaveBeenCalledWith(undefined)
+    expect(onTaskActivitySnapshotChange).toHaveBeenCalledWith(nextState.taskActivitySnapshot)
   })
 
   it('renders messages from hook state', () => {

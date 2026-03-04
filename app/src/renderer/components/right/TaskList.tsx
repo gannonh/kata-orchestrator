@@ -3,9 +3,19 @@ import { StatusBadge, type StatusBadgeTone } from '../shared/StatusBadge'
 import type { ProjectTask, TaskStatus } from '../../types/project'
 import type { SpecTaskItem, SpecTaskStatus } from '../../types/spec-document'
 import { Card, CardContent } from '../ui/card'
+import { cn } from '../../lib/cn'
+
+type StructuredTaskDisplayStatus = SpecTaskStatus | 'blocked'
+
+type StructuredTaskListItem = SpecTaskItem & {
+  displayStatus?: StructuredTaskDisplayStatus
+  activityLevel?: 'none' | 'low' | 'high'
+  activityDetail?: string
+  activeAgentId?: string
+}
 
 type TaskListProps = {
-  tasks: ProjectTask[] | SpecTaskItem[]
+  tasks: ProjectTask[] | StructuredTaskListItem[]
   onToggleTask?: (taskId: string) => void
 }
 
@@ -33,7 +43,7 @@ const taskStatusConfig: Record<TaskStatus, StatusConfig> = {
   }
 }
 
-const specTaskStatusConfig: Record<SpecTaskStatus, StatusConfig> = {
+const specTaskStatusConfig: Record<StructuredTaskDisplayStatus, StatusConfig> = {
   not_started: {
     label: 'Not Started',
     tone: 'neutral'
@@ -45,10 +55,14 @@ const specTaskStatusConfig: Record<SpecTaskStatus, StatusConfig> = {
   complete: {
     label: 'Complete',
     tone: 'success'
+  },
+  blocked: {
+    label: 'Blocked',
+    tone: 'danger'
   }
 }
 
-function isStructuredTask(task: ProjectTask | SpecTaskItem): task is SpecTaskItem {
+function isStructuredTask(task: ProjectTask | StructuredTaskListItem): task is StructuredTaskListItem {
   return 'markdownLineIndex' in task
 }
 
@@ -61,7 +75,9 @@ export function TaskList({ tasks, onToggleTask }: TaskListProps) {
     <ul className="grid gap-2">
       {tasks.map((task) => {
         if (isStructuredTask(task)) {
-          const status = specTaskStatusConfig[task.status]
+          const displayStatus = task.displayStatus ?? task.status
+          const status = specTaskStatusConfig[displayStatus]
+          const isHighActivity = task.activityLevel === 'high' && Boolean(task.activityDetail)
 
           return (
             <li key={task.id}>
@@ -71,9 +87,9 @@ export function TaskList({ tasks, onToggleTask }: TaskListProps) {
                     <label className="flex min-w-0 flex-1 items-center gap-3 text-sm">
                       <Checkbox
                         checked={
-                          task.status === 'in_progress'
+                          displayStatus === 'in_progress'
                             ? 'indeterminate'
-                            : task.status === 'complete'
+                            : displayStatus === 'complete'
                         }
                         aria-label={task.title}
                         onCheckedChange={() => {
@@ -87,6 +103,23 @@ export function TaskList({ tasks, onToggleTask }: TaskListProps) {
                       tone={status.tone}
                     />
                   </div>
+                  {isHighActivity ? (
+                    <div className="mt-2 flex items-center gap-2 border-t border-border/60 pt-2">
+                      <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                        {task.activityDetail}
+                      </p>
+                      {task.activeAgentId ? (
+                        <span
+                          aria-label="Active specialist"
+                          className={cn(
+                            'inline-flex h-4 items-center rounded bg-status-in-progress/20 px-1.5 text-[10px] font-medium text-status-in-progress'
+                          )}
+                        >
+                          {task.activeAgentId}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             </li>

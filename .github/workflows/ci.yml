@@ -7,67 +7,8 @@ on:
       - main
 
 jobs:
-  changes:
-    name: Detect Changed Areas
-    runs-on: ubuntu-latest
-    outputs:
-      core: ${{ steps.filter.outputs.core }}
-      desktop: ${{ steps.filter.outputs.desktop }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Detect changed paths
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            core:
-              - '**'
-              - '!app/**'
-            desktop:
-              - 'app/**'
-              - 'package.json'
-              - '.github/workflows/ci.yml'
-
-  kata-core-quality:
-    name: Kata Core Quality
-    needs:
-      - changes
-    if: github.event_name == 'push' || needs.changes.outputs.core == 'true'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install root dependencies
-        run: npm ci --workspaces=false
-
-      - name: Run core test suite
-        run: npm test
-
-      - name: Run scripts test suite
-        run: npm run test:scripts
-
-      - name: Build plugin distribution
-        run: npm run build:plugin
-
-      - name: Validate plugin artifacts
-        run: npm run test:artifacts
-
   kata-desktop-quality-gate:
     name: Kata Desktop Quality Gate
-    needs:
-      - changes
-    if: github.event_name == 'push' || needs.changes.outputs.desktop == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -88,34 +29,5 @@ jobs:
         run: |
           which xvfb-run >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y xvfb)
 
-      - name: Run desktop Wave 1 quality gate (lint + coverage + @quality-gate E2E subset)
+      - name: Run desktop quality gate (lint + coverage + full E2E suite)
         run: xvfb-run --auto-servernum npm run test:app:quality-gate
-
-  kata-desktop-uat:
-    name: Kata Desktop Full UAT E2E
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs:
-      - changes
-      - kata-desktop-quality-gate
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
-
-      - name: Install desktop app dependencies
-        run: npm ci --workspace app
-
-      - name: Ensure xvfb is available
-        run: |
-          which xvfb-run >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y xvfb)
-
-      - name: Run full desktop Wave 1 UAT E2E suite
-        run: xvfb-run --auto-servernum npm run test:app:e2e

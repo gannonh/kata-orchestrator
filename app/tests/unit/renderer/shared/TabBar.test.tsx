@@ -68,6 +68,59 @@ describe('TabBar', () => {
     expect(screen.getByRole('tab', { name: 'Changes' }).getAttribute('aria-selected')).toBe('true')
   })
 
+  it('navigates backward with ArrowLeft and ArrowUp', () => {
+    function Harness() {
+      const [activeTab, setActiveTab] = useState<'agents' | 'context' | 'changes'>('changes')
+      return (
+        <TabBar
+          ariaLabel="Panel tabs"
+          activeTab={activeTab}
+          tabs={[
+            { id: 'agents', label: 'Agents' },
+            { id: 'context', label: 'Context' },
+            { id: 'changes', label: 'Changes' }
+          ]}
+          onTabChange={setActiveTab}
+        />
+      )
+    }
+
+    render(<Harness />)
+
+    const tablist = screen.getByRole('tablist', { name: 'Panel tabs' })
+
+    fireEvent.keyDown(tablist, { key: 'ArrowLeft', code: 'ArrowLeft' })
+    expect(screen.getByRole('tab', { name: 'Context' }).getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.keyDown(tablist, { key: 'ArrowUp', code: 'ArrowUp' })
+    expect(screen.getByRole('tab', { name: 'Agents' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('navigates forward with ArrowDown', () => {
+    function Harness() {
+      const [activeTab, setActiveTab] = useState<'agents' | 'context' | 'changes'>('agents')
+      return (
+        <TabBar
+          ariaLabel="Panel tabs"
+          activeTab={activeTab}
+          tabs={[
+            { id: 'agents', label: 'Agents' },
+            { id: 'context', label: 'Context' },
+            { id: 'changes', label: 'Changes' }
+          ]}
+          onTabChange={setActiveTab}
+        />
+      )
+    }
+
+    render(<Harness />)
+
+    const tablist = screen.getByRole('tablist', { name: 'Panel tabs' })
+
+    fireEvent.keyDown(tablist, { key: 'ArrowDown', code: 'ArrowDown' })
+    expect(screen.getByRole('tab', { name: 'Context' }).getAttribute('aria-selected')).toBe('true')
+  })
+
   it('supports Home/End keys and ignores keyboard navigation when all tabs are disabled', () => {
     function Harness() {
       const [activeTab, setActiveTab] = useState<'agents' | 'context' | 'changes'>('context')

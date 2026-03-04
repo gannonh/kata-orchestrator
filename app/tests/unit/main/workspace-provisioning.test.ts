@@ -10,6 +10,19 @@ import {
   WorkspaceProvisioningError,
   provisionManagedWorkspace
 } from '../../../src/main/workspace-provisioning'
+import { GIT_ENV_KEYS_TO_CLEAR } from '../../../src/shared/git-env'
+
+function buildGitEnv(extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, ...extra }
+  for (const key of GIT_ENV_KEYS_TO_CLEAR) {
+    delete env[key]
+  }
+  return env
+}
+
+function execGit(cwd: string, args: string[]): void {
+  execFileSync('git', args, { cwd, env: buildGitEnv() })
+}
 
 type MockFsApi = {
   mkdir: ReturnType<typeof vi.fn>
@@ -414,6 +427,7 @@ describe('provisionManagedWorkspace validation', () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'kata-managed-workspace-'))
     const workspaceBaseDir = path.join(tempRoot, 'workspaces')
     const repoCacheBaseDir = path.join(tempRoot, 'repos')
+    const branchName = `main-${path.basename(tempRoot)}`
 
     const result = await provisionManagedWorkspace({
       workspaceBaseDir,
@@ -424,7 +438,7 @@ describe('provisionManagedWorkspace validation', () => {
         newRepoParentDir: repoCacheBaseDir,
         newRepoFolderName: 'from-default-fs',
         repoUrl: '',
-        branch: 'main'
+        branch: branchName
       }
     })
 
@@ -459,20 +473,55 @@ describe('provisionManagedWorkspace validation', () => {
     })
   })
 
+  it('falls back to forced worktree creation when branch is already checked out in another worktree', async () => {
+    const runGit = vi.fn(async ({ args }: { cwd: string, args: string[] }) => {
+      if (args[0] === 'worktree' && args[1] === 'add' && !args.includes('--force')) {
+        throw new Error("Preparing worktree (checking out 'main')\nfatal: 'main' is already used by worktree")
+      }
+    })
+
+    await provisionManagedWorkspace({
+      workspaceBaseDir: '/tmp/workspaces',
+      repoCacheBaseDir: '/tmp/repos',
+      input: {
+        workspaceMode: 'managed',
+        provisioningMethod: 'copy-local',
+        sourceLocalPath: '/Users/me/dev/kata-cloud',
+        repoUrl: 'https://github.com/org/repo',
+        branch: 'main'
+      },
+      runGit,
+      fsApi: createMockFsApi(['/tmp/repos/kata-cloud'])
+    })
+
+    expect(runGit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/tmp/repos/kata-cloud',
+        args: ['worktree', 'add', expect.any(String), 'main']
+      })
+    )
+    expect(runGit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/tmp/repos/kata-cloud',
+        args: ['worktree', 'add', '--force', expect.any(String), 'main']
+      })
+    )
+  })
+
   it('uses default fs cp path for copy-local provisioning', async () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'kata-managed-workspace-copy-'))
     const sourceRepoPath = path.join(tempRoot, 'source-repo')
     const workspaceBaseDir = path.join(tempRoot, 'workspaces')
     const repoCacheBaseDir = path.join(tempRoot, 'repos')
+    const branchName = `main-${path.basename(tempRoot)}`
 
     await fs.mkdir(sourceRepoPath, { recursive: true })
-    execFileSync('git', ['init'], { cwd: sourceRepoPath })
+    execGit(sourceRepoPath, ['init'])
     await fs.writeFile(path.join(sourceRepoPath, 'README.md'), '# source\n')
-    execFileSync('git', ['add', 'README.md'], { cwd: sourceRepoPath })
-    execFileSync(
-      'git',
+    execGit(sourceRepoPath, ['add', 'README.md'])
+    execGit(
+      sourceRepoPath,
       ['-c', 'user.name=Kata', '-c', 'user.email=kata@local', 'commit', '-m', 'Initial commit'],
-      { cwd: sourceRepoPath }
     )
 
     const result = await provisionManagedWorkspace({
@@ -483,13 +532,62 @@ describe('provisionManagedWorkspace validation', () => {
         provisioningMethod: 'copy-local',
         sourceLocalPath: sourceRepoPath,
         repoUrl: 'https://github.com/org/source-repo',
-        branch: 'main'
+        branch: branchName
       }
     })
 
     await expect(fs.access(path.join(repoCacheBaseDir, 'source-repo'))).resolves.toBeUndefined()
     expect(result.rootPath).toContain(path.join('workspaces', 'source-repo-'))
     await fs.rm(tempRoot, { recursive: true, force: true })
+  })
+
+  it('ignores inherited git hook environment when using default git runner', async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'kata-managed-workspace-env-'))
+    const workspaceBaseDir = path.join(tempRoot, 'workspaces')
+    const repoCacheBaseDir = path.join(tempRoot, 'repos')
+    const branchName = `main-${path.basename(tempRoot)}`
+    const originalGitDir = process.env.GIT_DIR
+    const originalGitWorkTree = process.env.GIT_WORK_TREE
+    const originalGitCommonDir = process.env.GIT_COMMON_DIR
+
+    process.env.GIT_DIR = '/definitely/not-a-repo/.git'
+    process.env.GIT_WORK_TREE = '/definitely/not-a-repo'
+    process.env.GIT_COMMON_DIR = '/definitely/not-a-repo/.git'
+
+    try {
+      const result = await provisionManagedWorkspace({
+        workspaceBaseDir,
+        repoCacheBaseDir,
+        input: {
+          workspaceMode: 'managed',
+          provisioningMethod: 'new-repo',
+          newRepoParentDir: repoCacheBaseDir,
+          newRepoFolderName: 'env-isolated',
+          repoUrl: '',
+          branch: branchName
+        }
+      })
+
+      await expect(fs.access(path.join(repoCacheBaseDir, 'env-isolated', '.git'))).resolves.toBeUndefined()
+      expect(result.rootPath).toContain(path.join('workspaces', 'env-isolated-'))
+    } finally {
+      if (typeof originalGitDir === 'undefined') {
+        delete process.env.GIT_DIR
+      } else {
+        process.env.GIT_DIR = originalGitDir
+      }
+      if (typeof originalGitWorkTree === 'undefined') {
+        delete process.env.GIT_WORK_TREE
+      } else {
+        process.env.GIT_WORK_TREE = originalGitWorkTree
+      }
+      if (typeof originalGitCommonDir === 'undefined') {
+        delete process.env.GIT_COMMON_DIR
+      } else {
+        process.env.GIT_COMMON_DIR = originalGitCommonDir
+      }
+      await fs.rm(tempRoot, { recursive: true, force: true })
+    }
   })
 })
 
@@ -522,6 +620,30 @@ describe('WorkspaceProvisioningError', () => {
     await expect(result).rejects.toMatchObject({
       category: 'git',
       remediation: expect.any(String)
+    })
+  })
+
+  it('throws a provisioning error when pathExists encounters a non-ENOENT error', async () => {
+    const eaccesError = Object.assign(new Error('EACCES'), { code: 'EACCES' })
+    const mockFsApi = createMockFsApi()
+    mockFsApi.access.mockRejectedValue(eaccesError)
+
+    await expect(provisionManagedWorkspace({
+      workspaceBaseDir: '/tmp/ws',
+      repoCacheBaseDir: '/tmp/cache',
+      input: {
+        workspaceMode: 'managed',
+        provisioningMethod: 'copy-local',
+        sourceLocalPath: '/Users/me/dev/kata-cloud',
+        repoUrl: 'https://github.com/org/repo',
+        branch: 'main'
+      },
+      runGit: vi.fn(),
+      fsApi: mockFsApi
+    })).rejects.toMatchObject({
+      category: 'filesystem',
+      message: expect.stringContaining('Cannot access path'),
+      remediation: 'Check filesystem permissions.'
     })
   })
 

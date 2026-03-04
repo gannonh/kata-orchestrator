@@ -11,6 +11,15 @@ const tasks: ProjectTask[] = [
   { id: 'task-4', title: 'Resolve merge conflicts', status: 'blocked' }
 ]
 
+import type { SpecTaskItem } from '../../../../src/renderer/types/spec-document'
+
+type StructuredTaskListItem = SpecTaskItem & {
+  displayStatus?: 'not_started' | 'in_progress' | 'complete' | 'blocked'
+  activityLevel?: 'none' | 'low' | 'high'
+  activityDetail?: string
+  activeAgentId?: string
+}
+
 describe('TaskList', () => {
   it('renders tasks with status indicators', () => {
     render(<TaskList tasks={tasks} />)
@@ -30,5 +39,23 @@ describe('TaskList', () => {
     render(<TaskList tasks={[]} />)
 
     expect(screen.getByText('No tasks yet.')).toBeTruthy()
+  })
+
+  it('renders high-activity detail without specialist badge when activeAgentId is absent', () => {
+    const structuredTasks: StructuredTaskListItem[] = [
+      {
+        id: 'task-1',
+        title: 'Draft panel structure',
+        status: 'in_progress',
+        markdownLineIndex: 0,
+        activityLevel: 'high',
+        activityDetail: 'Working on the panel layout'
+      }
+    ]
+
+    render(<TaskList tasks={structuredTasks} />)
+
+    expect(screen.getByText('Working on the panel layout')).toBeTruthy()
+    expect(screen.queryByLabelText('Active specialist')).toBeNull()
   })
 })

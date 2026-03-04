@@ -1,4 +1,5 @@
 import type { ConversationMessage, ConversationRunState } from './session-conversation'
+import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 type NonErrorConversationRunState = Exclude<ConversationRunState, 'error'>
 
@@ -28,7 +29,16 @@ export type MessageUpdatedEvent = {
   runId?: string
 }
 
-export type SessionRuntimeEvent = RunStateChangedEvent | MessageAppendedEvent | MessageUpdatedEvent
+export type TaskActivitySnapshotEvent = {
+  type: 'task_activity_snapshot'
+  snapshot: TaskActivitySnapshot
+}
+
+export type SessionRuntimeEvent =
+  | RunStateChangedEvent
+  | MessageAppendedEvent
+  | MessageUpdatedEvent
+  | TaskActivitySnapshotEvent
 
 export type SessionRuntimeAdapter = {
   subscribe: (onEvent: (event: SessionRuntimeEvent) => void) => () => void

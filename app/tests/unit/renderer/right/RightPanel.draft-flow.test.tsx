@@ -46,6 +46,22 @@ describe('RightPanel draft flow', () => {
         project={mockProject}
         spaceId="space-1"
         sessionId="session-1"
+        taskActivitySnapshot={{
+          sessionId: 'session-1',
+          runId: 'run-1',
+          items: [
+            {
+              id: 'task-parse-spec-sections',
+              title: 'Parse spec sections',
+              status: 'in_progress',
+              activityLevel: 'high',
+              activityDetail: 'Starting implementation for the space creation flow.',
+              activeAgentId: 'spec',
+              updatedAt: '2026-03-04T00:00:00.000Z'
+            }
+          ],
+          counts: { not_started: 0, in_progress: 1, blocked: 0, complete: 0 }
+        }}
         latestDraft={{
           runId: 'run-1',
           generatedAt: '2026-03-02T12:00:00.000Z',
@@ -85,6 +101,7 @@ describe('RightPanel draft flow', () => {
       })
       expect(screen.getByText('Build a prompt-to-spec demo')).toBeTruthy()
       expect(screen.getByRole('heading', { name: 'Goal' })).toBeTruthy()
+      expect(screen.getByText('Starting implementation for the space creation flow.')).toBeTruthy()
     })
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Parse spec sections' }))
@@ -99,6 +116,79 @@ describe('RightPanel draft flow', () => {
           appliedRunId: 'run-1'
         })
       )
+    })
+  })
+
+  it('applies manual task toggle state even when an older snapshot exists', async () => {
+    mockSpecGet.mockResolvedValueOnce({
+      markdown: ['## Goal', 'Persisted goal', '', '## Tasks', '- [ ] Initial task'].join('\n'),
+      updatedAt: '2026-03-03T00:00:00.000Z'
+    })
+
+    const { rerender } = render(
+      <RightPanel
+        project={mockProject}
+        spaceId="space-1"
+        sessionId="session-1"
+        taskActivitySnapshot={{
+          sessionId: 'session-1',
+          runId: 'run-1',
+          items: [
+            {
+              id: 'task-initial-task',
+              title: 'Initial task',
+              status: 'not_started',
+              activityLevel: 'none',
+              updatedAt: '2026-03-03T00:00:00.000Z'
+            }
+          ],
+          counts: { not_started: 1, in_progress: 0, blocked: 0, complete: 0 }
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Persisted goal')).toBeTruthy()
+      expect(screen.getByText('Not Started')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Initial task' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('In Progress')).toBeTruthy()
+      expect(mockSpecSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          spaceId: 'space-1',
+          sessionId: 'session-1',
+          markdown: expect.stringContaining('[/] Initial task')
+        })
+      )
+    })
+
+    rerender(
+      <RightPanel
+        project={mockProject}
+        spaceId="space-1"
+        sessionId="session-1"
+        taskActivitySnapshot={{
+          sessionId: 'session-1',
+          runId: 'run-2',
+          items: [
+            {
+              id: 'task-initial-task',
+              title: 'Initial task',
+              status: 'complete',
+              activityLevel: 'none',
+              updatedAt: '2099-01-01T00:00:00.000Z'
+            }
+          ],
+          counts: { not_started: 0, in_progress: 0, blocked: 0, complete: 1 }
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Complete')).toBeTruthy()
     })
   })
 
@@ -135,6 +225,40 @@ describe('RightPanel draft flow', () => {
         })
       )
     })
+  })
+
+  it('keeps structured view after a draft has already been applied, even when a newer run draft exists', async () => {
+    mockSpecGet.mockResolvedValueOnce({
+      markdown: [
+        '## Goal',
+        'Persisted applied goal',
+        '',
+        '## Tasks',
+        '- [ ] Initial task'
+      ].join('\n'),
+      updatedAt: '2026-03-03T00:00:00.000Z',
+      appliedRunId: 'run-1',
+      appliedAt: '2026-03-03T00:00:00.000Z'
+    })
+
+    render(
+      <RightPanel
+        project={mockProject}
+        spaceId="space-1"
+        sessionId="session-1"
+        latestDraft={{
+          runId: 'run-2',
+          generatedAt: '2026-03-03T00:01:00.000Z',
+          content: ['## Goal', 'Newer draft that should not force apply state'].join('\n')
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Persisted applied goal')).toBeTruthy()
+    })
+
+    expect(screen.queryByRole('button', { name: 'Apply Draft to Spec' })).toBeNull()
   })
 
   it('cancels markdown editing and restores the persisted content', async () => {

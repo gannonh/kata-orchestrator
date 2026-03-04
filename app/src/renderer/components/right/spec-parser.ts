@@ -3,6 +3,7 @@ import type {
   SpecTaskStatus,
   StructuredSpecDocument
 } from '../../types/spec-document'
+import { toStableTaskId } from '@shared/task-id'
 
 interface IndexedLine {
   content: string
@@ -121,6 +122,7 @@ function normalizeListItems(lines: IndexedLine[]): string[] {
 
 function normalizeTasks(lines: IndexedLine[]): SpecTaskItem[] {
   const tasks: SpecTaskItem[] = []
+  const seenIds = new Map<string, number>()
 
   lines.forEach(({ content, lineIndex }) => {
     const match = content.match(/^\s*(?:(?:[-*+]\s+|\d+[.)]\s+))?\[( |\/|x|X)\]\s+(.*?)\s*$/)
@@ -128,9 +130,11 @@ function normalizeTasks(lines: IndexedLine[]): SpecTaskItem[] {
       return
     }
 
+    const title = match[2]
+
     tasks.push({
-      id: `task-${tasks.length + 1}`,
-      title: match[2],
+      id: toStableTaskId(title, seenIds),
+      title,
       status: statusForMarker(match[1]),
       markdownLineIndex: lineIndex
     })

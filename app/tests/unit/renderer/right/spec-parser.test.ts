@@ -43,19 +43,19 @@ describe('parseStructuredSpec', () => {
     expect(parsed.sections.rollbackPlan).toEqual(['Revert the latest changes'])
     expect(parsed.tasks).toEqual([
       {
-        id: 'task-1',
+        id: 'task-build-parser',
         title: 'Build parser',
         status: 'not_started',
         markdownLineIndex: 22
       },
       {
-        id: 'task-2',
+        id: 'task-wire-ui',
         title: 'Wire UI',
         status: 'in_progress',
         markdownLineIndex: 23
       },
       {
-        id: 'task-3',
+        id: 'task-add-tests',
         title: 'Add tests',
         status: 'complete',
         markdownLineIndex: 24
@@ -114,17 +114,34 @@ describe('parseStructuredSpec', () => {
 
     expect(parsed.tasks).toEqual([
       {
-        id: 'task-1',
+        id: 'task-draft-parser',
         title: 'Draft parser',
         status: 'not_started',
         markdownLineIndex: 1
       },
       {
-        id: 'task-2',
+        id: 'task-add-tests',
         title: 'Add tests',
         status: 'complete',
         markdownLineIndex: 2
       }
+    ])
+  })
+
+  it('assigns deterministic task ids derived from title text and disambiguates duplicates', () => {
+    const markdown = [
+      '## Tasks',
+      '- [ ] Build spec panel',
+      '- [ ] Build spec panel',
+      '- [x] Build spec panel'
+    ].join('\n')
+
+    const parsed = parseStructuredSpec(markdown)
+
+    expect(parsed.tasks.map((task) => task.id)).toEqual([
+      'task-build-spec-panel',
+      'task-build-spec-panel-2',
+      'task-build-spec-panel-3'
     ])
   })
 
@@ -167,6 +184,24 @@ describe('parseStructuredSpec', () => {
     ])
   })
 
+  it('ignores unrecognized section headings without crashing', () => {
+    const markdown = [
+      '## Goal',
+      'Ship the parser',
+      '',
+      '## Unknown Section',
+      'This content should be ignored',
+      '',
+      '## Tasks',
+      '- [ ] Build parser'
+    ].join('\n')
+
+    const parsed = parseStructuredSpec(markdown)
+
+    expect(parsed.sections.goal).toBe('Ship the parser')
+    expect(parsed.tasks).toHaveLength(1)
+  })
+
   it('skips non-checkbox lines in tasks sections', () => {
     const markdown = [
       '## Tasks',
@@ -178,7 +213,7 @@ describe('parseStructuredSpec', () => {
 
     expect(parsed.tasks).toEqual([
       {
-        id: 'task-1',
+        id: 'task-build-parser',
         title: 'Build parser',
         status: 'not_started',
         markdownLineIndex: 2

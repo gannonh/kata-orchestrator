@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KAT-188 — Task Tracking State Parity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ============ THEME — Deep Blue + Gold ============ */
+  :root {
+    --font-body: 'Sora', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --surface2: #f0f2f5;
+    --surface-elevated: #ffffff;
+    --border: rgba(0, 0, 0, 0.07);
+    --border-bright: rgba(0, 0, 0, 0.14);
+    --text: #1e2a3a;
+    --text-dim: #6b7a8d;
+    --accent: #1e3a5f;
+    --accent-dim: rgba(30, 58, 95, 0.07);
+    --gold: #b5761a;
+    --gold-dim: rgba(181, 118, 26, 0.07);
+    --teal: #0c7a6e;
+    --teal-dim: rgba(12, 122, 110, 0.07);
+    --green: #2d6a30;
+    --green-dim: rgba(45, 106, 48, 0.07);
+    --rose: #9f1239;
+    --rose-dim: rgba(159, 18, 57, 0.07);
+    --slate: #475569;
+    --slate-dim: rgba(71, 85, 105, 0.07);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1419;
+      --surface: #171d24;
+      --surface2: #1e252e;
+      --surface-elevated: #222b36;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-bright: rgba(255, 255, 255, 0.12);
+      --text: #dce4ec;
+      --text-dim: #7e8fa0;
+      --accent: #5b9bd5;
+      --accent-dim: rgba(91, 155, 213, 0.1);
+      --gold: #d4a73a;
+      --gold-dim: rgba(212, 167, 58, 0.1);
+      --teal: #4fd1c5;
+      --teal-dim: rgba(79, 209, 197, 0.1);
+      --green: #68d391;
+      --green-dim: rgba(104, 211, 145, 0.1);
+      --rose: #fda4af;
+      --rose-dim: rgba(253, 164, 175, 0.1);
+      --slate: #94a3b8;
+      --slate-dim: rgba(148, 163, 184, 0.1);
+    }
+  }
+
+  /* ============ RESET ============ */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 15% 0%, var(--accent-dim) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 100%, var(--gold-dim) 0%, transparent 35%);
+    color: var(--text);
+    font-family: var(--font-body);
+    padding: 40px;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  /* ============ ANIMATION ============ */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeScale {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .anim { animation: fadeUp 0.45s ease-out both; animation-delay: calc(var(--i, 0) * 0.06s); }
+  .anim-scale { animation: fadeScale 0.4s ease-out both; animation-delay: calc(var(--i, 0) * 0.06s); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-delay: 0ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* ============ RESPONSIVE NAV ============ */
+  .wrap {
+    max-width: 1300px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 0 40px;
+  }
+  .main { min-width: 0; }
+
+  .toc {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    padding: 14px 0;
+    grid-row: 1 / -1;
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+  }
+  .toc::-webkit-scrollbar { width: 3px; }
+  .toc::-webkit-scrollbar-thumb { background: var(--surface-elevated); border-radius: 2px; }
+
+  .toc-title {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    padding: 0 0 10px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .toc a {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 5px;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+    line-height: 1.4;
+    margin-bottom: 1px;
+  }
+  .toc a:hover { color: var(--text); background: var(--surface2); }
+  .toc a.active { color: var(--text); border-left-color: var(--gold); }
+
+  @media (max-width: 1000px) {
+    .wrap { grid-template-columns: 1fr; padding-top: 0; }
+    body { padding-top: 0; }
+    .toc {
+      position: sticky; top: 0; z-index: 200;
+      max-height: none; display: flex; gap: 4px; align-items: center;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      padding: 10px 0; margin: 0 -40px; padding-left: 40px; padding-right: 40px;
+      grid-row: auto;
+    }
+    .toc::-webkit-scrollbar { display: none; }
+    .toc-title { display: none; }
+    .toc a {
+      white-space: nowrap; flex-shrink: 0; border-left: none;
+      border-bottom: 2px solid transparent; border-radius: 4px 4px 0 0;
+      padding: 6px 10px; font-size: 10px;
+    }
+    .toc a.active { border-left: none; border-bottom-color: var(--gold); background: var(--surface); }
+    .main { padding-top: 20px; }
+    .sec-head { scroll-margin-top: 52px; }
+  }
+
+  /* ============ TYPOGRAPHY ============ */
+  h1 {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    margin-bottom: 6px;
+    text-wrap: balance;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 8px;
+    font-family: var(--font-mono);
+  }
+
+  .lead {
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--text-dim);
+    max-width: 680px;
+    margin-bottom: 40px;
+  }
+
+  /* ============ SECTION HEAD ============ */
+  .sec-head {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    padding: 10px 0 18px;
+    margin-top: 40px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sec-head .dot {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }
+
+  .sec-accent { color: var(--accent); }
+  .sec-accent .dot { background: var(--accent); }
+  .sec-gold { color: var(--gold); }
+  .sec-gold .dot { background: var(--gold); }
+  .sec-teal { color: var(--teal); }
+  .sec-teal .dot { background: var(--teal); }
+  .sec-green { color: var(--green); }
+  .sec-green .dot { background: var(--green); }
+  .sec-rose { color: var(--rose); }
+  .sec-rose .dot { background: var(--rose); }
+  .sec-slate { color: var(--slate); }
+  .sec-slate .dot { background: var(--slate); }
+
+  /* ============ CARDS ============ */
+  .ve-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+  .ve-card--hero {
+    background: var(--surface-elevated);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+    padding: 28px 32px;
+  }
+  .ve-card--recessed {
+    background: var(--surface2);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .ve-card--gold { border-color: var(--gold-dim); border-left: 3px solid var(--gold); }
+  .ve-card--accent { border-color: var(--accent-dim); border-left: 3px solid var(--accent); }
+  .ve-card--teal { border-color: var(--teal-dim); border-left: 3px solid var(--teal); }
+  .ve-card--green { border-color: var(--green-dim); border-left: 3px solid var(--green); }
+  .ve-card--rose { border-color: var(--rose-dim); border-left: 3px solid var(--rose); }
+  .ve-card--slate { border-color: var(--slate-dim); border-left: 3px solid var(--slate); }
+
+  .ve-card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .ve-card p, .ve-card li {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+  }
+
+  .ve-card ul { list-style: none; }
+  .ve-card li { padding-left: 14px; position: relative; margin-bottom: 4px; }
+  .ve-card li::before {
+    content: '›';
+    color: var(--text-dim);
+    font-weight: 600;
+    position: absolute;
+    left: 0;
+  }
+
+  /* ============ CODE ============ */
+  code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .code-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    color: var(--text);
+    margin: 12px 0;
+  }
+  .code-block .kw { color: var(--accent); }
+  .code-block .tp { color: var(--teal); }
+  .code-block .str { color: var(--gold); }
+  .code-block .cm { color: var(--text-dim); }
+
+  /* ============ GRIDS ============ */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  @media (max-width: 768px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+
+  /* ============ FLOW ARROW ============ */
+  .flow-arrow {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 8px 0;
+  }
+  .flow-arrow svg {
+    width: 20px; height: 20px; fill: none;
+    stroke: var(--border-bright); stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* ============ MERMAID ============ */
+  .mermaid-wrap {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    overflow: hidden;
+  }
+
+  .mermaid-viewport {
+    overflow: auto;
+    cursor: grab;
+    min-height: 200px;
+  }
+  .mermaid-viewport.dragging { cursor: grabbing; }
+
+  .mermaid-viewport .mermaid-inner {
+    transform-origin: 0 0;
+    transition: transform 0.15s ease-out;
+    display: flex;
+    justify-content: center;
+  }
+
+  .zoom-controls {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 4px;
+    z-index: 10;
+  }
+  .zoom-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: 28px; height: 28px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+  }
+  .zoom-btn:hover { background: var(--surface-elevated); color: var(--text); border-color: var(--border-bright); }
+
+  .mermaid .nodeLabel { color: var(--text) !important; }
+  .mermaid .edgeLabel { color: var(--text-dim) !important; background-color: var(--bg) !important; }
+  .mermaid .edgeLabel rect { fill: var(--bg) !important; }
+  .mermaid .node rect, .mermaid .node circle, .mermaid .node polygon { stroke-width: 1.5px; }
+  .mermaid .edge-pattern-solid { stroke-width: 1.5px; }
+  .mermaid .edgeLabel { font-family: var(--font-mono) !important; font-size: 12px !important; }
+  .mermaid .nodeLabel { font-family: var(--font-body) !important; font-size: 15px !important; }
+
+  /* ============ BADGE ============ */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge--accent { background: var(--accent-dim); color: var(--accent); }
+  .badge--gold { background: var(--gold-dim); color: var(--gold); }
+  .badge--teal { background: var(--teal-dim); color: var(--teal); }
+  .badge--green { background: var(--green-dim); color: var(--green); }
+  .badge--rose { background: var(--rose-dim); color: var(--rose); }
+  .badge--slate { background: var(--slate-dim); color: var(--slate); }
+
+  /* ============ KPI ROW ============ */
+  .kpi-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 20px;
+    text-align: center;
+    flex: 1;
+    min-width: 120px;
+  }
+  .kpi-val {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    margin-bottom: 2px;
+  }
+  .kpi-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  /* ============ TASK TIMELINE ============ */
+  .timeline { position: relative; padding-left: 36px; }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--border-bright);
+    border-radius: 1px;
+  }
+  .tl-item {
+    position: relative;
+    margin-bottom: 12px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: border-color 0.2s;
+  }
+  .tl-item:hover { border-color: var(--border-bright); }
+  .tl-item::before {
+    content: '';
+    position: absolute;
+    left: -28px;
+    top: 16px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 2px solid var(--border-bright);
+  }
+  .tl-item--shared::before { border-color: var(--accent); background: var(--accent-dim); }
+  .tl-item--main::before { border-color: var(--teal); background: var(--teal-dim); }
+  .tl-item--renderer::before { border-color: var(--gold); background: var(--gold-dim); }
+  .tl-item--e2e::before { border-color: var(--green); background: var(--green-dim); }
+  .tl-item--verify::before { border-color: var(--rose); background: var(--rose-dim); }
+
+  .tl-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .tl-num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    min-width: 20px;
+  }
+  .tl-title {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .tl-files {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* ============ CALLOUT ============ */
+  .callout {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--gold);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    margin: 16px 0;
+  }
+  .callout strong { color: var(--text); font-weight: 600; }
+
+  /* ============ LEGEND ============ */
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 12px 0;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+  .legend-swatch {
+    width: 10px; height: 10px; border-radius: 50%;
+  }
+
+  /* ============ TABLE ============ */
+  .sync-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 12px 0;
+  }
+  .sync-table th {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--border-bright);
+  }
+  .sync-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .sync-table tr:last-child td { border-bottom: none; }
+  .sync-table tr:nth-child(even) td { background: var(--surface2); }
+
+  /* ============ DETAILS ============ */
+  details {
+    margin: 12px 0;
+  }
+  details summary {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 6px 0;
+    list-style: none;
+  }
+  details summary::before {
+    content: '+ ';
+    color: var(--accent);
+  }
+  details[open] summary::before {
+    content: '- ';
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <nav class="toc" id="toc">
+    <div class="toc-title">Contents</div>
+    <a href="#s1">1. Overview</a>
+    <a href="#s2">2. Architecture</a>
+    <a href="#s3">3. Domain Model</a>
+    <a href="#s4">4. Event Lifecycle</a>
+    <a href="#s5">5. Panel Composition</a>
+    <a href="#s6">6. State Sync</a>
+    <a href="#s7">7. Impl. Plan</a>
+    <a href="#s8">8. Risks</a>
+  </nav>
+
+  <div class="main">
+
+    <h1 class="anim" style="--i:0">KAT-188</h1>
+    <p class="subtitle anim" style="--i:1">Task Tracking State Parity &middot; Build Session Mock 14</p>
+    <p class="lead anim" style="--i:2">Implement real-time task tracking in the left panel with synchronized state across left and right panels, driven by a typed task-activity snapshot contract emitted from main process runtime events.</p>
+
+    <div class="kpi-row anim-scale" style="--i:3">
+      <div class="kpi">
+        <div class="kpi-val" style="color:var(--accent)">10</div>
+        <div class="kpi-label">Tasks</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val" style="color:var(--gold)">3</div>
+        <div class="kpi-label">Layers</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val" style="color:var(--teal)">~25</div>
+        <div class="kpi-label">Files</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-val" style="color:var(--green)">TDD</div>
+        <div class="kpi-label">Method</div>
+      </div>
+    </div>
+
+    <!-- ──────── 1. OVERVIEW ──────── -->
+    <div id="s1" class="sec-head sec-accent anim" style="--i:4"><span class="dot"></span> 1 — Overview</div>
+
+    <div class="ve-card ve-card--hero anim" style="--i:5">
+      <h3>Scope</h3>
+      <ul>
+        <li>Task rows in the left panel match Mock 14 structure and interaction patterns</li>
+        <li>Task state updates reflect live run activity while the orchestrator is active</li>
+        <li>High-activity and no-activity row detail states match the provided detail mocks</li>
+        <li>Left-panel task states stay in sync with right-panel spec task states</li>
+      </ul>
+    </div>
+
+    <div class="grid-2 anim" style="--i:6;margin-top:16px">
+      <div class="ve-card ve-card--accent">
+        <h3>Approach Selected</h3>
+        <p><strong>Main-owned task-activity projection + typed runtime snapshots.</strong> A typed <code>task_activity_snapshot</code> event emitted from main process. Renderer consumes snapshots and renders both panels from the same projected source.</p>
+      </div>
+      <div class="ve-card ve-card--recessed">
+        <h3>Approaches Rejected</h3>
+        <ul>
+          <li><strong>Renderer-only derivation</strong> from run/message events: brittle, no shared contract, hard to test</li>
+          <li><strong>Polling-based sync</strong> via run:list + roster: laggy UX, IPC churn, race conditions</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ──────── 2. ARCHITECTURE ──────── -->
+    <div id="s2" class="sec-head sec-gold anim" style="--i:7"><span class="dot"></span> 2 — Architecture</div>
+
+    <div class="mermaid-wrap anim" style="--i:8" id="arch-diagram">
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomDiagram('arch-diagram', 1.2)" title="Zoom in">+</button>
+        <button class="zoom-btn" onclick="zoomDiagram('arch-diagram', 0.8)" title="Zoom out">&minus;</button>
+        <button class="zoom-btn" onclick="resetZoom('arch-diagram')" title="Reset">R</button>
+      </div>
+      <div class="mermaid-viewport">
+        <div class="mermaid-inner">
+          <pre class="mermaid">
+flowchart TD
+    RUN["Run Lifecycle Events<br/><small>run_state_changed, message_updated</small>"]
+    SPEC["Spec Document<br/><small>Applied task list</small>"]
+    PROJ["Task Activity Projector<br/><small>main/task-activity-projector.ts</small>"]
+    IPC["IPC Bridge<br/><small>task_activity_snapshot event</small>"]
+    HOOK["useIpcSessionConversation<br/><small>Conversation state hook</small>"]
+    SHELL["AppShell<br/><small>Snapshot distribution</small>"]
+    LEFT["Left Panel<br/><small>TaskTrackingSection</small>"]
+    RIGHT["Right Panel<br/><small>TaskList + SpecSections</small>"]
+
+    RUN --> PROJ
+    SPEC --> PROJ
+    PROJ --> IPC
+    IPC --> HOOK
+    HOOK --> SHELL
+    SHELL --> LEFT
+    SHELL --> RIGHT
+    RIGHT -.->|"checkbox toggle"| SPEC
+          </pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-3 anim" style="--i:9;margin-top:16px">
+      <div class="ve-card ve-card--accent">
+        <h3>Main Process</h3>
+        <ul>
+          <li><code>task-activity-projector.ts</code></li>
+          <li><code>ipc-handlers.ts</code></li>
+          <li><code>orchestrator.ts</code></li>
+        </ul>
+      </div>
+      <div class="ve-card ve-card--slate">
+        <h3>Shared Types</h3>
+        <ul>
+          <li><code>task-tracking.ts</code></li>
+          <li><code>session-runtime-adapter.ts</code></li>
+        </ul>
+      </div>
+      <div class="ve-card ve-card--gold">
+        <h3>Renderer</h3>
+        <ul>
+          <li><code>TaskTrackingSection.tsx</code></li>
+          <li><code>useIpcSessionConversation</code></li>
+          <li><code>AppShell</code>, <code>LeftPanel</code></li>
+          <li><code>TaskList</code>, <code>RightPanel</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ──────── 3. DOMAIN MODEL ──────── -->
+    <div id="s3" class="sec-head sec-teal anim" style="--i:10"><span class="dot"></span> 3 — Domain Model</div>
+
+    <div class="grid-2 anim" style="--i:11">
+      <div class="ve-card ve-card--teal">
+        <h3>TaskTrackingItem</h3>
+        <div class="code-block"><span class="kw">type</span> <span class="tp">TaskTrackingItem</span> = {
+  <span class="str">id</span>: string
+  <span class="str">title</span>: string
+  <span class="str">status</span>: <span class="tp">TaskTrackingStatus</span>
+  <span class="str">activityLevel</span>: <span class="tp">TaskActivityLevel</span>
+  <span class="str">activityDetail</span>?: string
+  <span class="str">activeAgentId</span>?: string
+  <span class="str">updatedAt</span>: string
+}</div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-swatch" style="border:2px solid var(--text-dim);background:transparent"></div> not_started</div>
+          <div class="legend-item"><div class="legend-swatch" style="border:2px solid var(--accent);background:var(--accent-dim)"></div> in_progress</div>
+          <div class="legend-item"><div class="legend-swatch" style="border:2px solid var(--rose);background:var(--rose-dim)"></div> blocked</div>
+          <div class="legend-item"><div class="legend-swatch" style="border:2px solid var(--green);background:var(--green-dim)"></div> complete</div>
+        </div>
+      </div>
+      <div class="ve-card ve-card--teal">
+        <h3>TaskActivitySnapshot</h3>
+        <div class="code-block"><span class="kw">type</span> <span class="tp">TaskActivitySnapshot</span> = {
+  <span class="str">sessionId</span>: string
+  <span class="str">runId</span>: string
+  <span class="str">items</span>: <span class="tp">TaskTrackingItem</span>[]
+  <span class="str">counts</span>: Record&lt;<span class="tp">TaskTrackingStatus</span>, number&gt;
+}</div>
+        <p style="margin-top:10px">Activity levels: <code>none</code> <code>low</code> <code>high</code></p>
+      </div>
+    </div>
+
+    <div class="callout anim" style="--i:12">
+      <strong>ID Stability:</strong> Task IDs use deterministic title-based slugs (<code>slug(task title)</code>) instead of sequence IDs. The spec-parser preserves <code>markdownLineIndex</code> for write-back while exposing a stable <code>id</code> for cross-panel sync.
+    </div>
+
+    <!-- ──────── 4. EVENT LIFECYCLE ──────── -->
+    <div id="s4" class="sec-head sec-green anim" style="--i:13"><span class="dot"></span> 4 — Runtime Event Lifecycle</div>
+
+    <div class="mermaid-wrap anim" style="--i:14" id="seq-diagram">
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="zoomDiagram('seq-diagram', 1.2)">+</button>
+        <button class="zoom-btn" onclick="zoomDiagram('seq-diagram', 0.8)">&minus;</button>
+        <button class="zoom-btn" onclick="resetZoom('seq-diagram')">R</button>
+      </div>
+      <div class="mermaid-viewport">
+        <div class="mermaid-inner">
+          <pre class="mermaid">
+sequenceDiagram
+    participant O as Orchestrator
+    participant P as Projector
+    participant IPC as IPC Bridge
+    participant R as Renderer Hook
+
+    O->>P: run_state_changed pending
+    P->>P: Seed snapshot from spec tasks
+    P->>IPC: task_activity_snapshot
+    IPC->>R: Store in conversation state
+
+    O->>P: message_updated
+    P->>P: Update active task detail
+    P->>IPC: task_activity_snapshot
+    IPC->>R: Re-render panels
+
+    O->>P: run_state_changed idle
+    P->>P: Settle in-progress items
+    P->>IPC: terminal snapshot
+    IPC->>R: Final state update
+          </pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-3 anim" style="--i:15;margin-top:16px">
+      <div class="ve-card ve-card--green">
+        <h3>On Pending</h3>
+        <p>Emit initial snapshot. Mark first unresolved task <code>in_progress</code> with <code>high</code> activity. Seed task list from applied spec document (or draft fallback).</p>
+      </div>
+      <div class="ve-card ve-card--green">
+        <h3>On Message Update</h3>
+        <p>Update top active task with one-line activity detail text. Emit fresh snapshot. Map agent progression to task row deterministically.</p>
+      </div>
+      <div class="ve-card ve-card--green">
+        <h3>On Idle/Error</h3>
+        <p>Settle in-progress items. Clear high-activity detail. Emit terminal snapshot. Preserve completion status from prior toggles.</p>
+      </div>
+    </div>
+
+    <div class="callout anim" style="--i:16">
+      <strong>Projection source priority:</strong> 1) Applied spec tasks, 2) Latest draft task list, 3) Empty snapshot. The projector never randomizes task selection; ordering is deterministic for stable tests.
+    </div>
+
+    <!-- ──────── 5. PANEL COMPOSITION ──────── -->
+    <div id="s5" class="sec-head sec-rose anim" style="--i:17"><span class="dot"></span> 5 — Panel Composition</div>
+
+    <div class="grid-2 anim" style="--i:18">
+      <div class="ve-card ve-card--rose">
+        <h3>Left Panel — TaskTrackingSection</h3>
+        <p>Replaces preview-state task scaffolding in <code>LeftStatusSection</code>.</p>
+        <ul style="margin-top:8px">
+          <li>Header summary: <code>4 in progress &middot; 3 done &middot; 4 waiting</code></li>
+          <li>Status icon + title + disclosure chevron per row</li>
+          <li><code>activityLevel=none</code>: compact row only</li>
+          <li><code>activityLevel=high</code>: detail line + specialist badge</li>
+        </ul>
+      </div>
+      <div class="ve-card ve-card--rose">
+        <h3>Right Panel — TaskList overlay</h3>
+        <p>Keeps interactive checkbox surface. Enhances display from same snapshot.</p>
+        <ul style="margin-top:8px">
+          <li>Status badge reflects <code>TaskTrackingStatus</code> projection</li>
+          <li>Optional inline activity detail for high-activity rows</li>
+          <li>Checkbox toggles still delegate to <code>useSpecDocument.toggleTask</code></li>
+          <li>Post-persist, local state merges into snapshot projection</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="ve-card ve-card--recessed anim" style="--i:19;margin-top:16px">
+      <h3>AppShell Wiring</h3>
+      <p><code>useIpcSessionConversation</code> holds latest <code>taskActivitySnapshot</code> in conversation state. <code>AppShell</code> distributes the snapshot to both <code>LeftPanel</code> and <code>RightPanel</code> via props. <code>ChatPanel</code> exposes a callback <code>onTaskActivitySnapshotChange</code> for the runtime event flow.</p>
+    </div>
+
+    <!-- ──────── 6. STATE SYNC ──────── -->
+    <div id="s6" class="sec-head sec-slate anim" style="--i:20"><span class="dot"></span> 6 — State Sync Contract</div>
+
+    <div class="ve-card anim" style="--i:21">
+      <table class="sync-table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Writer</th>
+            <th>Precedence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Task completion status</td>
+            <td><code>specSave</code> / <code>specApplyDraft</code> (checkbox)</td>
+            <td><span class="badge badge--accent">Authoritative</span></td>
+          </tr>
+          <tr>
+            <td>Activity detail, level, agent</td>
+            <td>Runtime projector (main process)</td>
+            <td><span class="badge badge--gold">Layered on top</span></td>
+          </tr>
+          <tr>
+            <td>Task list ordering and titles</td>
+            <td>Spec document (applied or draft)</td>
+            <td><span class="badge badge--teal">Source of truth</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout anim" style="--i:22">
+      <strong>Conflict rule:</strong> If a user marks a task complete while runtime reports activity, completion status stays <code>complete</code>. Activity detail clears on the next snapshot. Persisted state always wins.
+    </div>
+
+    <div class="ve-card ve-card--recessed anim" style="--i:23;margin-top:12px">
+      <h3>Resilience</h3>
+      <ul>
+        <li>Unmappable activity goes to a synthetic <code>unmapped</code> bucket (not rendered; logged)</li>
+        <li>Absent snapshot events: fall back to persisted spec task list with no-activity rendering</li>
+        <li>Unknown statuses treated as <code>not_started</code></li>
+      </ul>
+    </div>
+
+    <!-- ──────── 7. IMPL PLAN ──────── -->
+    <div id="s7" class="sec-head sec-accent anim" style="--i:24"><span class="dot"></span> 7 — Implementation Plan</div>
+
+    <div class="legend anim" style="--i:25">
+      <div class="legend-item"><div class="legend-swatch" style="border:2px solid var(--accent);background:var(--accent-dim)"></div> Shared</div>
+      <div class="legend-item"><div class="legend-swatch" style="border:2px solid var(--teal);background:var(--teal-dim)"></div> Main</div>
+      <div class="legend-item"><div class="legend-swatch" style="border:2px solid var(--gold);background:var(--gold-dim)"></div> Renderer</div>
+      <div class="legend-item"><div class="legend-swatch" style="border:2px solid var(--green);background:var(--green-dim)"></div> E2E</div>
+      <div class="legend-item"><div class="legend-swatch" style="border:2px solid var(--rose);background:var(--rose-dim)"></div> Verify</div>
+    </div>
+
+    <div class="timeline anim" style="--i:26">
+      <div class="tl-item tl-item--shared">
+        <div class="tl-header">
+          <span class="tl-num">01</span>
+          <span class="tl-title">Add Shared Task Tracking Contracts</span>
+          <span class="badge badge--accent">Shared</span>
+        </div>
+        <div class="tl-files"><code>task-tracking.ts</code> <code>session-runtime-adapter.ts</code></div>
+      </div>
+
+      <div class="tl-item tl-item--shared">
+        <div class="tl-header">
+          <span class="tl-num">02</span>
+          <span class="tl-title">Stabilize Spec Task IDs for Cross-Panel Sync</span>
+          <span class="badge badge--accent">Shared</span>
+        </div>
+        <div class="tl-files"><code>spec-parser.ts</code> — deterministic <code>toStableTaskId()</code></div>
+      </div>
+
+      <div class="tl-item tl-item--main">
+        <div class="tl-header">
+          <span class="tl-num">03</span>
+          <span class="tl-title">Implement Main Task Activity Projector</span>
+          <span class="badge badge--teal">Main</span>
+        </div>
+        <div class="tl-files"><code>task-activity-projector.ts</code> <code>orchestrator.ts</code></div>
+      </div>
+
+      <div class="tl-item tl-item--main">
+        <div class="tl-header">
+          <span class="tl-num">04</span>
+          <span class="tl-title">Emit Snapshots from Runtime Events</span>
+          <span class="badge badge--teal">Main</span>
+        </div>
+        <div class="tl-files"><code>ipc-handlers.ts</code> — wire projector into run lifecycle</div>
+      </div>
+
+      <div class="tl-item tl-item--renderer">
+        <div class="tl-header">
+          <span class="tl-num">05</span>
+          <span class="tl-title">Consume Snapshots in Conversation State Hook</span>
+          <span class="badge badge--gold">Renderer</span>
+        </div>
+        <div class="tl-files"><code>useIpcSessionConversation.ts</code> — add reducer branch</div>
+      </div>
+
+      <div class="tl-item tl-item--renderer">
+        <div class="tl-header">
+          <span class="tl-num">06</span>
+          <span class="tl-title">Build Left TaskTrackingSection UI</span>
+          <span class="badge badge--gold">Renderer</span>
+        </div>
+        <div class="tl-files"><code>TaskTrackingSection.tsx</code> — no-activity + high-activity variants</div>
+      </div>
+
+      <div class="tl-item tl-item--renderer">
+        <div class="tl-header">
+          <span class="tl-num">07</span>
+          <span class="tl-title">Wire AppShell and LeftPanel to Shared Source</span>
+          <span class="badge badge--gold">Renderer</span>
+        </div>
+        <div class="tl-files"><code>AppShell.tsx</code> <code>LeftPanel.tsx</code> <code>ChatPanel.tsx</code></div>
+      </div>
+
+      <div class="tl-item tl-item--renderer">
+        <div class="tl-header">
+          <span class="tl-num">08</span>
+          <span class="tl-title">Merge Snapshot Activity into Right TaskList</span>
+          <span class="badge badge--gold">Renderer</span>
+        </div>
+        <div class="tl-files"><code>TaskList.tsx</code> <code>SpecSections.tsx</code> <code>RightPanel.tsx</code></div>
+      </div>
+
+      <div class="tl-item tl-item--e2e">
+        <div class="tl-header">
+          <span class="tl-num">09</span>
+          <span class="tl-title">E2E Parity Evidence Capture</span>
+          <span class="badge badge--green">E2E</span>
+        </div>
+        <div class="tl-files"><code>kat-188-task-tracking-parity.spec.ts</code> + 4 screenshot artifacts</div>
+      </div>
+
+      <div class="tl-item tl-item--verify">
+        <div class="tl-header">
+          <span class="tl-num">10</span>
+          <span class="tl-title">Verification Gate and Evidence Checklist</span>
+          <span class="badge badge--rose">Verify</span>
+        </div>
+        <div class="tl-files">Lint + unit suite + quality-gate E2E + acceptance checklist</div>
+      </div>
+    </div>
+
+    <!-- ──────── 8. RISKS ──────── -->
+    <div id="s8" class="sec-head sec-rose anim" style="--i:27"><span class="dot"></span> 8 — Risks and Mitigations</div>
+
+    <div class="grid-3 anim" style="--i:28">
+      <div class="ve-card ve-card--rose">
+        <h3>Task ID Drift</h3>
+        <p>IDs drift when markdown task order changes.</p>
+        <p style="margin-top:8px;color:var(--text)"><strong>Mitigation:</strong> Deterministic title-based IDs + parser stability tests.</p>
+      </div>
+      <div class="ve-card ve-card--rose">
+        <h3>Event Ordering Races</h3>
+        <p>Checkbox toggles and incoming runtime snapshots interleave.</p>
+        <p style="margin-top:8px;color:var(--text)"><strong>Mitigation:</strong> Merge precedence with persisted status as authoritative.</p>
+      </div>
+      <div class="ve-card ve-card--rose">
+        <h3>Projector Scope Creep</h3>
+        <p>Main-process projection complexity grows beyond ticket scope.</p>
+        <p style="margin-top:8px;color:var(--text)"><strong>Mitigation:</strong> Single snapshot event, deterministic mapping, no extra IPC channels.</p>
+      </div>
+    </div>
+
+    <div class="callout anim" style="--i:29;margin-top:24px">
+      <strong>Non-goals:</strong> Full orchestrator rewrite, center-panel decision flow changes (KAT-187), left-panel tab architecture redesign, spec panel comments/threads.
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /wrap -->
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    look: 'classic',
+    themeVariables: {
+      primaryColor: isDark ? '#1e3a5f' : '#e8f0f8',
+      primaryBorderColor: isDark ? '#5b9bd5' : '#1e3a5f',
+      primaryTextColor: isDark ? '#dce4ec' : '#1e2a3a',
+      secondaryColor: isDark ? '#27201a' : '#fef8f0',
+      secondaryBorderColor: isDark ? '#d4a73a' : '#b5761a',
+      secondaryTextColor: isDark ? '#dce4ec' : '#1e2a3a',
+      tertiaryColor: isDark ? '#1a2e2b' : '#eef8f6',
+      tertiaryBorderColor: isDark ? '#4fd1c5' : '#0c7a6e',
+      tertiaryTextColor: isDark ? '#dce4ec' : '#1e2a3a',
+      lineColor: isDark ? '#5b7a9d' : '#94a3b8',
+      fontSize: '15px',
+      fontFamily: "'Sora', system-ui, sans-serif",
+      noteBkgColor: isDark ? '#1e252e' : '#fefce8',
+      noteTextColor: isDark ? '#dce4ec' : '#1e2a3a',
+      noteBorderColor: isDark ? '#d4a73a' : '#b5761a',
+      actorBkg: isDark ? '#1e3a5f' : '#e8f0f8',
+      actorBorder: isDark ? '#5b9bd5' : '#1e3a5f',
+      actorTextColor: isDark ? '#dce4ec' : '#1e2a3a',
+      signalColor: isDark ? '#5b7a9d' : '#475569',
+      signalTextColor: isDark ? '#dce4ec' : '#1e2a3a',
+      activationBkgColor: isDark ? '#222b36' : '#f0f2f5',
+      activationBorderColor: isDark ? '#5b9bd5' : '#1e3a5f',
+    }
+  });
+</script>
+
+<script>
+// Zoom controls for Mermaid diagrams
+const zoomState = {};
+
+function getZoomState(id) {
+  if (!zoomState[id]) zoomState[id] = { scale: 1, panX: 0, panY: 0 };
+  return zoomState[id];
+}
+
+function applyTransform(id) {
+  const s = getZoomState(id);
+  const inner = document.querySelector('#' + id + ' .mermaid-inner');
+  if (inner) inner.style.transform = 'scale(' + s.scale + ') translate(' + s.panX + 'px, ' + s.panY + 'px)';
+}
+
+function zoomDiagram(id, factor) {
+  const s = getZoomState(id);
+  s.scale = Math.min(3, Math.max(0.3, s.scale * factor));
+  applyTransform(id);
+}
+
+function resetZoom(id) {
+  zoomState[id] = { scale: 1, panX: 0, panY: 0 };
+  applyTransform(id);
+}
+
+// Ctrl/Cmd + scroll zoom
+document.querySelectorAll('.mermaid-viewport').forEach(vp => {
+  const wrap = vp.closest('.mermaid-wrap');
+  if (!wrap) return;
+  const id = wrap.id;
+
+  vp.addEventListener('wheel', e => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      zoomDiagram(id, e.deltaY < 0 ? 1.1 : 0.9);
+    }
+  }, { passive: false });
+
+  // Click-and-drag panning
+  let dragging = false, startX, startY;
+  vp.addEventListener('mousedown', e => {
+    const s = getZoomState(id);
+    if (s.scale <= 1) return;
+    dragging = true;
+    startX = e.clientX - s.panX;
+    startY = e.clientY - s.panY;
+    vp.classList.add('dragging');
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const s = getZoomState(id);
+    s.panX = e.clientX - startX;
+    s.panY = e.clientY - startY;
+    applyTransform(id);
+  });
+  document.addEventListener('mouseup', () => {
+    dragging = false;
+    vp.classList.remove('dragging');
+  });
+});
+
+// Scroll spy for TOC
+(function() {
+  const toc = document.getElementById('toc');
+  const links = toc.querySelectorAll('a');
+  const sections = [];
+
+  links.forEach(link => {
+    const id = link.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (el) sections.push({ id, el, link });
+  });
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const match = sections.find(s => s.el === entry.target);
+        if (match) {
+          match.link.classList.add('active');
+          if (window.innerWidth <= 1000) {
+            match.link.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          }
+        }
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px' });
+
+  sections.forEach(s => observer.observe(s.el));
+
+  links.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const id = link.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        history.replaceState(null, '', '#' + id);
+      }
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

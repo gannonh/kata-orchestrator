@@ -1,10 +1,11 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { RightPanel } from '../../../../src/renderer/components/layout/RightPanel'
 import { mockProject } from '../../../../src/renderer/mock/project'
 
 afterEach(() => {
+  window.kata = undefined
   cleanup()
 })
 
@@ -112,5 +113,18 @@ describe('RightPanel', () => {
 
     expect(screen.getByRole('button', { name: 'Collapse right column' })).toBeTruthy()
     expect(content?.className).toContain('opacity-100')
+  })
+
+  it('does not call specGet when no active space/session is selected', async () => {
+    const specGet = vi.fn().mockResolvedValue(null)
+    window.kata = { ...window.kata, specGet }
+
+    render(<RightPanel project={mockProject} />)
+
+    await new Promise<void>((resolve) => {
+      setTimeout(() => resolve(), 0)
+    })
+
+    expect(specGet).not.toHaveBeenCalled()
   })
 })

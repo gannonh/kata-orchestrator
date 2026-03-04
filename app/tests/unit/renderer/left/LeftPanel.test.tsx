@@ -308,6 +308,38 @@ describe('LeftPanel', () => {
     expect(onJumpToMessage).toHaveBeenCalledWith('m-1')
   })
 
+  it('renders task tracking rows when runtime task activity snapshot is provided', () => {
+    render(
+      <LeftPanel
+        taskActivitySnapshot={{
+          sessionId: 'session-1',
+          runId: 'run-1',
+          items: [
+            {
+              id: 'task-a',
+              title: 'Implement parser',
+              status: 'in_progress',
+              activityLevel: 'high',
+              activityDetail: 'Starting parser implementation',
+              activeAgentId: 'agent-impl',
+              updatedAt: '2026-03-04T00:00:00.000Z'
+            }
+          ],
+          counts: {
+            not_started: 0,
+            in_progress: 1,
+            blocked: 0,
+            complete: 0
+          }
+        }}
+      />
+    )
+
+    expect(screen.getByLabelText('Task tracking')).toBeTruthy()
+    expect(screen.getByText('Implement parser')).toBeTruthy()
+    expect(screen.getByText('Starting parser implementation')).toBeTruthy()
+  })
+
   it('does not render conversation entry index when jump callback is not provided', () => {
     render(
       <LeftPanel

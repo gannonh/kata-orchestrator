@@ -71,7 +71,11 @@ test.describe('KAT-187 approval actions parity @uat', () => {
 
       await appWindow.getByRole('button', { name: 'Approve the plan...' }).click()
 
-      await expect(appWindow.getByText('Approve the plan and continue with this tech stack.')).toBeVisible()
+      await expect(
+        appWindow.getByTestId('message-list').getByText('Approve the plan and continue with this tech stack.', {
+          exact: true
+        })
+      ).toBeVisible()
 
       await appWindow.screenshot({
         path: 'test-results/kat-187/mock13-actions-post-click.png',

@@ -129,6 +129,11 @@ export function sessionConversationReducer(
         ...state,
         runState: 'idle'
       }
+    case 'TASK_ACTIVITY_SNAPSHOT_RECEIVED':
+      return {
+        ...state,
+        taskActivitySnapshot: event.snapshot
+      }
     case 'RESET_CONVERSATION':
       return createInitialSessionConversationState()
     default:

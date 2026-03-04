@@ -12,6 +12,7 @@ import type { PersistedSpecDocument } from '../../shared/types/spec-document'
 interface UseSpecDocumentParams {
   spaceId: string
   sessionId: string
+  enabled?: boolean
 }
 
 const fallbackDocumentCache = new Map<string, PersistedSpecDocument>()
@@ -64,7 +65,7 @@ function buildDocument(
   return document
 }
 
-export function useSpecDocument({ spaceId, sessionId }: UseSpecDocumentParams) {
+export function useSpecDocument({ spaceId, sessionId, enabled = true }: UseSpecDocumentParams) {
   const storageKey = useMemo(
     () => buildCacheKey(spaceId, sessionId),
     [sessionId, spaceId]
@@ -139,6 +140,10 @@ export function useSpecDocument({ spaceId, sessionId }: UseSpecDocumentParams) {
   )
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
+
     const specGet = window.kata?.specGet
     if (typeof specGet !== 'function') {
       return
@@ -167,7 +172,7 @@ export function useSpecDocument({ spaceId, sessionId }: UseSpecDocumentParams) {
     return () => {
       isCancelled = true
     }
-  }, [applyPersistedDocument, sessionId, spaceId, storageKey])
+  }, [applyPersistedDocument, enabled, sessionId, spaceId, storageKey])
 
   const persistDocument = useCallback(
     (nextDocument: StructuredSpecDocument) => {

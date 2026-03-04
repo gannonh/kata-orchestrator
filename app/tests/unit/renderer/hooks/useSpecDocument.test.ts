@@ -74,7 +74,7 @@ describe('useSpecDocument', () => {
         },
         tasks: [
           {
-            id: 'task-1',
+            id: 'task-restore-saved-specs',
             title: 'Restore saved specs',
             status: 'complete'
           }
@@ -110,7 +110,7 @@ describe('useSpecDocument', () => {
     ])
     expect(result.current.document.tasks).toEqual([
       {
-        id: 'task-1',
+        id: 'task-draft-the-hook',
         title: 'Draft the hook',
         status: 'not_started',
         markdownLineIndex: 7
@@ -156,7 +156,7 @@ describe('useSpecDocument', () => {
     expect(result.current.document.tasks[0]?.status).toBe('not_started')
 
     act(() => {
-      result.current.toggleTask('task-1')
+      result.current.toggleTask('task-review-the-draft')
     })
 
     expect(result.current.document.tasks[0]?.status).toBe('in_progress')
@@ -308,7 +308,7 @@ describe('useSpecDocument', () => {
     })
 
     act(() => {
-      result.current.toggleTask('task-1')
+      result.current.toggleTask('task-existing-task')
     })
 
     expect(result.current.document.appliedRunId).toBe('run-99')

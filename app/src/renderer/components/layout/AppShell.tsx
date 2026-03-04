@@ -8,6 +8,7 @@ import { RightPanel } from './RightPanel'
 import type { ScrollToMessage } from '../center/MessageList'
 import type { ConversationEntry } from '../left/conversation-entry-index'
 import type { LatestRunDraft } from '../../types/spec-document'
+import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 const RESIZER_WIDTH = 10
 const LEFT_MIN = 320
@@ -70,6 +71,13 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
   }>({
     sessionId: activeSessionKey,
     draft: undefined
+  })
+  const [taskActivitySnapshotState, setTaskActivitySnapshotState] = useState<{
+    sessionId: string | null
+    snapshot: TaskActivitySnapshot | undefined
+  }>({
+    sessionId: activeSessionKey,
+    snapshot: undefined
   })
   const [theme, setTheme] = useState<Theme>(() => {
     const persistedTheme = globalThis.localStorage?.getItem(THEME_STORAGE_KEY)
@@ -166,6 +174,10 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
     latestDraftState.sessionId === activeSessionKey
       ? latestDraftState.draft
       : undefined
+  const taskActivitySnapshot =
+    taskActivitySnapshotState.sessionId === activeSessionKey
+      ? taskActivitySnapshotState.snapshot
+      : undefined
   const handleLatestDraftChange = useCallback(
     (draft: LatestRunDraft | undefined) => {
       setLatestDraftState((current) => {
@@ -176,6 +188,22 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
         return {
           sessionId: activeSessionKey,
           draft
+        }
+      })
+    },
+    [activeSessionKey]
+  )
+  const handleTaskActivitySnapshotChange = useCallback(
+    (snapshot: TaskActivitySnapshot | undefined) => {
+      const snapshotSessionId = snapshot?.sessionId ?? activeSessionKey
+      setTaskActivitySnapshotState((current) => {
+        if (current.sessionId === snapshotSessionId && current.snapshot === snapshot) {
+          return current
+        }
+
+        return {
+          sessionId: snapshotSessionId,
+          snapshot
         }
       })
     },
@@ -212,6 +240,7 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
         <LeftPanel
           activeSpaceId={activeSpaceId}
           activeSessionId={activeSessionId}
+          taskActivitySnapshot={taskActivitySnapshot}
           collapsed={leftCollapsed}
           onCollapsedChange={setLeftCollapsed}
           theme={theme}
@@ -237,7 +266,9 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
         <CenterPanel>
           <ChatPanel
             sessionId={activeSessionId ?? null}
+            spaceId={activeSpaceId ?? null}
             onLatestDraftChange={handleLatestDraftChange}
+            onTaskActivitySnapshotChange={handleTaskActivitySnapshotChange}
             onConversationEntriesChange={setConversationEntries}
             onRegisterScrollToMessage={handleRegisterScrollToMessage}
           />
@@ -259,6 +290,7 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
             spaceId={activeSpaceId ?? null}
             sessionId={activeSessionId ?? null}
             latestDraft={latestDraft}
+            taskActivitySnapshot={taskActivitySnapshot}
           />
         </aside>
       </section>
