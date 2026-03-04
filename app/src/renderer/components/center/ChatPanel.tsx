@@ -76,8 +76,6 @@ export function ChatPanel({
 
                   if (selectedAction) {
                     submitPrompt(selectedAction.followUpPrompt)
-                  } else {
-                    console.error(`[ChatPanel] Decision action "${actionId}" not found in card for message ${decisionCard?.sourceMessageId}`)
                   }
                 }}
               />

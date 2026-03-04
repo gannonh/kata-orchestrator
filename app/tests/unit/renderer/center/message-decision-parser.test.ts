@@ -173,6 +173,10 @@ describe('message-decision-parser', () => {
     expect(stripDecisionActionLines(plain)).toBe(plain)
   })
 
+  it('returns empty string for falsy content', () => {
+    expect(stripDecisionActionLines('')).toBe('')
+  })
+
   it('returns false when a matching user message appears BEFORE the decision card', () => {
     const messages: ConversationMessage[] = [
       {
