@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+echo "[pre-push] Running local CI checks (npm run test:ci:local)..."
+npm run test:ci:local
+echo "[pre-push] Local CI checks passed."
