@@ -414,6 +414,7 @@ describe('provisionManagedWorkspace validation', () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'kata-managed-workspace-'))
     const workspaceBaseDir = path.join(tempRoot, 'workspaces')
     const repoCacheBaseDir = path.join(tempRoot, 'repos')
+    const branchName = `main-${path.basename(tempRoot)}`
 
     const result = await provisionManagedWorkspace({
       workspaceBaseDir,
@@ -424,7 +425,7 @@ describe('provisionManagedWorkspace validation', () => {
         newRepoParentDir: repoCacheBaseDir,
         newRepoFolderName: 'from-default-fs',
         repoUrl: '',
-        branch: 'main'
+        branch: branchName
       }
     })
 
@@ -464,6 +465,7 @@ describe('provisionManagedWorkspace validation', () => {
     const sourceRepoPath = path.join(tempRoot, 'source-repo')
     const workspaceBaseDir = path.join(tempRoot, 'workspaces')
     const repoCacheBaseDir = path.join(tempRoot, 'repos')
+    const branchName = `main-${path.basename(tempRoot)}`
 
     await fs.mkdir(sourceRepoPath, { recursive: true })
     execFileSync('git', ['init'], { cwd: sourceRepoPath })
@@ -483,7 +485,7 @@ describe('provisionManagedWorkspace validation', () => {
         provisioningMethod: 'copy-local',
         sourceLocalPath: sourceRepoPath,
         repoUrl: 'https://github.com/org/source-repo',
-        branch: 'main'
+        branch: branchName
       }
     })
 
