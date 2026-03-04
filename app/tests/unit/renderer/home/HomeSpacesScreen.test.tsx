@@ -197,11 +197,15 @@ describe('HomeSpacesScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
     await waitFor(() => expect(dialogOpenDirectory).toHaveBeenCalledTimes(1))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-
+    const createButton = screen.getByRole('button', { name: 'Create space' }) as HTMLButtonElement
     await waitFor(() => {
-      expect(screen.getByRole('alert').textContent).toContain('create failed')
+      expect(createButton.disabled).toBe(false)
     })
+
+    fireEvent.click(createButton)
+    await waitFor(() => expect(spaceCreate).toHaveBeenCalledTimes(1))
+
+    expect((await screen.findByRole('alert')).textContent).toContain('create failed')
   })
 
   it('shows IPC unavailable error when create handler is not exposed', async () => {
@@ -214,11 +218,13 @@ describe('HomeSpacesScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
     await waitFor(() => expect(dialogOpenDirectory).toHaveBeenCalledTimes(1))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-
+    const createButton = screen.getByRole('button', { name: 'Create space' }) as HTMLButtonElement
     await waitFor(() => {
-      expect(screen.getByRole('alert').textContent).toContain('IPC unavailable')
+      expect(createButton.disabled).toBe(false)
     })
+
+    fireEvent.click(createButton)
+    expect((await screen.findByRole('alert')).textContent).toContain('IPC unavailable')
   })
 
   it('supports search and list toggles (grouping + archived)', async () => {
@@ -267,11 +273,15 @@ describe('HomeSpacesScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Browse' }))
     await waitFor(() => expect(dialogOpenDirectory).toHaveBeenCalledTimes(1))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create space' }))
-
+    const createButton = screen.getByRole('button', { name: 'Create space' }) as HTMLButtonElement
     await waitFor(() => {
-      expect(screen.getByRole('alert').textContent).toContain('Failed to create space.')
+      expect(createButton.disabled).toBe(false)
     })
+
+    fireEvent.click(createButton)
+    await waitFor(() => expect(spaceCreate).toHaveBeenCalledTimes(1))
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Failed to create space.')
   })
 
   it('opens the currently selected space with the correct space ID', () => {

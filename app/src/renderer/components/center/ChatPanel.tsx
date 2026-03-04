@@ -6,6 +6,7 @@ import type { ConversationEntry } from '../left/conversation-entry-index'
 import { buildConversationEntries } from '../left/conversation-entry-index'
 import { ChatInput } from './ChatInput'
 import { MessageBubble } from './MessageBubble'
+import { type DecisionState, extractInlineDecisionCard, type InlineDecisionCard, isDecisionResolved } from './message-decision-parser'
 import { type ScrollToMessage, MessageList } from './MessageList'
 import { RunStatusBadge } from './RunStatusBadge'
 
@@ -33,18 +34,54 @@ export function ChatPanel({
     onConversationEntriesChange?.(conversationEntries)
   }, [conversationEntries, onConversationEntriesChange])
 
+  const decisionCardMap = useMemo(
+    () => {
+      const map = new Map<string, { card: InlineDecisionCard | undefined; resolved: boolean }>()
+      for (const message of state.messages) {
+        const card = extractInlineDecisionCard(message)
+        const resolved = card ? isDecisionResolved(state.messages, card) : false
+        map.set(message.id, { card, resolved })
+      }
+      return map
+    },
+    [state.messages]
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <MessageList onRegisterScrollToMessage={onRegisterScrollToMessage}>
-        {state.messages.map((message) => (
-          <div
-            key={message.id}
-            id={`message-${message.id}`}
-            data-message-id={message.id}
-          >
-            <MessageBubble message={message} />
-          </div>
-        ))}
+        {state.messages.map((message) => {
+          const { card: decisionCard, resolved } = decisionCardMap.get(message.id) ?? { card: undefined, resolved: false }
+          const decisionState: DecisionState = resolved
+            ? 'resolved'
+            : state.runState === 'pending'
+              ? 'pending'
+              : 'available'
+
+          return (
+            <div
+              key={message.id}
+              id={`message-${message.id}`}
+              data-message-id={message.id}
+            >
+              <MessageBubble
+                message={message}
+                decisionCard={decisionCard}
+                decisionState={decisionState}
+                onDecisionAction={(actionId) => {
+                  const selectedAction =
+                    decisionState === 'available'
+                      ? decisionCard?.actions.find((action) => action.id === actionId)
+                      : undefined
+
+                  if (selectedAction) {
+                    submitPrompt(selectedAction.followUpPrompt)
+                  }
+                }}
+              />
+            </div>
+          )
+        })}
       </MessageList>
       <div className="shrink-0 px-4 py-2">
         <RunStatusBadge runState={state.runState} />

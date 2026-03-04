@@ -1,0 +1,227 @@
+import { describe, expect, it } from 'vitest'
+
+import {
+  extractInlineDecisionCard,
+  isDecisionResolved,
+  stripDecisionActionLines
+} from '../../../../src/renderer/components/center/message-decision-parser'
+import type { ConversationMessage } from '../../../../src/renderer/types/session-conversation'
+
+const proposal = [
+  '## Why',
+  '- Electron + TypeScript keeps desktop iteration stable',
+  '',
+  '## How to keep Tech stable later',
+  '- Keep provider adapter boundaries explicit',
+  '',
+  'Approve this plan with 1 check? Clarifications',
+  '- Approve the plan...',
+  '- Keep the last switch...'
+].join('\n')
+
+const nearShapeProposal = [
+  '## WHY:',
+  '- Electron + TypeScript keeps desktop iteration stable',
+  '',
+  '## How to keep tech stable later ?',
+  '- Keep provider adapter boundaries explicit',
+  '',
+  'Approve this plan with 1 check :   clarifications',
+  '* Approve the plan...',
+  '* Keep the last switch...'
+].join('\n')
+
+const driftedIntentProposal = [
+  '## Why',
+  '- Electron + TypeScript keeps desktop iteration stable',
+  '',
+  '## How to keep Tech stable later',
+  '- Keep provider adapter boundaries explicit',
+  '',
+  'Approve this plan with 1 check? Clarifications',
+  '- Approve the plan, but remove TypeScript.',
+  '- Keep the last switch, but skip router alignment.'
+].join('\n')
+
+const expectedActions = [
+  {
+    id: 'approve_tech_stack_plan',
+    label: 'Approve the plan...',
+    followUpPrompt: 'Approve the plan and continue with this tech stack.',
+    variant: 'default'
+  },
+  {
+    id: 'keep_last_stack_switch',
+    label: 'Keep the last switch...',
+    followUpPrompt: 'Keep the last switch and apply the revised views.',
+    variant: 'secondary'
+  },
+  {
+    id: 'ask_for_clarification',
+    label: 'Clarifications',
+    followUpPrompt: 'I need clarifications before approving this plan.',
+    variant: 'outline'
+  }
+] as const
+
+describe('message-decision-parser', () => {
+  it('extracts an inline decision card from mock-12/13 shaped agent content', () => {
+    const card = extractInlineDecisionCard({
+      id: 'agent-1',
+      role: 'agent',
+      content: proposal,
+      createdAt: '2026-03-03T00:00:01.000Z'
+    })
+
+    expect(card).toEqual({
+      sourceMessageId: 'agent-1',
+      promptLabel: 'Approve this plan with 1 check? Clarifications',
+      actions: expectedActions
+    })
+  })
+
+  it('extracts from near-shape formatting variation while keeping same semantics', () => {
+    const card = extractInlineDecisionCard({
+      id: 'agent-variation',
+      role: 'agent',
+      content: nearShapeProposal,
+      createdAt: '2026-03-03T00:00:01.000Z'
+    })
+
+    expect(card).toEqual({
+      sourceMessageId: 'agent-variation',
+      promptLabel: 'Approve this plan with 1 check? Clarifications',
+      actions: expectedActions
+    })
+  })
+
+  it('returns undefined for non-decision messages', () => {
+    const card = extractInlineDecisionCard({
+      id: 'agent-2',
+      role: 'agent',
+      content: 'General planning update with no approval prompt.',
+      createdAt: '2026-03-03T00:00:01.000Z'
+    })
+
+    expect(card).toBeUndefined()
+  })
+
+  it('returns undefined when action lines drift from the expected decisions', () => {
+    const card = extractInlineDecisionCard({
+      id: 'agent-drifted',
+      role: 'agent',
+      content: driftedIntentProposal,
+      createdAt: '2026-03-03T00:00:01.000Z'
+    })
+
+    expect(card).toBeUndefined()
+  })
+
+  it('derives resolved state when a later user message matches action follow-up prompt', () => {
+    const messages: ConversationMessage[] = [
+      {
+        id: 'agent-1',
+        role: 'agent',
+        content: proposal,
+        createdAt: '2026-03-03T00:00:01.000Z'
+      },
+      {
+        id: 'user-1',
+        role: 'user',
+        content: 'Approve the plan and continue with this tech stack.',
+        createdAt: '2026-03-03T00:00:02.000Z'
+      }
+    ]
+
+    const card = extractInlineDecisionCard(messages[0]!)
+    expect(card).toBeTruthy()
+    expect(isDecisionResolved(messages, card!)).toBe(true)
+  })
+
+  it('matches follow-up prompts deterministically with whitespace/case normalization', () => {
+    const messages: ConversationMessage[] = [
+      {
+        id: 'agent-1',
+        role: 'agent',
+        content: proposal,
+        createdAt: '2026-03-03T00:00:01.000Z'
+      },
+      {
+        id: 'user-1',
+        role: 'user',
+        content: '  approve THE plan and continue with this tech stack.  ',
+        createdAt: '2026-03-03T00:00:02.000Z'
+      }
+    ]
+
+    const card = extractInlineDecisionCard(messages[0]!)
+    expect(card).toBeTruthy()
+    expect(isDecisionResolved(messages, card!)).toBe(true)
+  })
+
+  it('strips prompt and action bullet lines from content', () => {
+    const stripped = stripDecisionActionLines(proposal)
+    expect(stripped).not.toContain('Approve this plan with 1 check? Clarifications')
+    expect(stripped).not.toContain('- Approve the plan...')
+    expect(stripped).not.toContain('- Keep the last switch...')
+    expect(stripped).toContain('## Why')
+    expect(stripped).toContain('## How to keep Tech stable later')
+  })
+
+  it('returns content unchanged when no decision lines are present', () => {
+    const plain = '## Summary\n\nHere is the status update.'
+    expect(stripDecisionActionLines(plain)).toBe(plain)
+  })
+
+  it('returns empty string for falsy content', () => {
+    expect(stripDecisionActionLines('')).toBe('')
+  })
+
+  it('returns false when a matching user message appears BEFORE the decision card', () => {
+    const messages: ConversationMessage[] = [
+      {
+        id: 'user-early',
+        role: 'user',
+        content: 'Approve the plan and continue with this tech stack.',
+        createdAt: '2026-03-03T00:00:00.000Z'
+      },
+      {
+        id: 'agent-1',
+        role: 'agent',
+        content: proposal,
+        createdAt: '2026-03-03T00:00:01.000Z'
+      }
+    ]
+
+    const card = extractInlineDecisionCard(messages[1]!)
+    expect(card).toBeTruthy()
+    expect(isDecisionResolved(messages, card!)).toBe(false)
+  })
+
+  it('returns false when the decision source message is not present in the conversation', () => {
+    const card = extractInlineDecisionCard({
+      id: 'agent-source',
+      role: 'agent',
+      content: proposal,
+      createdAt: '2026-03-03T00:00:01.000Z'
+    })
+
+    const messages: ConversationMessage[] = [
+      {
+        id: 'other-agent',
+        role: 'agent',
+        content: proposal,
+        createdAt: '2026-03-03T00:00:01.000Z'
+      },
+      {
+        id: 'user-1',
+        role: 'user',
+        content: 'Approve the plan and continue with this tech stack.',
+        createdAt: '2026-03-03T00:00:02.000Z'
+      }
+    ]
+
+    expect(card).toBeTruthy()
+    expect(isDecisionResolved(messages, card!)).toBe(false)
+  })
+})

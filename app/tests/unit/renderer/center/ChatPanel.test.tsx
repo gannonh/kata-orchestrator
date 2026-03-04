@@ -16,6 +16,18 @@ vi.mock('../../../../src/renderer/hooks/useIpcSessionConversation', () => ({
   useIpcSessionConversation: (...args: [string | null]) => mockHook(...args),
 }))
 
+const decisionProposal = [
+  '## Why',
+  '- Electron + TypeScript keeps desktop iteration stable',
+  '',
+  '## How to keep Tech stable later',
+  '- Keep provider adapter boundaries explicit',
+  '',
+  'Approve this plan with 1 check? Clarifications',
+  '- Approve the plan...',
+  '- Keep the last switch...'
+].join('\n')
+
 function idleState(
   overrides: Partial<SessionConversationState> = {},
 ): SessionConversationState {
@@ -63,6 +75,43 @@ describe('ChatPanel', () => {
     render(<ChatPanel sessionId="sess-42" />)
 
     expect(mockHook).toHaveBeenCalledWith('sess-42')
+  })
+
+  it('calls onLatestDraftChange when latestDraft changes', () => {
+    const onLatestDraftChange = vi.fn()
+    const initialState = idleState({ latestDraft: undefined })
+    const nextState = idleState({
+      latestDraft: {
+        runId: 'run-1',
+        generatedAt: '2026-03-03T00:00:01Z',
+        content: '## Goal\nDraft'
+      }
+    })
+
+    let currentState = initialState
+    mockHook.mockImplementation(() => ({
+      state: currentState,
+      submitPrompt: vi.fn(),
+      retry: vi.fn(),
+    }))
+
+    const { rerender } = render(
+      <ChatPanel
+        sessionId="sess-42"
+        onLatestDraftChange={onLatestDraftChange}
+      />
+    )
+
+    currentState = nextState
+    rerender(
+      <ChatPanel
+        sessionId="sess-42"
+        onLatestDraftChange={onLatestDraftChange}
+      />
+    )
+
+    expect(onLatestDraftChange).toHaveBeenCalledWith(undefined)
+    expect(onLatestDraftChange).toHaveBeenCalledWith(nextState.latestDraft)
   })
 
   it('renders messages from hook state', () => {
@@ -129,6 +178,88 @@ describe('ChatPanel', () => {
     render(<ChatPanel sessionId={null} />)
 
     expect(screen.queryByText('GPT-5.3 Codex')).toBeNull()
+  })
+
+  it('renders inline decision actions for an eligible agent message', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        messages: [
+          { id: 'm1', role: 'agent', content: decisionProposal, createdAt: '2026-03-01T00:00:01Z' },
+        ],
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn(),
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    expect(screen.getByRole('button', { name: 'Approve the plan...' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Keep the last switch...' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Clarifications' })).toBeTruthy()
+  })
+
+  it('clicking a decision action submits the canonical follow-up prompt', () => {
+    const submitPrompt = vi.fn()
+    mockHook.mockReturnValue({
+      state: idleState({
+        messages: [
+          { id: 'm1', role: 'agent', content: decisionProposal, createdAt: '2026-03-01T00:00:01Z' },
+        ],
+      }),
+      submitPrompt,
+      retry: vi.fn(),
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve the plan...' }))
+
+    expect(submitPrompt).toHaveBeenCalledWith('Approve the plan and continue with this tech stack.')
+  })
+
+  it('disables inline decision actions while runState is pending', () => {
+    const submitPrompt = vi.fn()
+    mockHook.mockReturnValue({
+      state: idleState({
+        runState: 'pending',
+        messages: [
+          { id: 'm1', role: 'agent', content: decisionProposal, createdAt: '2026-03-01T00:00:01Z' },
+        ],
+      }),
+      submitPrompt,
+      retry: vi.fn(),
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    const approveButton = screen.getByRole('button', { name: 'Approve the plan...' }) as HTMLButtonElement
+    expect(approveButton.disabled).toBe(true)
+    fireEvent.click(approveButton)
+    expect(submitPrompt).not.toHaveBeenCalled()
+  })
+
+  it('renders decision actions only for the decision message, not for plain messages', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        messages: [
+          { id: 'm1', role: 'agent', content: decisionProposal, createdAt: '2026-03-01T00:00:01Z' },
+          { id: 'm2', role: 'agent', content: 'Hello, how can I help?', createdAt: '2026-03-01T00:00:02Z' },
+        ],
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn(),
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    const approveButtons = screen.getAllByRole('button', { name: 'Approve the plan...' })
+    expect(approveButtons).toHaveLength(1)
+
+    const keepButtons = screen.getAllByRole('button', { name: 'Keep the last switch...' })
+    expect(keepButtons).toHaveLength(1)
+
+    const clarifyButtons = screen.getAllByRole('button', { name: 'Clarifications' })
+    expect(clarifyButtons).toHaveLength(1)
   })
 
   it('publishes derived conversation entries when messages change', () => {
