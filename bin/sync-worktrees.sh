@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MAIN_DIR="/Users/gannonhall/dev/kata/kata-orchestrator"
-WT_DIR="/Users/gannonhall/dev/kata/kata-orchestrator.worktrees"
+MAIN_DIR="${MAIN_DIR:-/Users/gannonhall/dev/kata/kata-orchestrator}"
+WT_DIR="${WT_DIR:-/Users/gannonhall/dev/kata/kata-orchestrator.worktrees}"
 
 # Discover all worktree directories automatically (bash 3.2 compatible)
 WORKTREES=()
@@ -15,21 +15,30 @@ errors=0
 die() { echo "FATAL: $*" >&2; exit 1; }
 warn() { echo "ERROR: $*" >&2; errors=$((errors + 1)); }
 
-# -- Step 1: Switch main checkout to main and pull -----------------------
+# -- Step 1: Move main checkout to exactly origin/main --------------------
 echo "==> Switching $MAIN_DIR to main"
 if ! git -C "$MAIN_DIR" switch main 2>&1; then
   die "switch to main failed"
 fi
 
-echo "==> Pulling main"
-if ! git -C "$MAIN_DIR" pull --ff-only origin main 2>&1; then
-  die "pull failed"
+echo "==> Fetching origin/main"
+if ! git -C "$MAIN_DIR" fetch origin main 2>&1; then
+  die "fetch failed"
 fi
 
-target_sha=$(git -C "$MAIN_DIR" rev-parse HEAD)
+target_sha=$(git -C "$MAIN_DIR" rev-parse origin/main)
+echo "==> Resetting main checkout to ${target_sha:0:7}"
+if ! git -C "$MAIN_DIR" reset --hard "$target_sha" 2>&1; then
+  die "main reset failed"
+fi
+
+main_sha=$(git -C "$MAIN_DIR" rev-parse HEAD)
+if [ "$main_sha" != "$target_sha" ]; then
+  die "main expected ${target_sha:0:7} but got ${main_sha:0:7}"
+fi
 echo "    main is at ${target_sha:0:7}"
 
-# -- Step 2: Switch each worktree to its standby branch and pull ---------
+# -- Step 2: Move each standby worktree to exactly target_sha -------------
 for wt in "${WORKTREES[@]}"; do
   wt_path="$WT_DIR/$wt"
   branch="${wt}-standby"
@@ -58,9 +67,9 @@ for wt in "${WORKTREES[@]}"; do
     fi
   fi
 
-  echo "==> Pulling $wt"
-  if ! git -C "$wt_path" pull --ff-only 2>&1; then
-    warn "$wt: pull failed"
+  echo "==> Resetting $wt to ${target_sha:0:7}"
+  if ! git -C "$wt_path" reset --hard "$target_sha" 2>&1; then
+    warn "$wt: reset failed"
     continue
   fi
 
