@@ -2,7 +2,11 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 
 import { expect, test } from './fixtures/electron'
-import { seedSpec04ParityTimeline } from './helpers/spec04-parity-seed'
+import {
+  MOCK14_HIGH_ACTIVITY_DETAIL,
+  MOCK14_TASK_TITLES,
+  seedSpec04ParityTimeline
+} from './helpers/spec04-parity-seed'
 
 const evidenceDir = path.resolve(process.cwd(), 'test-results/kat-189')
 const mock10Path = path.join(evidenceDir, 'mock10-spec-draft-review.png')
@@ -10,14 +14,8 @@ const mock11Path = path.join(evidenceDir, 'mock11-architecture-proposal.png')
 const mock12Path = path.join(evidenceDir, 'mock12-tech-stack-a.png')
 const mock13Path = path.join(evidenceDir, 'mock13-tech-stack-b.png')
 const mock14Path = path.join(evidenceDir, 'mock14-task-tracking.png')
-const MOCK14_TASK_TITLES = [
-  'Review the latest prompt',
-  'Apply the structured draft',
-  'Keep the runtime wiring stable'
-]
-const MOCK14_HIGH_ACTIVITY_DETAIL = "I'm starting implementation for the structured draft task."
 
-test.describe('KAT-189 spec04 parity sweep @uat', () => {
+test.describe('KAT-189 spec04 parity sweep @quality-gate @ci @uat', () => {
   test('mock10-11 captures spec draft review and architecture proposal parity', async ({ appWindow, electronApp }) => {
     const timeline = await seedSpec04ParityTimeline({ appWindow, electronApp })
 

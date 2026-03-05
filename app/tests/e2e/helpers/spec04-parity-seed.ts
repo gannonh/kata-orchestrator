@@ -91,12 +91,12 @@ const MOCK12_TECH_STACK_PROPOSAL_CONTENT = [
   '- Approve the plan...',
   '- Keep the last switch...'
 ].join('\n')
-const MOCK14_TASK_TITLES = [
+export const MOCK14_TASK_TITLES = [
   'Review the latest prompt',
   'Apply the structured draft',
   'Keep the runtime wiring stable'
 ]
-const MOCK14_HIGH_ACTIVITY_DETAIL = "I'm starting implementation for the structured draft task."
+export const MOCK14_HIGH_ACTIVITY_DETAIL = "I'm starting implementation for the structured draft task."
 const MOCK14_TASK_TRACKING_SPEC_MARKDOWN = [
   '## Goal',
   'Build session parity sweep baseline.',
@@ -283,7 +283,8 @@ async function restoreSpecState(appWindow: Page, context: SeedSpecContext): Prom
     : {
         spaceId: context.spaceId,
         sessionId: context.sessionId,
-        markdown: ''
+        markdown: '',
+        appliedRunId: ''
       }
 
   await appWindow.evaluate(
@@ -417,6 +418,7 @@ export async function seedSpec04ParityTimeline({
         await appWindow.reload({ waitUntil: 'load' })
         await appWindow.waitForSelector('#root > *', { state: 'attached' })
         await ensureWorkspaceShell(appWindow)
+        await ensureSendButtonReady(appWindow)
 
         const rightPanel = appWindow.getByTestId('right-panel')
         const rightTabs = rightPanel.getByRole('tablist', { name: 'Right panel tabs' })
