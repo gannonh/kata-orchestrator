@@ -171,6 +171,23 @@ describe('useSpecDocument', () => {
       markdown: ['## Goal', 'Apply the incoming draft.', '', '## Tasks', '- [/] Review the draft'].join('\n'),
       appliedRunId: 'run-456'
     })
+
+    act(() => {
+      result.current.toggleTask('task-review-the-draft')
+    })
+
+    expect(result.current.document.tasks[0]?.status).toBe('complete')
+    expect(result.current.document.markdown).toBe(
+      ['## Goal', 'Apply the incoming draft.', '', '## Tasks', '- [x] Review the draft'].join(
+        '\n'
+      )
+    )
+    expect(mockSpecSave).toHaveBeenLastCalledWith({
+      spaceId: 'space-1',
+      sessionId: 'session-1',
+      markdown: ['## Goal', 'Apply the incoming draft.', '', '## Tasks', '- [x] Review the draft'].join('\n'),
+      appliedRunId: 'run-456'
+    })
   })
 
   it('keeps documents isolated by session key in local fallback cache', async () => {

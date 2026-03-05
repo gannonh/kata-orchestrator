@@ -138,6 +138,20 @@ describe('RightPanel draft flow', () => {
         })
       )
     })
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Parse spec sections' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Complete')).toBeTruthy()
+      expect(mockSpecSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          spaceId: 'space-1',
+          sessionId: 'session-1',
+          markdown: expect.stringContaining('[x] Parse spec sections'),
+          appliedRunId: 'run-1'
+        })
+      )
+    })
   })
 
   it('applies manual task toggle state even when an older snapshot exists', async () => {
