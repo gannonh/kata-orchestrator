@@ -42,17 +42,21 @@ export function TaskList({ tasks, onToggleTask }: TaskListProps) {
   }
 
   if (isStructuredTask(tasks[0])) {
+    const structuredTasks = tasks as TaskBlockListItem[]
+
     return (
       <TaskBlockList
-        tasks={tasks}
+        tasks={structuredTasks}
         onToggleTask={onToggleTask}
       />
     )
   }
 
+  const projectTasks = tasks as ProjectTask[]
+
   return (
     <ul className="grid gap-2">
-      {tasks.map((task) => {
+      {projectTasks.map((task) => {
         const status = taskStatusConfig[task.status]
 
         return (
