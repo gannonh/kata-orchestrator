@@ -15,7 +15,10 @@ async function expectRunStatus(appWindow: Page, label: 'Ready' | 'Thinking', tim
 
 test.describe('KAT-160 spec panel parity evidence @uat', () => {
   test('captures generating and structured states', async ({ appWindow, managedTestRootDir }) => {
-    test.skip(process.env.CI === 'true' || process.env.CI === '1', 'Requires local OAuth session and is excluded from CI.')
+    test.skip(
+      process.env.CI === 'true' || process.env.CI === '1' || process.env.KATA_E2E_HEADLESS === '1',
+      'Requires local OAuth session and is excluded from CI/headless quality gates.'
+    )
     test.setTimeout(120_000)
 
     const sourceAuthPath = path.join(os.homedir(), '.codex', 'auth.json')
