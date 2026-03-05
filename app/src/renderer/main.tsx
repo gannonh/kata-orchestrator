@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { Agentation } from 'agentation'
 
 import { App } from './App'
+import { shouldRenderAgentation } from './lib/agentation'
 import './app.css'
 
 const root = document.getElementById('root')
@@ -14,6 +15,8 @@ if (!root) {
 createRoot(root).render(
   <StrictMode>
     <App />
-    {import.meta.env.DEV && <Agentation endpoint="http://localhost:4747" />}
+    {shouldRenderAgentation(import.meta.env.DEV, import.meta.env.VITE_DISABLE_AGENTATION) && (
+      <Agentation endpoint="http://localhost:4747" />
+    )}
   </StrictMode>
 )
