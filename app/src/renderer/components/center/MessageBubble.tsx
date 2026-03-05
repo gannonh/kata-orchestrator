@@ -1,8 +1,7 @@
 import { type ChatMessage } from '../../types/chat'
 import { type ConversationMessage } from '../../types/session-conversation'
 import { MessageActionRow } from './MessageActionRow'
-import { toPrimitiveMessage } from './primitives/adapters'
-import { ConversationMessage as ConversationMessagePrimitive } from './primitives/ConversationMessage'
+import { ConversationMessage as ConversationMessagePrimitive, toPrimitiveMessage } from './primitives'
 import { stripDecisionActionLines, type DecisionState, type InlineDecisionActionId, type InlineDecisionCard } from './message-decision-parser'
 
 type BubbleMessage = ChatMessage | ConversationMessage

@@ -1,6 +1,5 @@
 import type { ConversationRunState } from '../../types/session-conversation'
-import { toPrimitiveRunState } from './primitives/adapters'
-import { ConversationStatusBadge } from './primitives/ConversationStatusBadge'
+import { ConversationStatusBadge, toPrimitiveRunState } from './primitives'
 
 type RunStatusBadgeProps = {
   runState: ConversationRunState
