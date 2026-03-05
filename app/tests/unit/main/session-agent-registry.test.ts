@@ -47,6 +47,18 @@ describe('createSessionAgentRegistry', () => {
     expect(registry.list('session-1').find((entry) => entry.id === agent.id)?.status).toBe('completed')
   })
 
+  it('throws when transitioning an unknown agent id', () => {
+    const state = createDefaultAppState()
+    const registry = createSessionAgentRegistry(
+      () => state,
+      (next) => Object.assign(state, next)
+    )
+
+    expect(() => {
+      registry.transitionStatus('missing-agent', 'running', '2026-03-05T00:00:01.000Z')
+    }).toThrow('Cannot transition unknown agent: missing-agent')
+  })
+
   it('lists with deterministic sortOrder then createdAt then id', () => {
     const state = createDefaultAppState()
     const registry = createSessionAgentRegistry(
@@ -91,7 +103,19 @@ describe('createSessionAgentRegistry', () => {
       createdAt: '2026-03-05T00:00:01.000Z',
       updatedAt: '2026-03-05T00:00:01.000Z'
     })
+    registry.upsert({
+      id: 'd',
+      sessionId,
+      name: 'D',
+      role: 'D',
+      kind: 'specialist',
+      status: 'idle',
+      avatarColor: '#444444',
+      sortOrder: 1,
+      createdAt: '2026-03-05T00:00:02.000Z',
+      updatedAt: '2026-03-05T00:00:02.000Z'
+    })
 
-    expect(registry.list(sessionId).map((agent) => agent.id)).toEqual(['c', 'a', 'b'])
+    expect(registry.list(sessionId).map((agent) => agent.id)).toEqual(['c', 'a', 'd', 'b'])
   })
 })

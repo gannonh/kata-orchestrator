@@ -102,11 +102,8 @@ function isRunRecord(value: unknown): boolean {
 }
 
 function isSessionAgentRecord(value: unknown): value is SessionAgentRecord {
-  if (!isRecord(value)) {
-    return false
-  }
-
   return (
+    isRecord(value) &&
     typeof value.id === 'string' &&
     typeof value.sessionId === 'string' &&
     typeof value.name === 'string' &&

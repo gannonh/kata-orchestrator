@@ -677,6 +677,50 @@ describe('createStateStore', () => {
     expect(state.agentRoster.invalid).toBeUndefined()
   })
 
+  test('drops agent roster entries when status is unknown', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {
+          valid: {
+            id: 'valid',
+            sessionId: 's1',
+            name: 'Valid Agent',
+            role: 'Valid role',
+            kind: 'specialist',
+            status: 'running',
+            avatarColor: '#123456',
+            sortOrder: 1,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          },
+          invalid: {
+            id: 'invalid',
+            sessionId: 's1',
+            name: 'Invalid Agent',
+            role: 'Invalid role',
+            kind: 'specialist',
+            status: 'mystery',
+            avatarColor: '#123456',
+            sortOrder: 2,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          }
+        },
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.agentRoster.valid).toBeDefined()
+    expect(state.agentRoster.invalid).toBeUndefined()
+  })
+
   test('drops non-object agent roster entries', () => {
     fs.writeFileSync(
       filePath,

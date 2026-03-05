@@ -1639,6 +1639,37 @@ describe('registerIpcHandlers', () => {
       expect(abortResult).toBe(false)
     })
 
+    it('marks run failed when runner.execute rejects unexpectedly', async () => {
+      const mockRunner = { execute: vi.fn().mockRejectedValue(new Error('boom')), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({
+        id: 'run-fail-1',
+        sessionId: 'sess-1',
+        prompt: 'hello',
+        status: 'queued',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        messages: []
+      })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore()
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      await expect(handler({ sender: { send: vi.fn() } }, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })).resolves.toEqual({
+        runId: 'run-fail-1'
+      })
+
+      await Promise.resolve()
+
+      expect(mockUpdateRunStatus).toHaveBeenCalledWith(store, 'run-fail-1', 'failed', 'boom')
+
+      const abortHandler = getHandlersByChannel().get('run:abort')!
+      await expect(abortHandler(null, { runId: 'run-fail-1' })).resolves.toBe(false)
+    })
+
     it('seeds task activity from the latest Tasks section when markdown contains multiple Tasks headings', async () => {
       const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
       mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
