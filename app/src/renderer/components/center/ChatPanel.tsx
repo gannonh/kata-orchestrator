@@ -8,7 +8,8 @@ import { ChatInput } from './ChatInput'
 import { MessageBubble } from './MessageBubble'
 import { type DecisionState, extractInlineDecisionCard, type InlineDecisionCard, isDecisionResolved } from './message-decision-parser'
 import { type ScrollToMessage, MessageList } from './MessageList'
-import { RunStatusBadge } from './RunStatusBadge'
+import { toPrimitiveRunState } from './primitives/adapters'
+import { ConversationStatusBadge } from './primitives/ConversationStatusBadge'
 import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 type ChatPanelProps = {
@@ -29,6 +30,7 @@ export function ChatPanel({
   onRegisterScrollToMessage
 }: ChatPanelProps) {
   const { state, submitPrompt, retry } = useIpcSessionConversation(sessionId, spaceId ?? null)
+  const primitiveRunState = toPrimitiveRunState(state.runState)
   const conversationEntries = useMemo(() => buildConversationEntries(state.messages), [state.messages])
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export function ChatPanel({
           const { card: decisionCard, resolved } = decisionCardMap.get(message.id) ?? { card: undefined, resolved: false }
           const decisionState: DecisionState = resolved
             ? 'resolved'
-            : state.runState === 'pending'
+            : primitiveRunState === 'pending'
               ? 'pending'
               : 'available'
 
@@ -93,7 +95,7 @@ export function ChatPanel({
         })}
       </MessageList>
       <div className="shrink-0 px-4 py-2">
-        <RunStatusBadge runState={state.runState} />
+        <ConversationStatusBadge runState={primitiveRunState} />
       </div>
       <ChatInput
         onSend={submitPrompt}
