@@ -87,13 +87,22 @@ describe('AgentCard', () => {
 
     expect(within(screen.getByTestId('agent-row-status-dot')).getByText('Idle')).toBeTruthy()
 
+    rerender(<AgentCard agent={{ ...runningAgent, status: 'queued' }} />)
+    expect(within(screen.getByTestId('agent-row-status-dot')).getByText('Queued')).toBeTruthy()
+
+    rerender(<AgentCard agent={{ ...runningAgent, status: 'delegating' }} />)
+    expect(within(screen.getByTestId('agent-row-status-dot')).getByText('Delegating')).toBeTruthy()
+
     rerender(<AgentCard agent={{ ...runningAgent, status: 'running' }} />)
     expect(within(screen.getByTestId('agent-row-status-dot')).getByText('Running')).toBeTruthy()
 
     rerender(<AgentCard agent={{ ...runningAgent, status: 'blocked' }} />)
     expect(within(screen.getByTestId('agent-row-status-dot')).getByText('Blocked')).toBeTruthy()
 
-    rerender(<AgentCard agent={{ ...runningAgent, status: 'complete' }} />)
-    expect(within(screen.getByTestId('agent-row-status-dot')).getByText('Complete')).toBeTruthy()
+    rerender(<AgentCard agent={{ ...runningAgent, status: 'completed' }} />)
+    expect(within(screen.getByTestId('agent-row-status-dot')).getByText('Completed')).toBeTruthy()
+
+    rerender(<AgentCard agent={{ ...runningAgent, status: 'failed' }} />)
+    expect(within(screen.getByTestId('agent-row-status-dot')).getByText('Failed')).toBeTruthy()
   })
 })
