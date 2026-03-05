@@ -57,6 +57,7 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
     await ensureSendButtonReady(appWindow)
     await expect(appWindow.getByLabel('Message input')).toBeVisible()
 
+    const previousOpenAiApiKey = await electronApp.evaluate(() => process.env.OPENAI_API_KEY ?? null)
     await electronApp.evaluate(() => {
       if (!process.env.OPENAI_API_KEY) {
         process.env.OPENAI_API_KEY = 'kat-162-e2e-dummy-key'
@@ -74,6 +75,7 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
       throw new Error('Missing active space/session before KAT-162 run submission.')
     }
 
+    let runId: string | null = null
     await appWindow.getByLabel('Message input').fill(BASELINE_PROMPT)
     await appWindow.getByRole('button', { name: 'Send' }).click()
     await expect(appWindow.getByTestId('message-list').getByText(BASELINE_PROMPT)).toBeVisible()
@@ -82,7 +84,6 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
       fullPage: true
     })
 
-    let runId: string | null = null
     await expect.poll(async () => {
       const state = await readPersistedState(managedStateFilePath)
       const run = Object.values(state.runs).find(
@@ -152,6 +153,23 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
       throw new Error('Persisted state did not contain expected run/spec data before relaunch.')
     }
     await fs.copyFile(managedStateFilePath, relaunchStateFilePath)
+    await appWindow.evaluate(async (inputRunId) => {
+      if (!inputRunId) {
+        return
+      }
+      try {
+        await window.kata?.runAbort?.({ runId: inputRunId })
+      } catch {
+        // Best-effort cleanup: run may already be settled.
+      }
+    }, runId)
+    await electronApp.evaluate((previousKey) => {
+      if (previousKey === null) {
+        delete process.env.OPENAI_API_KEY
+      } else {
+        process.env.OPENAI_API_KEY = previousKey
+      }
+    }, previousOpenAiApiKey)
 
     const launchArgs = process.env.CI
       ? ['--no-sandbox', '--disable-setuid-sandbox', MAIN_ENTRY]
@@ -201,5 +219,12 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
     })
 
     expect(evidencePath).toContain('test-results/kat-162/')
+
+    // Worker-scoped Electron fixture is reused across e2e files.
+    // Reset to a ready shell state so subsequent specs are not affected.
+    await appWindow.reload({ waitUntil: 'load' })
+    await appWindow.waitForSelector('#root > *', { state: 'attached' })
+    await ensureWorkspaceShell(appWindow)
+    await ensureSendButtonReady(appWindow)
   })
 })
