@@ -41,11 +41,14 @@ afterEach(() => {
 
 describe('RightPanel draft flow', () => {
   it('applies the latest run draft into structured spec content and toggles task state', async () => {
+    const onTaskActivitySnapshotChange = vi.fn()
+
     render(
       <RightPanel
         project={mockProject}
         spaceId="space-1"
         sessionId="session-1"
+        onTaskActivitySnapshotChange={onTaskActivitySnapshotChange}
         taskActivitySnapshot={{
           sessionId: 'session-1',
           runId: 'run-1',
@@ -114,6 +117,24 @@ describe('RightPanel draft flow', () => {
           sessionId: 'session-1',
           markdown: expect.stringContaining('[/] Parse spec sections'),
           appliedRunId: 'run-1'
+        })
+      )
+      expect(onTaskActivitySnapshotChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: 'session-1',
+          counts: {
+            not_started: 0,
+            in_progress: 1,
+            blocked: 0,
+            complete: 0
+          },
+          items: [
+            expect.objectContaining({
+              id: 'task-parse-spec-sections',
+              title: 'Parse spec sections',
+              status: 'in_progress'
+            })
+          ]
         })
       )
     })

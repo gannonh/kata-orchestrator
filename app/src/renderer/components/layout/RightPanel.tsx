@@ -1,13 +1,15 @@
-import { useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
 import { mockProject } from '../../mock/project'
 import { useSpecDocument } from '../../hooks/useSpecDocument'
 import type { ProjectSpec } from '../../types/project'
 import type { LatestRunDraft } from '../../types/spec-document'
+import type { SpecTaskItem } from '../../types/spec-document'
 import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 import { cn } from '../../lib/cn'
 import { SpecTab } from '../right/SpecTab'
+import { cycleTaskStatus } from '../right/spec-task-markdown'
 import { DynamicPanelTabs } from '../shared/DynamicPanelTabs'
 import { NewNoteScaffold } from '../shared/NewNoteScaffold'
 import { Button } from '../ui/button'
@@ -22,6 +24,7 @@ type RightPanelProps = {
   sessionId?: string | null
   latestDraft?: LatestRunDraft
   taskActivitySnapshot?: TaskActivitySnapshot
+  onTaskActivitySnapshotChange?: (snapshot: TaskActivitySnapshot | undefined) => void
 }
 
 const COMMENT_STATUS_NOTE =
@@ -32,7 +35,8 @@ export function RightPanel({
   spaceId,
   sessionId,
   latestDraft,
-  taskActivitySnapshot
+  taskActivitySnapshot,
+  onTaskActivitySnapshotChange
 }: RightPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -43,6 +47,35 @@ export function RightPanel({
     sessionId: sessionId ?? 'inactive-session',
     enabled: hasStructuredSpec
   })
+
+  const handleToggleTask = useCallback(
+    (taskId: string) => {
+      const task = specDocument.document.tasks.find((candidate) => candidate.id === taskId)
+
+      if (task && sessionId) {
+        const updatedAt = new Date().toISOString()
+        const optimisticTasks = specDocument.document.tasks.map((candidate) =>
+          candidate.id === taskId
+            ? {
+                ...candidate,
+                status: cycleTaskStatus(candidate.status)
+              }
+            : candidate
+        )
+        onTaskActivitySnapshotChange?.(
+          buildTaskActivitySnapshot({
+            sessionId,
+            runId: specDocument.document.appliedRunId ?? `spec-${sessionId}`,
+            updatedAt,
+            tasks: optimisticTasks
+          })
+        )
+      }
+
+      specDocument.toggleTask(taskId)
+    },
+    [onTaskActivitySnapshotChange, sessionId, specDocument]
+  )
 
   useLayoutEffect(() => {
     setIsEditing(false)
@@ -122,7 +155,7 @@ export function RightPanel({
           mode: 'structured_view',
           document: specDocument.document,
           taskActivitySnapshot,
-          onToggleTask: specDocument.toggleTask,
+          onToggleTask: handleToggleTask,
           onEditMarkdown: () => {
             setDraftMarkdown(specDocument.document.markdown)
             setIsEditing(true)
@@ -193,4 +226,42 @@ export function RightPanel({
       </div>
     </div>
   )
+}
+
+function buildTaskActivitySnapshot({
+  sessionId,
+  runId,
+  updatedAt,
+  tasks
+}: {
+  sessionId: string
+  runId: string
+  updatedAt: string
+  tasks: SpecTaskItem[]
+}): TaskActivitySnapshot {
+  const items: TaskActivitySnapshot['items'] = tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    activityLevel: 'none',
+    updatedAt
+  }))
+
+  const counts: TaskActivitySnapshot['counts'] = {
+    not_started: 0,
+    in_progress: 0,
+    blocked: 0,
+    complete: 0
+  }
+
+  for (const item of items) {
+    counts[item.status] += 1
+  }
+
+  return {
+    sessionId,
+    runId,
+    items,
+    counts
+  }
 }
