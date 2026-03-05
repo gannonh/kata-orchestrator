@@ -625,6 +625,58 @@ describe('createStateStore', () => {
     })
   })
 
+  test('drops agent roster entries when extended metadata fields are invalid', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {
+          valid: {
+            id: 'valid',
+            sessionId: 's1',
+            name: 'Valid Agent',
+            role: 'Valid role',
+            kind: 'specialist',
+            status: 'queued',
+            avatarColor: '#123456',
+            sortOrder: 1,
+            activeRunId: 'run-1',
+            waveId: 'wave-1',
+            groupLabel: 'Wave 1',
+            lastActivityAt: '2026-03-05T00:00:00.000Z',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          },
+          invalid: {
+            id: 'invalid',
+            sessionId: 's1',
+            name: 'Invalid Agent',
+            role: 'Invalid role',
+            kind: 'specialist',
+            status: 'queued',
+            avatarColor: '#123456',
+            sortOrder: 2,
+            activeRunId: 42,
+            waveId: 'wave-2',
+            groupLabel: 'Wave 2',
+            lastActivityAt: '2026-03-05T00:00:00.000Z',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          }
+        },
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.agentRoster.valid).toBeDefined()
+    expect(state.agentRoster.invalid).toBeUndefined()
+  })
+
   test('drops non-object agent roster entries', () => {
     fs.writeFileSync(
       filePath,

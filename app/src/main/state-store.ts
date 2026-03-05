@@ -120,6 +120,10 @@ function isSessionAgentRecord(value: unknown): value is SessionAgentRecord {
     (value.currentTask === undefined || typeof value.currentTask === 'string') &&
     typeof value.sortOrder === 'number' &&
     Number.isFinite(value.sortOrder) &&
+    (value.activeRunId === undefined || typeof value.activeRunId === 'string') &&
+    (value.waveId === undefined || typeof value.waveId === 'string') &&
+    (value.groupLabel === undefined || typeof value.groupLabel === 'string') &&
+    (value.lastActivityAt === undefined || typeof value.lastActivityAt === 'string') &&
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string'
   )
