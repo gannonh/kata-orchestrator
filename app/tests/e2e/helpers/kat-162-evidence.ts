@@ -12,7 +12,8 @@ type Kat162EvidenceInput = {
 export async function writeKat162Evidence(input: Kat162EvidenceInput): Promise<string> {
   const outputDir = path.resolve(process.cwd(), 'test-results/kat-162')
   await fs.mkdir(outputDir, { recursive: true })
-  const outputPath = path.join(outputDir, `${input.testName}-${Date.now()}.json`)
+  const safeTestName = input.testName.replace(/[^a-zA-Z0-9_-]+/g, '-')
+  const outputPath = path.join(outputDir, `${safeTestName}-${Date.now()}.json`)
   await fs.writeFile(
     outputPath,
     JSON.stringify({ generatedAt: new Date().toISOString(), ...input }, null, 2),
