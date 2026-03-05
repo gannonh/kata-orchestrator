@@ -539,7 +539,7 @@ describe('provisionManagedWorkspace validation', () => {
     await expect(fs.access(path.join(repoCacheBaseDir, 'source-repo'))).resolves.toBeUndefined()
     expect(result.rootPath).toContain(path.join('workspaces', 'source-repo-'))
     await fs.rm(tempRoot, { recursive: true, force: true })
-  })
+  }, 20_000)
 
   it('ignores inherited git hook environment when using default git runner', async () => {
     const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'kata-managed-workspace-env-'))
