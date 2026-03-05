@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import { _electron as electron } from '@playwright/test'
 import { expect, test } from './fixtures/electron'
+import { writeKat162Evidence } from './helpers/kat-162-evidence'
 import { broadcastRunEvent } from './helpers/run-event'
 import { ensureSendButtonReady, ensureWorkspaceShell } from './helpers/shell-view'
 
@@ -14,6 +15,12 @@ const RUN_ID = 'run-kat-162-e2e'
 const EVIDENCE_DIR = path.resolve(process.cwd(), 'test-results/kat-162')
 const BASELINE_PROMPT = 'KAT-162 demo proof baseline prompt'
 const DRAFT_MARKDOWN = ['## Goal', 'KAT-162 demo proof goal.', '', '## Tasks', '- [ ] Capture evidence'].join('\n')
+const ARTIFACTS = [
+  'test-results/kat-162/01-prompt-submitted.png',
+  'test-results/kat-162/02-run-completed-with-draft.png',
+  'test-results/kat-162/03-draft-applied-spec.png',
+  'test-results/kat-162/04-post-relaunch-restored-session.png'
+]
 
 test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
   test('covers prompt to relaunch continuity flow', async ({
@@ -175,5 +182,19 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
         console.warn('[fixture teardown] relaunched.close() failed:', error)
       })
     }
+
+    const evidencePath = await writeKat162Evidence({
+      testName: 'kat-162-prompt-run-apply-persist-relaunch',
+      stateFilePath: relaunchStateFilePath,
+      runId: RUN_ID,
+      artifacts: ARTIFACTS,
+      assertions: {
+        promptVisibleAfterRelaunch: true,
+        appliedRunBadgeVisibleAfterRelaunch: true,
+        workspaceShellRestoredWithoutHome: true
+      }
+    })
+
+    expect(evidencePath).toContain('test-results/kat-162/')
   })
 })
