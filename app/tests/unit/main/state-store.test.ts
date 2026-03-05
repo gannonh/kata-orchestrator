@@ -554,6 +554,77 @@ describe('createStateStore', () => {
     })
   })
 
+  test('normalizes legacy agent status complete to completed', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {
+          a1: {
+            id: 'a1',
+            sessionId: 's1',
+            name: 'Legacy Agent',
+            role: 'legacy',
+            kind: 'specialist',
+            status: 'complete',
+            avatarColor: '#123456',
+            sortOrder: 0,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          }
+        },
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.agentRoster.a1?.status).toBe('completed')
+  })
+
+  test('keeps extended agent metadata fields when valid', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {
+          a1: {
+            id: 'a1',
+            sessionId: 's1',
+            name: 'Wave Agent',
+            role: 'Handles wave work',
+            kind: 'specialist',
+            status: 'queued',
+            avatarColor: '#123456',
+            sortOrder: 1,
+            activeRunId: 'run-1',
+            waveId: 'wave-1',
+            groupLabel: 'Wave 1',
+            lastActivityAt: '2026-03-05T00:00:00.000Z',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          }
+        },
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.agentRoster.a1).toMatchObject({
+      activeRunId: 'run-1',
+      waveId: 'wave-1',
+      groupLabel: 'Wave 1',
+      lastActivityAt: '2026-03-05T00:00:00.000Z'
+    })
+  })
+
   test('drops non-object agent roster entries', () => {
     fs.writeFileSync(
       filePath,

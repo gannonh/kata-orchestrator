@@ -125,6 +125,21 @@ function isSessionAgentRecord(value: unknown): value is SessionAgentRecord {
   )
 }
 
+function normalizeSessionAgentStatus(value: unknown): SessionAgentRecord['status'] | null {
+  if (value === 'complete') {
+    return 'completed'
+  }
+
+  if (
+    typeof value === 'string' &&
+    SESSION_AGENT_STATUSES.includes(value as SessionAgentRecord['status'])
+  ) {
+    return value as SessionAgentRecord['status']
+  }
+
+  return null
+}
+
 function isStringOrNull(value: unknown): value is string | null {
   return value === null || typeof value === 'string'
 }
@@ -183,8 +198,24 @@ function normalizeAgentRoster(value: unknown): AppState['agentRoster'] {
   const normalized: AppState['agentRoster'] = {}
 
   for (const [key, record] of Object.entries(value)) {
-    if (isSessionAgentRecord(record) && record.id === key) {
-      normalized[key] = record
+    if (!isRecord(record) || record.id !== key) {
+      console.warn('[StateStore] Dropping invalid agent roster entry:', key)
+      continue
+    }
+
+    const status = normalizeSessionAgentStatus(record.status)
+    if (status === null) {
+      console.warn('[StateStore] Dropping invalid agent roster entry:', key)
+      continue
+    }
+
+    const candidate: unknown = {
+      ...record,
+      status
+    }
+
+    if (isSessionAgentRecord(candidate)) {
+      normalized[key] = candidate
     } else {
       console.warn('[StateStore] Dropping invalid agent roster entry:', key)
     }
