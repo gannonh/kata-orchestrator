@@ -11,7 +11,6 @@ import { ensureSendButtonReady, ensureWorkspaceShell } from './helpers/shell-vie
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const MAIN_ENTRY = path.resolve(__dirname, '../../dist/main/index.js')
-const RUN_ID = 'run-kat-162-e2e'
 const EVIDENCE_DIR = path.resolve(process.cwd(), 'test-results/kat-162')
 const BASELINE_PROMPT = 'KAT-162 demo proof baseline prompt'
 const DRAFT_MARKDOWN = ['## Goal', 'KAT-162 demo proof goal.', '', '## Tasks', '- [ ] Capture evidence'].join('\n')
@@ -21,6 +20,27 @@ const ARTIFACTS = [
   'test-results/kat-162/03-draft-applied-spec.png',
   'test-results/kat-162/04-post-relaunch-restored-session.png'
 ]
+
+type PersistedState = {
+  runs: Record<
+    string,
+    {
+      id: string
+      sessionId: string
+      prompt: string
+      messages: Array<{ role: 'user' | 'agent'; content: string }>
+      draftAppliedAt?: string
+    }
+  >
+  specDocuments: Record<string, { markdown: string; updatedAt: string; appliedRunId?: string; appliedAt?: string }>
+  activeSpaceId: string | null
+  activeSessionId: string | null
+}
+
+async function readPersistedState(stateFilePath: string): Promise<PersistedState> {
+  const raw = await fs.readFile(stateFilePath, 'utf8')
+  return JSON.parse(raw) as PersistedState
+}
 
 test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
   test('covers prompt to relaunch continuity flow', async ({
@@ -37,15 +57,22 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
     await ensureSendButtonReady(appWindow)
     await expect(appWindow.getByLabel('Message input')).toBeVisible()
 
-    await electronApp.evaluate(({ ipcMain }, deterministicRunId) => {
-      ;(globalThis as { __kat162DeterministicRunId?: string | null }).__kat162DeterministicRunId = null
+    await electronApp.evaluate(() => {
+      if (!process.env.OPENAI_API_KEY) {
+        process.env.OPENAI_API_KEY = 'kat-162-e2e-dummy-key'
+      }
+    })
 
-      try { ipcMain.removeHandler('run:submit') } catch {}
-      ipcMain.handle('run:submit', async () => {
-        ;(globalThis as { __kat162DeterministicRunId?: string | null }).__kat162DeterministicRunId = deterministicRunId
-        return { runId: deterministicRunId }
-      })
-    }, RUN_ID)
+    const bootstrap = await appWindow.evaluate(async () => {
+      const state = await window.kata?.appBootstrap?.()
+      return {
+        activeSpaceId: state?.activeSpaceId ?? null,
+        activeSessionId: state?.activeSessionId ?? null
+      }
+    })
+    if (!bootstrap.activeSpaceId || !bootstrap.activeSessionId) {
+      throw new Error('Missing active space/session before KAT-162 run submission.')
+    }
 
     await appWindow.getByLabel('Message input').fill(BASELINE_PROMPT)
     await appWindow.getByRole('button', { name: 'Send' }).click()
@@ -55,15 +82,23 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
       fullPage: true
     })
 
+    let runId: string | null = null
     await expect.poll(async () => {
-      return electronApp.evaluate(() => (
-        globalThis as { __kat162DeterministicRunId?: string | null }
-      ).__kat162DeterministicRunId ?? null)
-    }).toBe(RUN_ID)
+      const state = await readPersistedState(managedStateFilePath)
+      const run = Object.values(state.runs).find(
+        (candidate) =>
+          candidate.sessionId === bootstrap.activeSessionId && candidate.prompt === BASELINE_PROMPT
+      )
+      runId = run?.id ?? null
+      return runId
+    }, { timeout: 15_000 }).not.toBeNull()
+    if (!runId) {
+      throw new Error('Expected persisted KAT-162 run id before run:event injection.')
+    }
 
     await broadcastRunEvent(electronApp, {
       type: 'message_appended',
-      runId: RUN_ID,
+      runId,
       message: {
         id: 'agent-kat-162-draft-ready',
         role: 'agent',
@@ -73,7 +108,6 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
     })
     await broadcastRunEvent(electronApp, { type: 'run_state_changed', runState: 'idle' })
 
-    await expect(appWindow.getByRole('status', { name: 'Stopped' })).toBeVisible({ timeout: 10_000 })
     const rightPanel = appWindow.getByTestId('right-panel')
     await expect(rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })).toBeVisible({ timeout: 10_000 })
     await appWindow.screenshot({
@@ -83,70 +117,41 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
     await rightPanel.getByRole('button', { name: 'Apply Draft to Spec' }).click()
     await expect(rightPanel.getByRole('heading', { name: 'Goal', exact: true })).toBeVisible({ timeout: 10_000 })
     await expect(rightPanel.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible({ timeout: 10_000 })
-    await expect(rightPanel.getByText(`Applied from ${RUN_ID}`)).toBeVisible({ timeout: 10_000 })
+    await expect(rightPanel.getByText(`Applied from ${runId}`)).toBeVisible({ timeout: 10_000 })
     await appWindow.screenshot({
       path: path.join(EVIDENCE_DIR, '03-draft-applied-spec.png'),
       fullPage: true
     })
 
     const relaunchStateFilePath = path.join(managedTestRootDir, 'state-kat-162-relaunch.json')
+    let persistedReady = false
+    await expect.poll(async () => {
+      const persisted = await readPersistedState(managedStateFilePath)
+      if (!persisted.activeSpaceId || !persisted.activeSessionId) {
+        return false
+      }
+
+      const persistedRun = persisted.runs[runId]
+      const specDocumentKey = `${persisted.activeSpaceId}:${persisted.activeSessionId}`
+      const persistedSpec = persisted.specDocuments[specDocumentKey]
+
+      const hasPromptMessage = Array.isArray(persistedRun?.messages)
+        && persistedRun.messages.some((message) => message.role === 'user' && message.content === BASELINE_PROMPT)
+
+      persistedReady = Boolean(
+        persistedRun
+          && hasPromptMessage
+          && persistedRun.draftAppliedAt
+          && persistedSpec
+          && persistedSpec.appliedRunId === runId
+          && persistedSpec.markdown.includes('## Goal')
+      )
+      return persistedReady
+    }, { timeout: 15_000 }).toBe(true)
+    if (!persistedReady) {
+      throw new Error('Persisted state did not contain expected run/spec data before relaunch.')
+    }
     await fs.copyFile(managedStateFilePath, relaunchStateFilePath)
-    const relaunchStateRaw = await fs.readFile(relaunchStateFilePath, 'utf8')
-    const relaunchState = JSON.parse(relaunchStateRaw) as {
-      runs: Record<string, unknown>
-      specDocuments: Record<string, { markdown: string; updatedAt: string; appliedRunId?: string; appliedAt?: string }>
-      activeSpaceId: string | null
-      activeSessionId: string | null
-    }
-
-    if (!relaunchState.activeSpaceId || !relaunchState.activeSessionId) {
-      throw new Error('Missing active space/session before KAT-162 relaunch assertions.')
-    }
-
-    const stateTimestamp = '2026-03-05T10:00:05.000Z'
-    const specDocumentKey = `${relaunchState.activeSpaceId}:${relaunchState.activeSessionId}`
-    const existingSpecDocument = relaunchState.specDocuments[specDocumentKey]
-
-    relaunchState.runs[RUN_ID] = {
-      id: RUN_ID,
-      sessionId: relaunchState.activeSessionId,
-      prompt: BASELINE_PROMPT,
-      status: 'completed',
-      model: 'gpt-5.3-codex',
-      provider: 'openai-codex',
-      createdAt: stateTimestamp,
-      startedAt: stateTimestamp,
-      completedAt: stateTimestamp,
-      draftAppliedAt: stateTimestamp,
-      draft: {
-        runId: RUN_ID,
-        generatedAt: stateTimestamp,
-        content: DRAFT_MARKDOWN
-      },
-      messages: [
-        {
-          id: 'user-kat-162-prompt',
-          role: 'user',
-          content: BASELINE_PROMPT,
-          createdAt: stateTimestamp
-        },
-        {
-          id: 'agent-kat-162-draft-ready',
-          role: 'agent',
-          content: DRAFT_MARKDOWN,
-          createdAt: stateTimestamp
-        }
-      ]
-    }
-
-    relaunchState.specDocuments[specDocumentKey] = {
-      markdown: existingSpecDocument?.markdown ?? DRAFT_MARKDOWN,
-      updatedAt: existingSpecDocument?.updatedAt ?? stateTimestamp,
-      appliedRunId: RUN_ID,
-      appliedAt: stateTimestamp
-    }
-
-    await fs.writeFile(relaunchStateFilePath, JSON.stringify(relaunchState, null, 2), 'utf8')
 
     const launchArgs = process.env.CI
       ? ['--no-sandbox', '--disable-setuid-sandbox', MAIN_ENTRY]
@@ -170,7 +175,7 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
 
       await expect(relaunchedWindow.getByTestId('app-shell-root')).toBeVisible()
       await expect(relaunchedWindow.getByRole('heading', { name: 'Home' })).toHaveCount(0)
-      await expect(relaunchedWindow.getByTestId('right-panel').getByText(`Applied from ${RUN_ID}`)).toBeVisible()
+      await expect(relaunchedWindow.getByTestId('right-panel').getByText(`Applied from ${runId}`)).toBeVisible()
       await expect(relaunchedWindow.getByTestId('message-list').getByText(BASELINE_PROMPT)).toBeVisible()
 
       await relaunchedWindow.screenshot({
@@ -186,7 +191,7 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
     const evidencePath = await writeKat162Evidence({
       testName: 'kat-162-prompt-run-apply-persist-relaunch',
       stateFilePath: relaunchStateFilePath,
-      runId: RUN_ID,
+      runId,
       artifacts: ARTIFACTS,
       assertions: {
         promptVisibleAfterRelaunch: true,
