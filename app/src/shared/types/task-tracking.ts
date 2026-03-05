@@ -27,3 +27,18 @@ export type TaskActivitySnapshot = {
   items: TaskTrackingItem[]
   counts: Record<TaskTrackingStatus, number>
 }
+
+export function buildTaskCounts(items: TaskTrackingItem[]): TaskActivitySnapshot['counts'] {
+  const counts: TaskActivitySnapshot['counts'] = {
+    not_started: 0,
+    in_progress: 0,
+    blocked: 0,
+    complete: 0
+  }
+
+  for (const item of items) {
+    counts[item.status] += 1
+  }
+
+  return counts
+}

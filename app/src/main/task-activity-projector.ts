@@ -1,7 +1,8 @@
-import type {
-  TaskActivitySnapshot,
-  TaskTrackingItem,
-  TaskTrackingStatus
+import {
+  buildTaskCounts,
+  type TaskActivitySnapshot,
+  type TaskTrackingItem,
+  type TaskTrackingStatus
 } from '../shared/types/task-tracking'
 
 export type TaskActivitySeedItem = {
@@ -40,7 +41,7 @@ export function createTaskActivityProjector(): TaskActivityProjector {
   const snapshotsBySession = new Map<string, TaskActivitySnapshot>()
 
   const saveSnapshot = (snapshot: TaskActivitySnapshot): TaskActivitySnapshot => {
-    const withCounts = { ...snapshot, counts: buildCounts(snapshot.items) }
+    const withCounts = { ...snapshot, counts: buildTaskCounts(snapshot.items) }
     snapshotsBySession.set(withCounts.sessionId, withCounts)
     return cloneSnapshot(withCounts)
   }
@@ -166,17 +167,3 @@ function cloneSnapshot(snapshot: TaskActivitySnapshot): TaskActivitySnapshot {
   }
 }
 
-function buildCounts(items: TaskTrackingItem[]): TaskActivitySnapshot['counts'] {
-  const counts: TaskActivitySnapshot['counts'] = {
-    not_started: 0,
-    in_progress: 0,
-    blocked: 0,
-    complete: 0
-  }
-
-  for (const item of items) {
-    counts[item.status] += 1
-  }
-
-  return counts
-}

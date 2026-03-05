@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
-import { expect, test, type ElectronApplication } from './fixtures/electron'
+import { expect, test } from './fixtures/electron'
+import { broadcastRunEvent } from './helpers/run-event'
 import { ensureWorkspaceShell } from './helpers/shell-view'
 import type { TaskActivitySnapshot } from '../../src/shared/types/task-tracking'
 
@@ -26,22 +27,6 @@ type TaskSnapshotPayload = TaskActivitySnapshot
 type ActiveWorkspaceContext = {
   spaceId: string
   sessionId: string
-}
-
-async function broadcastRunEvent(
-  electronApp: ElectronApplication,
-  payload: unknown
-): Promise<void> {
-  await electronApp.evaluate(({ BrowserWindow }, event) => {
-    const windows = BrowserWindow.getAllWindows()
-    if (windows.length === 0) {
-      throw new Error('No BrowserWindow available for run:event injection')
-    }
-
-    for (const targetWindow of windows) {
-      targetWindow.webContents.send('run:event', event)
-    }
-  }, payload)
 }
 
 async function resolveActiveSessionContext(

@@ -6,7 +6,7 @@ import { useSpecDocument } from '../../hooks/useSpecDocument'
 import type { ProjectSpec } from '../../types/project'
 import type { LatestRunDraft } from '../../types/spec-document'
 import type { SpecTaskItem } from '../../types/spec-document'
-import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
+import { buildTaskCounts, type TaskActivitySnapshot } from '@shared/types/task-tracking'
 import { cn } from '../../lib/cn'
 import { SpecTab } from '../right/SpecTab'
 import { cycleTaskStatus } from '../right/spec-task-markdown'
@@ -247,21 +247,10 @@ function buildTaskActivitySnapshot({
     updatedAt
   }))
 
-  const counts: TaskActivitySnapshot['counts'] = {
-    not_started: 0,
-    in_progress: 0,
-    blocked: 0,
-    complete: 0
-  }
-
-  for (const item of items) {
-    counts[item.status] += 1
-  }
-
   return {
     sessionId,
     runId,
     items,
-    counts
+    counts: buildTaskCounts(items)
   }
 }
