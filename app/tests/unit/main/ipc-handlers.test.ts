@@ -7,14 +7,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDefaultAppState } from '../../../src/shared/types/space'
 import type { AppState, SessionAgentRecord } from '../../../src/shared/types/space'
 
-const { mockRemoveHandler, mockHandle, mockOpenExternal, mockShowOpenDialog, mockProvisionManagedWorkspace, mockFsAccess, mockExecFile } = vi.hoisted(() => ({
+const {
+  mockRemoveHandler,
+  mockHandle,
+  mockOpenExternal,
+  mockShowOpenDialog,
+  mockProvisionManagedWorkspace,
+  mockFsAccess,
+  mockExecFile,
+  mockCreateSessionAgentRegistry,
+  mockRegistrySeedBaselineAgents,
+  mockRegistryList
+} = vi.hoisted(() => ({
   mockRemoveHandler: vi.fn(),
   mockHandle: vi.fn(),
   mockOpenExternal: vi.fn(),
   mockShowOpenDialog: vi.fn(),
   mockProvisionManagedWorkspace: vi.fn(),
   mockFsAccess: vi.fn(),
-  mockExecFile: vi.fn()
+  mockExecFile: vi.fn(),
+  mockCreateSessionAgentRegistry: vi.fn(),
+  mockRegistrySeedBaselineAgents: vi.fn(),
+  mockRegistryList: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -66,6 +80,10 @@ vi.mock('../../../src/main/workspace-provisioning', async () => {
   }
 })
 
+vi.mock('../../../src/main/session-agent-registry', () => ({
+  createSessionAgentRegistry: (...args: unknown[]) => mockCreateSessionAgentRegistry(...args)
+}))
+
 const mockCreateRun = vi.fn()
 const mockUpdateRunStatus = vi.fn()
 const mockAppendRunMessage = vi.fn()
@@ -114,6 +132,66 @@ describe('registerIpcHandlers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockProvisionManagedWorkspace.mockReset()
+    mockCreateSessionAgentRegistry.mockImplementation((getState: () => AppState, setState: (next: AppState) => void) => ({
+      seedBaselineAgents: mockRegistrySeedBaselineAgents.mockImplementation(
+        (sessionId: string, createdAt: string) => {
+          const state = getState()
+          const existing = Object.values(state.agentRoster).filter((entry) => entry.sessionId === sessionId)
+          if (existing.length > 0) {
+            return existing
+          }
+
+          const seeded: SessionAgentRecord[] = [
+            {
+              id: `seed-system-${sessionId}`,
+              sessionId,
+              name: 'Kata Agents',
+              role: 'System-managed agent group',
+              kind: 'system',
+              status: 'idle',
+              avatarColor: '#334155',
+              sortOrder: 0,
+              createdAt,
+              updatedAt: createdAt
+            },
+            {
+              id: `seed-coordinator-${sessionId}`,
+              sessionId,
+              name: 'MVP Planning Coordinator',
+              role: 'Coordinates MVP planning tasks',
+              kind: 'coordinator',
+              status: 'idle',
+              avatarColor: '#0f766e',
+              sortOrder: 1,
+              createdAt,
+              updatedAt: createdAt
+            }
+          ]
+
+          setState({
+            ...state,
+            agentRoster: {
+              ...state.agentRoster,
+              ...Object.fromEntries(seeded.map((entry) => [entry.id, entry]))
+            }
+          })
+
+          return seeded
+        }
+      ),
+      list: mockRegistryList.mockImplementation((sessionId: string) => {
+        return Object.values(getState().agentRoster)
+          .filter((entry) => entry.sessionId === sessionId)
+          .sort((left, right) => {
+            if (left.sortOrder !== right.sortOrder) {
+              return left.sortOrder - right.sortOrder
+            }
+            return left.createdAt.localeCompare(right.createdAt)
+          })
+      }),
+      upsert: vi.fn(),
+      transitionStatus: vi.fn()
+    }))
   })
 
   it('registers expected channels', () => {
@@ -435,7 +513,7 @@ describe('registerIpcHandlers', () => {
     expect(store.save).toHaveBeenCalledTimes(1)
   })
 
-  it('session:create preserves existing roster state and seeds baseline agents for the new session', async () => {
+  it('session:create seeds baseline agents through registry and avoids duplicates', async () => {
     const existingSpace = {
       id: 'space-1',
       name: 'Existing',
@@ -472,8 +550,13 @@ describe('registerIpcHandlers', () => {
       .filter((entry) => entry.sessionId === (createdSession as { id: string }).id)
       .sort((left, right) => left.sortOrder - right.sortOrder)
 
+    expect(mockRegistrySeedBaselineAgents).toHaveBeenCalledWith(
+      (createdSession as { id: string }).id,
+      (createdSession as { createdAt: string }).createdAt
+    )
     expect(savedState.agentRoster[existingRosterEntry.id]).toEqual(existingRosterEntry)
     expect(seededRoster).toHaveLength(2)
+    expect(new Set(seededRoster.map((entry) => entry.id)).size).toBe(2)
     expect(seededRoster).toEqual([
       expect.objectContaining({
         sessionId: (createdSession as { id: string }).id,
@@ -526,7 +609,7 @@ describe('registerIpcHandlers', () => {
     ).rejects.toThrow('Session created but failed to save state (ENOSPC)')
   })
 
-  it('session-agent-roster:list returns sorted entries for a session and [] for unknown session ids', async () => {
+  it('session-agent-roster:list returns sorted agent records including new lifecycle statuses', async () => {
     const roster: Record<string, SessionAgentRecord> = {
       late: {
         id: 'late',
@@ -534,7 +617,7 @@ describe('registerIpcHandlers', () => {
         name: 'Late',
         role: 'Late role',
         kind: 'specialist',
-        status: 'idle',
+        status: 'failed',
         avatarColor: '#111111',
         sortOrder: 1,
         createdAt: '2026-02-27T00:00:03.000Z',
@@ -546,7 +629,7 @@ describe('registerIpcHandlers', () => {
         name: 'First Created',
         role: 'First role',
         kind: 'specialist',
-        status: 'idle',
+        status: 'running',
         avatarColor: '#222222',
         sortOrder: 1,
         createdAt: '2026-02-27T00:00:01.000Z',
@@ -558,7 +641,7 @@ describe('registerIpcHandlers', () => {
         name: 'System',
         role: 'System role',
         kind: 'system',
-        status: 'idle',
+        status: 'delegating',
         avatarColor: '#333333',
         sortOrder: 0,
         createdAt: '2026-02-27T00:00:02.000Z',
@@ -570,7 +653,7 @@ describe('registerIpcHandlers', () => {
         name: 'Other Session',
         role: 'Other role',
         kind: 'coordinator',
-        status: 'idle',
+        status: 'queued',
         avatarColor: '#444444',
         sortOrder: 0,
         createdAt: '2026-02-27T00:00:00.000Z',
@@ -589,7 +672,9 @@ describe('registerIpcHandlers', () => {
       roster.firstCreated,
       roster.late
     ])
+    expect(mockRegistryList).toHaveBeenCalledWith('session-1')
     await expect(rosterList({}, { sessionId: 'missing' })).resolves.toEqual([])
+    expect(mockRegistryList).toHaveBeenCalledWith('missing')
   })
 
   it('session:listBySpace returns sessions for the space sorted by newest first', async () => {
