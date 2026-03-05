@@ -667,12 +667,7 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
   ipcMain.handle(SESSION_AGENT_ROSTER_LIST_CHANNEL, async (_event, input: unknown) => {
     const { sessionId } = parseSessionAgentRosterListInput(input)
     const state = stateStore.load()
-    const sessionAgentRegistry = createSessionAgentRegistry(
-      () => state,
-      () => {
-        // no-op: list is read-only in this handler
-      }
-    )
+    const sessionAgentRegistry = createSessionAgentRegistry(() => state, stateStore.save)
 
     return sessionAgentRegistry.list(sessionId)
   })
