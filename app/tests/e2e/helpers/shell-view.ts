@@ -1,5 +1,45 @@
 import { expect, test, type Page } from '@playwright/test'
 
+export async function ensureSendButtonReady(appWindow: Page): Promise<void> {
+  const messageInput = appWindow.getByLabel('Message input')
+  const sendButton = appWindow.getByRole('button', { name: 'Send' })
+
+  const canEnableSend = async (): Promise<boolean> => {
+    if (
+      (await sendButton.count()) === 0 ||
+      !(await sendButton.isVisible()) ||
+      (await messageInput.count()) === 0 ||
+      !(await messageInput.isVisible())
+    ) {
+      return false
+    }
+
+    if (await sendButton.isEnabled()) {
+      return true
+    }
+
+    const originalInput = await messageInput.inputValue()
+    await messageInput.fill('parity-readiness-probe')
+    const becameEnabled = await sendButton.isEnabled()
+    await messageInput.fill(originalInput)
+    return becameEnabled
+  }
+
+  if (await canEnableSend()) {
+    return
+  }
+
+  await ensureHomeSpacesView(appWindow)
+  const openSelectedSpaceButton = appWindow.getByRole('button', { name: 'Open selected space' })
+  await expect(openSelectedSpaceButton).toBeEnabled({ timeout: 10_000 })
+  await openSelectedSpaceButton.click()
+  await expect(appWindow.getByTestId('app-shell-root')).toBeVisible({ timeout: 10_000 })
+
+  if (!(await canEnableSend())) {
+    throw new Error('Send input did not recover to a ready state after reopening selected space.')
+  }
+}
+
 type EnsureWorkspaceShellOptions = {
   workspacePath?: string
 }

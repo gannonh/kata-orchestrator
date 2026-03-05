@@ -9,7 +9,7 @@ import type { SessionRuntimeEvent } from '../types/session-runtime-adapter'
 import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../shared/types/run'
 import { isPersistedSpecDocument } from '../../shared/types/spec-document'
 import { toStableTaskId } from '@shared/task-id'
-import type { TaskActivitySnapshot, TaskTrackingItem } from '@shared/types/task-tracking'
+import { buildTaskCounts, type TaskActivitySnapshot, type TaskTrackingItem } from '@shared/types/task-tracking'
 
 const DEFAULT_RUN_MODEL = 'gpt-5.3-codex'
 const DEFAULT_RUN_PROVIDER = 'openai-codex'
@@ -282,20 +282,6 @@ function parseTaskItemsFromMarkdown(markdown: string): Array<{
   return tasks
 }
 
-function buildTaskCounts(items: TaskTrackingItem[]): TaskActivitySnapshot['counts'] {
-  const counts: TaskActivitySnapshot['counts'] = {
-    not_started: 0,
-    in_progress: 0,
-    blocked: 0,
-    complete: 0
-  }
-
-  for (const item of items) {
-    counts[item.status] += 1
-  }
-
-  return counts
-}
 
 function isReconciledInterruptedRunFallback(
   status: string,
