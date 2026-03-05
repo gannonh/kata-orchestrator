@@ -49,8 +49,16 @@ describe('PROVISIONING_METHODS', () => {
 })
 
 describe('SESSION_AGENT_STATUSES', () => {
-  it('contains idle, running, blocked, and complete', () => {
-    expect(SESSION_AGENT_STATUSES).toEqual(['idle', 'running', 'blocked', 'complete'])
+  it('contains lifecycle statuses used by coordinator + wave + completion surfaces', () => {
+    expect(SESSION_AGENT_STATUSES).toEqual([
+      'idle',
+      'queued',
+      'delegating',
+      'running',
+      'blocked',
+      'completed',
+      'failed'
+    ])
   })
 })
 
@@ -138,6 +146,31 @@ describe('SessionRecord type', () => {
 })
 
 describe('SessionAgentRecord type', () => {
+  it('allows optional wave/run metadata fields', () => {
+    const agent: SessionAgentRecord = {
+      id: 'agent-1',
+      sessionId: 'session-1',
+      name: 'Wave1 Verifier',
+      role: 'Verifies wave outputs',
+      kind: 'specialist',
+      status: 'queued',
+      avatarColor: '#0088cc',
+      sortOrder: 2,
+      activeRunId: 'run-1',
+      waveId: 'wave-1',
+      groupLabel: 'Wave 1 Coordinators',
+      lastActivityAt: '2026-03-05T00:00:00.000Z',
+      createdAt: '2026-03-05T00:00:00.000Z',
+      updatedAt: '2026-03-05T00:00:00.000Z'
+    }
+
+    expect(agent.status).toBe('queued')
+    expect(agent.activeRunId).toBe('run-1')
+    expect(agent.waveId).toBe('wave-1')
+    expect(agent.groupLabel).toBe('Wave 1 Coordinators')
+    expect(agent.lastActivityAt).toBe('2026-03-05T00:00:00.000Z')
+  })
+
   it('conforms to expected shape', () => {
     const agent: SessionAgentRecord = {
       id: 'agent-1',
