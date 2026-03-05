@@ -6,7 +6,7 @@
 - [x] State-store suite passes
 - [x] Registry suite passes
 - [x] IPC suite passes
-- [x] No out-of-scope file edits
+- [x] No out-of-scope center/right file edits
 
 ## Command Results (UTC)
 
@@ -42,3 +42,15 @@
 
 - No center-panel or right-panel presentation files were edited.
 - Main-process contract/state plumbing was the primary implementation surface, with only minimal left-pane compatibility updates required for type/lint parity after status-vocabulary migration.
+
+## Post-Review Hardening (March 5, 2026)
+
+- Added stricter validation for optional `SessionAgentRecord` metadata fields in `state-store` so malformed persisted values are dropped instead of leaking into typed runtime state.
+- Added regression coverage for invalid extended metadata entries in `tests/unit/main/state-store.test.ts`.
+- Re-ran all ticket verification commands after this hardening:
+  - `npm run test -- tests/unit/shared/types/space.test.ts` (PASS)
+  - `npm run test -- tests/unit/main/state-store.test.ts` (PASS)
+  - `npm run test -- tests/unit/main/session-agent-registry.test.ts` (PASS)
+  - `npm run test -- tests/unit/main/ipc-handlers.test.ts` (PASS)
+  - `npm run lint` (PASS)
+- Hardening commit: `4b7d946` (`fix: validate extended session agent metadata during state load`)
