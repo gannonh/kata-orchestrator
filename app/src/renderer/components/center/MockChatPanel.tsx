@@ -1,24 +1,67 @@
 import { useSessionConversation } from '../../hooks/useSessionConversation'
 import { ChatInput } from './ChatInput'
-import { MessageBubble } from './MessageBubble'
 import { MessageList } from './MessageList'
-import { RunStatusBadge } from './RunStatusBadge'
+import { deriveMockChatPresentation } from './mockChatPresentation'
+import { toPrimitiveRunState } from './primitives/adapters'
+import { ConversationBlocks } from './primitives/ConversationBlocks'
+import { ConversationMessage } from './primitives/ConversationMessage'
+import { ConversationStatusBadge } from './primitives/ConversationStatusBadge'
 
 export function MockChatPanel() {
   const { state, submitPrompt, retry } = useSessionConversation()
+  const presentation = deriveMockChatPresentation({
+    messages: state.messages,
+    isStreaming: state.runState === 'pending'
+  })
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <MessageList>
-        {state.messages.map((message) => (
-          <MessageBubble
-            key={message.id}
-            message={message}
-          />
-        ))}
+        {presentation.blocks
+          .filter((block) => block.type !== 'statusBadge')
+          .map((block) => {
+            if (block.type === 'message') {
+              return (
+                <div
+                  key={block.id}
+                  id={`message-${block.message.id}`}
+                  data-message-id={block.message.id}
+                >
+                  <ConversationMessage message={block.message} />
+                </div>
+              )
+            }
+
+            if (block.type === 'collapsedSummary') {
+              return (
+                <div
+                  key={block.id}
+                  id={`message-${block.id}`}
+                  data-message-id={block.id}
+                >
+                  <ConversationMessage
+                    message={{
+                      id: block.id,
+                      role: 'user',
+                      content: block.summary,
+                      summary: block.summary
+                    }}
+                    variant="collapsed"
+                  />
+                </div>
+              )
+            }
+
+            return (
+              <ConversationBlocks
+                key={block.id}
+                blocks={[block]}
+              />
+            )
+          })}
       </MessageList>
       <div className="shrink-0 px-4 py-2">
-        <RunStatusBadge runState={state.runState} />
+        <ConversationStatusBadge runState={toPrimitiveRunState(state.runState)} />
       </div>
       <ChatInput
         onSend={submitPrompt}
