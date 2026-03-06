@@ -209,10 +209,6 @@ function dedentLines(lines: string[]): string[] {
     })
   )
 
-  if (sharedIndent === 0) {
-    return lines
-  }
-
   return lines.map((line) => line.slice(Math.min(sharedIndent, line.length)))
 }
 
