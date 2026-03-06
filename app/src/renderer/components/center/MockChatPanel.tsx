@@ -2,16 +2,21 @@ import { useSessionConversation } from '../../hooks/useSessionConversation'
 import { ChatInput } from './ChatInput'
 import { MessageList } from './MessageList'
 import { deriveMockChatPresentation } from './mockChatPresentation'
-import { toPrimitiveRunState } from './primitives/adapters'
+import { toCoordinatorStatusBadgeState } from './primitives/adapters'
 import { ConversationBlocks } from './primitives/ConversationBlocks'
-import { ConversationMessage } from './primitives/ConversationMessage'
+import { ConversationMessageCard } from './primitives/ConversationMessageCard'
 import { ConversationStatusBadge } from './primitives/ConversationStatusBadge'
 
-export function MockChatPanel() {
+type MockChatPanelProps = {
+  forceAnalyzing?: boolean
+}
+
+export function MockChatPanel({ forceAnalyzing = false }: MockChatPanelProps) {
   const { state, submitPrompt, retry } = useSessionConversation()
   const presentation = deriveMockChatPresentation({
     messages: state.messages,
-    isStreaming: state.runState === 'pending'
+    isStreaming: state.runState === 'pending',
+    forceAnalyzing
   })
 
   return (
@@ -27,7 +32,7 @@ export function MockChatPanel() {
                   id={`message-${block.message.id}`}
                   data-message-id={block.message.id}
                 >
-                  <ConversationMessage message={block.message} />
+                  <ConversationMessageCard message={block.message} />
                 </div>
               )
             }
@@ -39,7 +44,7 @@ export function MockChatPanel() {
                   id={`message-${block.id}`}
                   data-message-id={block.id}
                 >
-                  <ConversationMessage
+                  <ConversationMessageCard
                     message={{
                       id: block.id,
                       role: 'user',
@@ -47,6 +52,7 @@ export function MockChatPanel() {
                       summary: block.summary
                     }}
                     variant="collapsed"
+                    metadata={<span>Pasted content text</span>}
                   />
                 </div>
               )
@@ -61,7 +67,11 @@ export function MockChatPanel() {
           })}
       </MessageList>
       <div className="shrink-0 px-4 py-2">
-        <ConversationStatusBadge runState={toPrimitiveRunState(state.runState)} />
+        <ConversationStatusBadge
+          state={toCoordinatorStatusBadgeState({
+            conversationRunState: state.runState
+          })}
+        />
       </div>
       <ChatInput
         onSend={submitPrompt}

@@ -1,7 +1,13 @@
 import { type ChatMessage, type ToolCallRecord } from '../../types/chat'
 import type { ConversationMessage } from '../../types/session-conversation'
-import { toPrimitiveMessage, toPrimitiveRunState } from './primitives/adapters'
-import type { PrimitiveMessage, PrimitiveRunState } from './primitives/types'
+import {
+  toCoordinatorStatusBadgeState,
+  toPrimitiveMessage
+} from './primitives/adapters'
+import type {
+  CoordinatorStatusBadgeState,
+  PrimitiveMessage
+} from './primitives/types'
 
 export type MockChatViewState = 'initial' | 'pastedContext' | 'contextReading' | 'analyzing'
 
@@ -29,7 +35,7 @@ export type MockChatPresentationBlock =
   | {
       id: string
       type: 'statusBadge'
-      variant: PrimitiveRunState
+      variant: CoordinatorStatusBadgeState
     }
 
 export type MockChatPresentation = {
@@ -83,7 +89,9 @@ export function deriveMockChatPresentation(input: DeriveMockChatPresentationInpu
   const reversed = [...input.messages].reverse()
   const reversedUsers = reversed.filter((message) => message.role === 'user')
   const viewState = inferViewState(reversedUsers, input.isStreaming, input.forceAnalyzing ?? false)
-  const statusVariant = toPrimitiveRunState(input.isStreaming ? 'pending' : 'idle')
+  const statusVariant = toCoordinatorStatusBadgeState({
+    conversationRunState: input.isStreaming ? 'pending' : 'idle'
+  })
   const latestUser = reversedUsers[0]
   const latestAnalyzingUser = reversedUsers
     .find((message) => ANALYZING_TRIGGER.test(message.content))

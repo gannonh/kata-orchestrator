@@ -50,6 +50,21 @@ describe('MockChatPanel', () => {
     expect(screen.getByText('## Context...')).toBeTruthy()
   })
 
+  it('renders collapsed analyzing summary and a thinking badge', () => {
+    render(<MockChatPanel forceAnalyzing />)
+
+    fireEvent.change(screen.getByLabelText('Message input'), {
+      target: {
+        value:
+          'I would like to build the following product for which I have created an overview document.'
+      }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
+    expect(screen.getByText('Pasted content text')).toBeTruthy()
+  })
+
   it('renders the deterministic agent response after the pending run completes', () => {
     render(<MockChatPanel />)
 
