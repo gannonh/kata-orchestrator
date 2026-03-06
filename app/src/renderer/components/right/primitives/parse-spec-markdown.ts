@@ -80,9 +80,20 @@ function normalizeTextBlock(lines: IndexedLine[]): string {
 function normalizeListItems(lines: IndexedLine[]): string[] {
   const items: string[] = []
   let currentItemLines: string[] = []
+  let openFenceMarker: string | null = null
 
   lines.forEach(({ content }) => {
     const trimmedEnd = content.trimEnd()
+    const trimmed = trimmedEnd.trim()
+
+    if (openFenceMarker) {
+      currentItemLines.push(trimmedEnd)
+      if (isMatchingFenceLine(trimmed, openFenceMarker)) {
+        openFenceMarker = null
+      }
+      return
+    }
+
     const listItemMatch = trimmedEnd.match(/^(?:[-*+]\s+|\d+[.)]\s+)(.+?)\s*$/)
 
     if (listItemMatch) {
@@ -92,8 +103,15 @@ function normalizeListItems(lines: IndexedLine[]): string[] {
     }
 
     if (currentItemLines.length > 0) {
-      if (trimmedEnd.trim() === '') {
+      if (trimmed === '') {
         currentItemLines.push('')
+        return
+      }
+
+      const fenceMarker = getFenceMarker(trimmed)
+      if (fenceMarker) {
+        currentItemLines.push(trimmedEnd)
+        openFenceMarker = fenceMarker
         return
       }
 
@@ -111,9 +129,9 @@ function normalizeListItems(lines: IndexedLine[]): string[] {
       return
     }
 
-    const trimmed = trimmedEnd.trim()
     if (trimmed) {
       currentItemLines = [trimmed]
+      openFenceMarker = getFenceMarker(trimmed)
     }
   })
 
@@ -210,6 +228,16 @@ function dedentLines(lines: string[]): string[] {
   )
 
   return lines.map((line) => line.slice(Math.min(sharedIndent, line.length)))
+}
+
+function getFenceMarker(line: string): string | null {
+  const match = line.match(/^(`{3,}|~{3,})/)
+  return match?.[1] ?? null
+}
+
+function isMatchingFenceLine(line: string, openFenceMarker: string): boolean {
+  const marker = getFenceMarker(line)
+  return marker !== null && marker[0] === openFenceMarker[0]
 }
 
 function isNestedListItem(line: string): boolean {

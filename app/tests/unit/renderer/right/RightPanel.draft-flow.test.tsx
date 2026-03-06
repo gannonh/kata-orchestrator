@@ -262,7 +262,7 @@ describe('RightPanel draft flow', () => {
     })
   })
 
-  it('keeps structured view after a draft has already been applied, even when a newer run draft exists', async () => {
+  it('surfaces and applies a newer run draft after a prior draft has already been applied', async () => {
     mockSpecGet.mockResolvedValueOnce({
       markdown: [
         '## Goal',
@@ -290,10 +290,19 @@ describe('RightPanel draft flow', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Persisted applied goal')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Apply Draft to Spec' })).toBeTruthy()
     })
 
-    expect(screen.queryByRole('button', { name: 'Apply Draft to Spec' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Apply Draft to Spec' }))
+
+    await waitFor(() => {
+      expect(mockSpecApplyDraft).toHaveBeenCalledWith({
+        spaceId: 'space-1',
+        sessionId: 'session-1',
+        draft: expect.objectContaining({ runId: 'run-2' })
+      })
+      expect(screen.getByText('Newer draft that should not force apply state')).toBeTruthy()
+    })
   })
 
   it('cancels markdown editing and restores the persisted content', async () => {

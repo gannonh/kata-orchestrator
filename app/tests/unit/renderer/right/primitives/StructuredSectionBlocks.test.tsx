@@ -1,9 +1,13 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { cleanup, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { StructuredSectionBlocks } from '../../../../../src/renderer/components/right/primitives/StructuredSectionBlocks'
 
 describe('StructuredSectionBlocks', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
   it('renders all canonical section headings in stable order', () => {
     render(
       <StructuredSectionBlocks
@@ -64,7 +68,7 @@ describe('StructuredSectionBlocks', () => {
   })
 
   it('renders markdown inside canonical list items', () => {
-    render(
+    const { container } = render(
       <StructuredSectionBlocks
         sections={{
           goal: '',
@@ -79,5 +83,39 @@ describe('StructuredSectionBlocks', () => {
     )
 
     expect(screen.getByText('markdown').tagName).toBe('CODE')
+  })
+
+  it('renders fenced code blocks inside canonical list items without splitting them into extra rows', () => {
+    const { container } = render(
+      <StructuredSectionBlocks
+        sections={{
+          goal: '',
+          acceptanceCriteria: [
+            [
+              'Illustrate the expected task markers.',
+              '',
+              '```ts',
+              "type TaskState = '[ ]' | '[/]' | '[x]'",
+              '```'
+            ].join('\n')
+          ],
+          nonGoals: [],
+          assumptions: [],
+          verificationPlan: [],
+          rollbackPlan: []
+        }}
+        renderTasks={() => null}
+      />
+    )
+
+    expect(screen.getByText("type TaskState = '[ ]' | '[/]' | '[x]'")).toBeTruthy()
+    const acceptanceCriteriaList = Array.from(container.querySelectorAll('[data-slot="card"]'))
+      .find((card) =>
+        within(card as HTMLElement).queryByRole('heading', { name: 'Acceptance Criteria' }) !== null
+      )
+      ?.querySelector('ol')
+
+    expect(acceptanceCriteriaList).toBeTruthy()
+    expect(within(acceptanceCriteriaList as HTMLElement).getAllByRole('listitem')).toHaveLength(1)
   })
 })

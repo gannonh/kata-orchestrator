@@ -91,4 +91,27 @@ describe('parseSpecMarkdown', () => {
       ['Support renderer-ready markdown:', '```ts', 'const stable = true', '```', 'with trailing explanation.'].join('\n')
     ])
   })
+
+  it('keeps a flush-left fenced block attached to the preceding canonical list item', () => {
+    const markdown = [
+      '## Acceptance Criteria',
+      '- Tasks include exactly one unchecked, one in-progress, and one completed item.',
+      '',
+      '```ts',
+      "type TaskState = '[ ]' | '[/]' | '[x]'",
+      '```'
+    ].join('\n')
+
+    const parsed = parseSpecMarkdown(markdown)
+
+    expect(parsed.sections.acceptanceCriteria).toEqual([
+      [
+        'Tasks include exactly one unchecked, one in-progress, and one completed item.',
+        '',
+        '```ts',
+        "type TaskState = '[ ]' | '[/]' | '[x]'",
+        '```'
+      ].join('\n')
+    ])
+  })
 })

@@ -272,7 +272,7 @@ describe('useIpcSessionConversation', () => {
     expect(result.current.state.latestDraft).toBeUndefined()
   })
 
-  it('receiving message_appended event adds agent message and transitions to idle', async () => {
+  it('receiving message_appended event publishes the assistant markdown as the latest draft', async () => {
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
     )
@@ -284,13 +284,36 @@ describe('useIpcSessionConversation', () => {
 
     const createdAt = '2026-03-01T00:00:01.000Z'
 
+    const assistantDraft = [
+      '## Goal',
+      'Ship `inline code` rendering.',
+      '',
+      '## Acceptance Criteria',
+      '1. Render canonical sections from assistant markdown.',
+      '',
+      '## Non-goals',
+      '- Do not synthesize a fallback draft.',
+      '',
+      '## Assumptions',
+      '- The latest assistant message is canonical markdown.',
+      '',
+      '## Verification Plan',
+      '1. Run the hook tests.',
+      '',
+      '## Rollback Plan',
+      '1. Restore the scaffolded draft builder.',
+      '',
+      '## Tasks',
+      '- [ ] Preserve assistant markdown'
+    ].join('\n')
+
     act(() => {
       onRunEventCallback?.({
         type: 'message_appended',
         message: {
           id: 'agent-1',
           role: 'agent',
-          content: 'Draft ready.',
+          content: assistantDraft,
           createdAt
         }
       })
@@ -302,31 +325,7 @@ describe('useIpcSessionConversation', () => {
     expect(result.current.state.latestDraft).toEqual({
       runId: 'run-agent-1',
       generatedAt: createdAt,
-      content: [
-        '## Goal',
-        'test',
-        '',
-        '## Acceptance Criteria',
-        '1. Produce a structured spec draft from the latest run',
-        '2. Keep the shell behavior deterministic for renderer tests',
-        '',
-        '## Non-goals',
-        '- Do not call external services from the right panel',
-        '',
-        '## Assumptions',
-        '- The latest prompt is the source of truth for the draft',
-        '',
-        '## Verification Plan',
-        '1. Run the renderer unit tests',
-        '',
-        '## Rollback Plan',
-        '1. Clear the generated draft state',
-        '',
-        '## Tasks',
-        '- [ ] Review the latest prompt',
-        '- [/] Apply the structured draft',
-        '- [x] Keep the runtime wiring stable'
-      ].join('\n')
+      content: assistantDraft
     })
   })
 
@@ -364,11 +363,13 @@ describe('useIpcSessionConversation', () => {
     expect(result.current.state.messages.filter((message) => message.id === duplicateMessage.id)).toHaveLength(1)
   })
 
-  it('builds a draft with an empty prompt when message_appended arrives before submit', async () => {
+  it('uses assistant markdown even when message_appended arrives before submit', async () => {
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
     )
     const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    const assistantDraft = ['## Goal', 'Draft created before prompt'].join('\n')
 
     act(() => {
       onRunEventCallback?.({
@@ -376,14 +377,14 @@ describe('useIpcSessionConversation', () => {
         message: {
           id: 'agent-pre',
           role: 'agent',
-          content: 'Draft created before prompt',
+          content: assistantDraft,
           createdAt: '2026-03-01T00:00:01.000Z'
         }
       })
     })
 
     expect(result.current.state.latestDraft?.runId).toBe('run-agent-pre')
-    expect(result.current.state.latestDraft?.content.startsWith('## Goal\n\n')).toBe(true)
+    expect(result.current.state.latestDraft?.content).toBe(assistantDraft)
   })
 
   it('receiving message_updated streams assistant content before completion', async () => {
