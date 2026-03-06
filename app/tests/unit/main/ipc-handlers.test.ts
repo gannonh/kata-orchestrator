@@ -583,6 +583,41 @@ describe('registerIpcHandlers', () => {
     ])
   })
 
+  it('session:create seeds the Spec context resource for the new session', async () => {
+    const existingSpace = {
+      id: 'space-1',
+      name: 'Existing',
+      repoUrl: 'https://github.com/user/repo',
+      rootPath: '/Users/me/repo',
+      branch: 'main',
+      orchestrationMode: 'team' as const,
+      createdAt: '2026-02-25T00:00:00.000Z',
+      status: 'active' as const
+    }
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      spaces: { [existingSpace.id]: existingSpace }
+    })
+
+    registerIpcHandlers(store)
+    const sessionCreate = getHandlersByChannel().get('session:create')!
+
+    const createdSession = await sessionCreate({}, { spaceId: existingSpace.id, label: 'Session 2' })
+    const savedState = store.save.mock.calls[0]?.[0] as AppState
+    const sessionResources = Object.values(savedState.contextResources)
+      .filter((entry) => entry.sessionId === (createdSession as { id: string }).id)
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+
+    expect(sessionResources).toEqual([
+      expect.objectContaining({
+        sessionId: (createdSession as { id: string }).id,
+        kind: 'spec',
+        label: 'Spec',
+        sortOrder: 0
+      })
+    ])
+  })
+
   it('session:create wraps save failures with a descriptive error code', async () => {
     const existingSpace = {
       id: 'space-1',
@@ -679,6 +714,102 @@ describe('registerIpcHandlers', () => {
     expect(mockRegistryList).toHaveBeenCalledWith('session-1')
     await expect(rosterList({}, { sessionId: 'missing' })).resolves.toEqual([])
     expect(mockRegistryList).toHaveBeenCalledWith('missing')
+  })
+
+  it('session-context-resources:list returns sorted records for one session', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      contextResources: {
+        'ctx-2': {
+          id: 'ctx-2',
+          sessionId: 'session-1',
+          kind: 'note',
+          label: 'Notes',
+          sortOrder: 0,
+          createdAt: '2026-03-06T00:00:02.000Z',
+          updatedAt: '2026-03-06T00:00:02.000Z'
+        },
+        'ctx-1': {
+          id: 'ctx-1',
+          sessionId: 'session-1',
+          kind: 'spec',
+          label: 'Spec',
+          sortOrder: 0,
+          createdAt: '2026-03-06T00:00:01.000Z',
+          updatedAt: '2026-03-06T00:00:01.000Z'
+        },
+        'ctx-3': {
+          id: 'ctx-3',
+          sessionId: 'session-2',
+          kind: 'manual',
+          label: 'Manual',
+          sortOrder: 0,
+          createdAt: '2026-03-06T00:00:00.000Z',
+          updatedAt: '2026-03-06T00:00:00.000Z'
+        }
+      }
+    })
+
+    registerIpcHandlers(store)
+    const handler = getHandlersByChannel().get('session-context-resources:list')!
+
+    await expect(handler({}, { sessionId: 'session-1' })).resolves.toEqual([
+      expect.objectContaining({ id: 'ctx-1' }),
+      expect.objectContaining({ id: 'ctx-2' })
+    ])
+  })
+
+  it('session-context-resources:list sorts by sortOrder then id for exact ties', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      contextResources: {
+        'ctx-z': {
+          id: 'ctx-z',
+          sessionId: 'session-1',
+          kind: 'note',
+          label: 'Later order',
+          sortOrder: 2,
+          createdAt: '2026-03-06T00:00:03.000Z',
+          updatedAt: '2026-03-06T00:00:03.000Z'
+        },
+        'ctx-b': {
+          id: 'ctx-b',
+          sessionId: 'session-1',
+          kind: 'note',
+          label: 'B',
+          sortOrder: 1,
+          createdAt: '2026-03-06T00:00:01.000Z',
+          updatedAt: '2026-03-06T00:00:01.000Z'
+        },
+        'ctx-a': {
+          id: 'ctx-a',
+          sessionId: 'session-1',
+          kind: 'spec',
+          label: 'A',
+          sortOrder: 1,
+          createdAt: '2026-03-06T00:00:01.000Z',
+          updatedAt: '2026-03-06T00:00:01.000Z'
+        }
+      }
+    })
+
+    registerIpcHandlers(store)
+    const handler = getHandlersByChannel().get('session-context-resources:list')!
+
+    await expect(handler({}, { sessionId: 'session-1' })).resolves.toEqual([
+      expect.objectContaining({ id: 'ctx-a' }),
+      expect.objectContaining({ id: 'ctx-b' }),
+      expect.objectContaining({ id: 'ctx-z' })
+    ])
+  })
+
+  it('session-context-resources:list rejects invalid input', async () => {
+    registerIpcHandlers(createMockStore(createDefaultAppState()))
+    const handler = getHandlersByChannel().get('session-context-resources:list')!
+
+    await expect(handler({}, null)).rejects.toThrow(
+      'session-context-resources:list input must be an object with string sessionId'
+    )
   })
 
   it('session:listBySpace returns sessions for the space sorted by newest first', async () => {
@@ -1672,6 +1803,39 @@ describe('registerIpcHandlers', () => {
 
       const abortHandler = getHandlersByChannel().get('run:abort')!
       await expect(abortHandler(null, { runId: 'run-fail-1' })).resolves.toBe(false)
+    })
+
+    it('uses the fallback failure message when runner.execute rejects with a non-Error value', async () => {
+      const mockRunner = { execute: vi.fn().mockRejectedValue('boom'), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({
+        id: 'run-fail-2',
+        sessionId: 'sess-1',
+        prompt: 'hello',
+        status: 'queued',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        messages: []
+      })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore()
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      await expect(handler({ sender: { send: vi.fn() } }, { sessionId: 'sess-1', prompt: 'hello', model: 'm', provider: 'p' })).resolves.toEqual({
+        runId: 'run-fail-2'
+      })
+
+      await Promise.resolve()
+
+      expect(mockUpdateRunStatus).toHaveBeenCalledWith(
+        store,
+        'run-fail-2',
+        'failed',
+        'Run execution failed unexpectedly'
+      )
     })
 
     it('seeds task activity from the latest Tasks section when markdown contains multiple Tasks headings', async () => {

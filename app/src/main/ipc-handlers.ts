@@ -47,6 +47,7 @@ import type {
   CreateSpaceInput,
   OrchestrationMode,
   ProvisioningMethod,
+  SessionContextResourceRecord,
   SessionRecord,
   SpaceRecord,
   WorkspaceMode
@@ -61,6 +62,7 @@ const SPACE_GET_CHANNEL = 'space:get'
 const SPACE_SET_ACTIVE_CHANNEL = 'space:setActive'
 const SESSION_CREATE_CHANNEL = 'session:create'
 const SESSION_AGENT_ROSTER_LIST_CHANNEL = 'session-agent-roster:list'
+const SESSION_CONTEXT_RESOURCES_LIST_CHANNEL = 'session-context-resources:list'
 const SESSION_LIST_BY_SPACE_CHANNEL = 'session:listBySpace'
 const SESSION_SET_ACTIVE_CHANNEL = 'session:setActive'
 const SPEC_GET_CHANNEL = 'spec:get'
@@ -255,6 +257,14 @@ function parseSessionAgentRosterListInput(input: unknown): { sessionId: string }
   return { sessionId: input.sessionId }
 }
 
+function parseSessionContextResourcesListInput(input: unknown): { sessionId: string } {
+  if (!isObjectRecord(input) || typeof input.sessionId !== 'string') {
+    throw new Error('session-context-resources:list input must be an object with string sessionId')
+  }
+
+  return { sessionId: input.sessionId }
+}
+
 function parseSessionListBySpaceInput(input: unknown): { spaceId: string } {
   if (!isObjectRecord(input) || typeof input.spaceId !== 'string') {
     throw new Error('session:listBySpace input must be an object with string spaceId')
@@ -366,6 +376,25 @@ function assertSpecScope(state: AppState, spaceId: string, sessionId: string): v
 
 function buildSpecDocumentKey(spaceId: string, sessionId: string): string {
   return `${spaceId}:${sessionId}`
+}
+
+function seedBaselineContextResources(
+  sessionId: string,
+  createdAt: string
+): Record<string, SessionContextResourceRecord> {
+  const specResource: SessionContextResourceRecord = {
+    id: randomUUID(),
+    sessionId,
+    kind: 'spec',
+    label: 'Spec',
+    sortOrder: 0,
+    createdAt,
+    updatedAt: createdAt
+  }
+
+  return {
+    [specResource.id]: specResource
+  }
 }
 
 function parseTaskSeedItemsFromMarkdown(markdown: string): TaskActivitySeedItem[] {
@@ -486,6 +515,7 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
   ipcMain.removeHandler(SPACE_SET_ACTIVE_CHANNEL)
   ipcMain.removeHandler(SESSION_CREATE_CHANNEL)
   ipcMain.removeHandler(SESSION_AGENT_ROSTER_LIST_CHANNEL)
+  ipcMain.removeHandler(SESSION_CONTEXT_RESOURCES_LIST_CHANNEL)
   ipcMain.removeHandler(SESSION_LIST_BY_SPACE_CHANNEL)
   ipcMain.removeHandler(SESSION_SET_ACTIVE_CHANNEL)
   ipcMain.removeHandler(SPEC_GET_CHANNEL)
@@ -643,6 +673,10 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     let nextState: AppState = {
       ...state,
       sessions: { ...state.sessions, [createdSession.id]: createdSession },
+      contextResources: {
+        ...state.contextResources,
+        ...seedBaselineContextResources(createdSession.id, createdSession.createdAt)
+      },
       activeSpaceId: parsedInput.spaceId,
       activeSessionId: createdSession.id
     }
@@ -670,6 +704,24 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     const sessionAgentRegistry = createSessionAgentRegistry(() => state, stateStore.save)
 
     return sessionAgentRegistry.list(sessionId)
+  })
+
+  ipcMain.handle(SESSION_CONTEXT_RESOURCES_LIST_CHANNEL, async (_event, input: unknown) => {
+    const { sessionId } = parseSessionContextResourcesListInput(input)
+
+    return Object.values(stateStore.load().contextResources)
+      .filter((resource) => resource.sessionId === sessionId)
+      .sort((left, right) => {
+        if (left.sortOrder !== right.sortOrder) {
+          return left.sortOrder - right.sortOrder
+        }
+
+        if (left.createdAt !== right.createdAt) {
+          return left.createdAt.localeCompare(right.createdAt)
+        }
+
+        return left.id.localeCompare(right.id)
+      })
   })
 
   ipcMain.handle(SESSION_LIST_BY_SPACE_CHANNEL, async (_event, input: unknown) => {
