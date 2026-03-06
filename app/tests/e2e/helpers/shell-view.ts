@@ -62,6 +62,7 @@ export async function ensureWorkspaceShell(
   const appShellRoot = appWindow.getByTestId('app-shell-root')
   if ((await appShellRoot.count()) > 0) {
     await expect(appShellRoot).toBeVisible()
+    await ensureSendButtonReady(appWindow)
     return
   }
 
@@ -82,5 +83,9 @@ export async function ensureWorkspaceShell(
     await expect(openSelectedSpaceButton).toBeEnabled()
     await openSelectedSpaceButton.click()
     await expect(appShellRoot).toBeVisible()
+  })
+
+  await test.step('Wait for send composer readiness', async () => {
+    await ensureSendButtonReady(appWindow)
   })
 }

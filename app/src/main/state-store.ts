@@ -309,24 +309,14 @@ function normalizeRunContextReferences(value: unknown): RunRecord['contextRefere
   return [...value]
 }
 
-function normalizeRunRecord(value: unknown): RunRecord | null {
-  if (!isRunRecord(value)) {
-    return null
-  }
-
-  const record = value as RunRecord & { contextReferences?: unknown }
-
+function normalizeRunRecord(value: RunRecord & { contextReferences?: unknown }): RunRecord {
   return {
-    ...record,
-    contextReferences: normalizeRunContextReferences(record.contextReferences)
+    ...value,
+    contextReferences: normalizeRunContextReferences(value.contextReferences)
   }
 }
 
-function normalizeRuns(value: unknown): AppState['runs'] {
-  if (!isRecord(value)) {
-    return {}
-  }
-
+function normalizeRuns(value: Record<string, unknown>): AppState['runs'] {
   const normalized = Object.create(null) as AppState['runs']
 
   for (const [key, record] of Object.entries(value)) {
@@ -335,17 +325,7 @@ function normalizeRuns(value: unknown): AppState['runs'] {
       continue
     }
 
-    if (!isRecord(record) || record.id !== key) {
-      console.warn('[StateStore] Dropping invalid run entry:', key)
-      continue
-    }
-
-    const normalizedRun = normalizeRunRecord(record)
-    if (normalizedRun) {
-      normalized[key] = normalizedRun
-    } else {
-      console.warn('[StateStore] Dropping invalid run entry:', key)
-    }
+    normalized[key] = normalizeRunRecord(record as RunRecord & { contextReferences?: unknown })
   }
 
   return normalized
@@ -378,10 +358,6 @@ function reconcileInterruptedRuns(runs: AppState['runs']): AppState['runs'] {
   const completedAt = new Date().toISOString()
 
   for (const [key, run] of Object.entries(runs)) {
-    if (isUnsafeRecordKey(key)) {
-      console.warn('[StateStore] Dropping unsafe run key:', key)
-      continue
-    }
     if (run.status === 'queued' || run.status === 'running') {
       reconciled[key] = {
         ...run,

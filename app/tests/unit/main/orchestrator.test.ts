@@ -247,6 +247,24 @@ describe('Orchestrator', () => {
     consoleSpy.mockRestore()
   })
 
+  it('replaceRunContextReferences is a no-op for nonexistent runId', async () => {
+    const { replaceRunContextReferences } = await import('../../../src/main/orchestrator')
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const saveSpy = vi.fn()
+    const noopStore = {
+      load: () => ({ ...state }),
+      save: saveSpy
+    }
+
+    replaceRunContextReferences(noopStore, 'nonexistent-run-id', [])
+
+    expect(saveSpy).not.toHaveBeenCalled()
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Cannot set context references for unknown run')
+    )
+    consoleSpy.mockRestore()
+  })
+
   it('setRunDraft rejects draft with mismatched runId', async () => {
     const { createRun, setRunDraft } = await import('../../../src/main/orchestrator')
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
