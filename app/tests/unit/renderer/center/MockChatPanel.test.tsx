@@ -37,6 +37,19 @@ describe('MockChatPanel', () => {
     expect(screen.getByText('Ship slice A')).toBeTruthy()
   })
 
+  it('renders pasted-context affordances for user messages', () => {
+    render(<MockChatPanel />)
+
+    fireEvent.change(screen.getByLabelText('Message input'), {
+      target: { value: 'Pasted 205 lines\n\nspec text' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(screen.getByText('Just now')).toBeTruthy()
+    expect(screen.getByText('Pasted 205 lines')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss message' }))
+  })
+
   it('renders analyzing preview context chips during pending runs', () => {
     render(<MockChatPanel />)
 

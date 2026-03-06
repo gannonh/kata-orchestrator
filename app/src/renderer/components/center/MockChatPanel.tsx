@@ -11,6 +11,16 @@ type MockChatPanelProps = {
   forceAnalyzing?: boolean
 }
 
+function getPastedContentFooter(content: string): string | undefined {
+  const match = content.match(/pasted\s+(\d+)\s+lines/i)
+
+  if (!match) {
+    return undefined
+  }
+
+  return `Pasted ${match[1]} lines`
+}
+
 export function MockChatPanel({ forceAnalyzing = false }: MockChatPanelProps) {
   const { state, submitPrompt, retry } = useSessionConversation()
   const presentation = deriveMockChatPresentation({
@@ -26,13 +36,20 @@ export function MockChatPanel({ forceAnalyzing = false }: MockChatPanelProps) {
           .filter((block) => block.type !== 'statusBadge')
           .map((block) => {
             if (block.type === 'message') {
+              const footerLabel = getPastedContentFooter(block.message.content)
+
               return (
                 <div
                   key={block.id}
                   id={`message-${block.message.id}`}
                   data-message-id={block.message.id}
                 >
-                  <ConversationMessageCard message={block.message} />
+                  <ConversationMessageCard
+                    message={block.message}
+                    timestampLabel={block.message.createdAt ? 'Just now' : undefined}
+                    footer={footerLabel ? <span>{footerLabel}</span> : undefined}
+                    onDismiss={footerLabel ? () => undefined : undefined}
+                  />
                 </div>
               )
             }

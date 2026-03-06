@@ -97,6 +97,31 @@ describe('ChatPanel', () => {
     expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
   })
 
+  it('renders pasted-context affordances through the real center panel path', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        runState: 'idle',
+        messages: [
+          {
+            id: 'm1',
+            role: 'user',
+            content: 'Pasted 205 lines\n\nspec text',
+            createdAt: '2026-03-01T00:00:00Z'
+          }
+        ]
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    expect(screen.getByText('Just now')).toBeTruthy()
+    expect(screen.getByText('Pasted 205 lines')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Dismiss message' })).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'Stopped' })).toBeTruthy()
+  })
+
   it('passes sessionId to useIpcSessionConversation', () => {
     mockHook.mockReturnValue({
       state: idleState(),

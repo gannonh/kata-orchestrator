@@ -15,6 +15,16 @@ type MessageBubbleProps = {
   onDecisionAction?: (actionId: InlineDecisionActionId) => void
 }
 
+function getPastedContentFooter(content: string): string | undefined {
+  const match = content.match(/pasted\s+(\d+)\s+lines/i)
+
+  if (!match) {
+    return undefined
+  }
+
+  return `Pasted ${match[1]} lines`
+}
+
 export function MessageBubble({
   message,
   variant = 'default',
@@ -39,12 +49,23 @@ export function MessageBubble({
       }
     : messageWithSummary
   const isDecisionDisabled = decisionState === 'pending' || decisionState === 'resolved'
+  const timestampLabel =
+    'createdAt' in message && typeof message.createdAt === 'string'
+      ? 'Just now'
+      : undefined
+  const footerLabel =
+    primitiveMessage.role === 'user'
+      ? getPastedContentFooter(displayMessage.content)
+      : undefined
 
   return (
     <div className="flex flex-col gap-2">
       <ConversationMessageCard
         message={displayMessage}
         variant={variant}
+        timestampLabel={timestampLabel}
+        footer={footerLabel ? <span>{footerLabel}</span> : undefined}
+        onDismiss={footerLabel ? () => undefined : undefined}
       />
       {shouldRenderDecisionCard && decisionCard ? (
         <div className="max-w-[85%] space-y-2 px-1">

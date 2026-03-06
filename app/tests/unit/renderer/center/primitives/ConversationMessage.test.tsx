@@ -12,10 +12,7 @@ describe('ConversationMessage', () => {
     )
 
     expect(screen.getByText('You')).toBeTruthy()
-    const contentArticle = screen.getByText('Ship slice A').closest('article')
-
-    expect(contentArticle).toBeTruthy()
-    expect(contentArticle?.parentElement?.closest('article')).toBeNull()
+    expect(screen.getByText('Ship slice A').closest('article')).toBeNull()
   })
 
   it('renders agent role via markdown with Kata label', () => {

@@ -30,12 +30,8 @@ describe('MessageBubble', () => {
 
     expect(screen.getByText('You')).toBeTruthy()
     const contentArticle = screen.getByText('Please summarize the current plan.').closest('article')
-    const outerArticle = contentArticle?.parentElement?.closest('article')
-
     expect(contentArticle).toBeTruthy()
-    expect(outerArticle).toBeTruthy()
-    expect(outerArticle).not.toBe(contentArticle)
-    expect(outerArticle?.contains(contentArticle as Node)).toBe(true)
+    expect(contentArticle?.parentElement?.closest('article')).toBeNull()
   })
 
   it('renders assistant messages using markdown formatting', () => {
@@ -85,13 +81,26 @@ describe('MessageBubble', () => {
     )
 
     const contentArticle = screen.getByText('I would like to build the following product...').closest('article')
-    const outerArticle = contentArticle?.parentElement?.closest('article')
-
     expect(contentArticle).toBeTruthy()
-    expect(outerArticle).toBeTruthy()
-    expect(outerArticle).not.toBe(contentArticle)
-    expect(outerArticle?.contains(contentArticle as Node)).toBe(true)
+    expect(contentArticle?.parentElement?.closest('article')).toBeNull()
     expect(screen.queryByText('Long content that should not be shown when collapsed.')).toBeNull()
+  })
+
+  it('surfaces timestamp, pasted-content footer, and dismiss affordance for pasted user messages', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 'user-paste',
+          role: 'user',
+          content: 'Pasted 205 lines\n\nspec text',
+          createdAt: '2026-03-06T00:00:00.000Z'
+        }}
+      />
+    )
+
+    expect(screen.getByText('Just now')).toBeTruthy()
+    expect(screen.getByText('Pasted 205 lines')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss message' }))
   })
 
   it('falls back to full message content when collapsed summary is blank', () => {
