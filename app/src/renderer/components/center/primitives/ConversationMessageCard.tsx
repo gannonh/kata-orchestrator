@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { X } from 'lucide-react'
 
 import { ConversationMessage } from './ConversationMessage'
 import type { PrimitiveMessage, PrimitiveMessageVariant } from './types'
@@ -52,9 +53,9 @@ export function ConversationMessageCard({
             type="button"
             aria-label="Dismiss message"
             onClick={onDismiss}
-            className="shrink-0 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
           >
-            x
+            <X size={14} />
           </button>
         ) : null}
       </div>

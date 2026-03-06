@@ -42,6 +42,10 @@ export function toCoordinatorStatusBadgeState(input: {
   conversationRunState?: ConversationRunState
   activeAgent?: SessionAgentRecord
 }): CoordinatorStatusBadgeState {
+  if (input.activeAgent?.status === 'failed') {
+    return 'error'
+  }
+
   if (
     input.activeAgent &&
     ACTIVE_COORDINATOR_STATUSES.has(input.activeAgent.status)

@@ -47,7 +47,7 @@ describe('MockChatPanel', () => {
 
     expect(screen.getByText('Just now')).toBeTruthy()
     expect(screen.getByText('Pasted 205 lines')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss message' }))
+    expect(screen.queryByRole('button', { name: 'Dismiss message' })).toBeNull()
   })
 
   it('renders analyzing preview context chips during pending runs', () => {

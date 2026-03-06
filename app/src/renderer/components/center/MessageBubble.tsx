@@ -1,8 +1,10 @@
 import { type ChatMessage } from '../../types/chat'
 import { type ConversationMessage } from '../../types/session-conversation'
+import { formatRelativeTime } from './format-relative-time'
 import { MessageActionRow } from './MessageActionRow'
-import { ConversationMessageCard, toPrimitiveMessage } from './primitives'
 import { stripDecisionActionLines, type DecisionState, type InlineDecisionActionId, type InlineDecisionCard } from './message-decision-parser'
+import { getPastedContentFooter } from './pasted-content-utils'
+import { ConversationMessageCard, toPrimitiveMessage } from './primitives'
 
 type BubbleMessage = ChatMessage | ConversationMessage
 
@@ -14,16 +16,6 @@ type MessageBubbleProps = {
   decisionState?: DecisionState
   onDecisionAction?: (actionId: InlineDecisionActionId) => void
   onDismiss?: (messageId: string) => void
-}
-
-function getPastedContentFooter(content: string): string | undefined {
-  const match = content.match(/pasted\s+(\d+)\s+lines/i)
-
-  if (!match) {
-    return undefined
-  }
-
-  return `Pasted ${match[1]} lines`
 }
 
 export function MessageBubble({
@@ -53,7 +45,7 @@ export function MessageBubble({
   const isDecisionDisabled = decisionState === 'pending' || decisionState === 'resolved'
   const timestampLabel =
     'createdAt' in message && typeof message.createdAt === 'string'
-      ? 'Just now'
+      ? formatRelativeTime(message.createdAt)
       : undefined
   const footerLabel =
     primitiveMessage.role === 'user'

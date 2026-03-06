@@ -62,12 +62,12 @@ export function ChatPanel({
       const map = new Map<string, { card: InlineDecisionCard | undefined; resolved: boolean }>()
       for (const message of visibleMessages) {
         const card = extractInlineDecisionCard(message)
-        const resolved = card ? isDecisionResolved(visibleMessages, card) : false
+        const resolved = card ? isDecisionResolved(state.messages, card) : false
         map.set(message.id, { card, resolved })
       }
       return map
     },
-    [visibleMessages]
+    [state.messages, visibleMessages]
   )
 
   return (

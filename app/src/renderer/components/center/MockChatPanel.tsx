@@ -1,7 +1,9 @@
 import { useSessionConversation } from '../../hooks/useSessionConversation'
 import { ChatInput } from './ChatInput'
+import { formatRelativeTime } from './format-relative-time'
 import { MessageList } from './MessageList'
 import { deriveMockChatPresentation } from './mockChatPresentation'
+import { getPastedContentFooter } from './pasted-content-utils'
 import { toCoordinatorStatusBadgeState } from './primitives/adapters'
 import { ConversationBlocks } from './primitives/ConversationBlocks'
 import { ConversationMessageCard } from './primitives/ConversationMessageCard'
@@ -9,16 +11,6 @@ import { ConversationStatusBadge } from './primitives/ConversationStatusBadge'
 
 type MockChatPanelProps = {
   forceAnalyzing?: boolean
-}
-
-function getPastedContentFooter(content: string): string | undefined {
-  const match = content.match(/pasted\s+(\d+)\s+lines/i)
-
-  if (!match) {
-    return undefined
-  }
-
-  return `Pasted ${match[1]} lines`
 }
 
 export function MockChatPanel({ forceAnalyzing = false }: MockChatPanelProps) {
@@ -46,9 +38,8 @@ export function MockChatPanel({ forceAnalyzing = false }: MockChatPanelProps) {
                 >
                   <ConversationMessageCard
                     message={block.message}
-                    timestampLabel={block.message.createdAt ? 'Just now' : undefined}
+                    timestampLabel={block.message.createdAt ? formatRelativeTime(block.message.createdAt) : undefined}
                     footer={footerLabel ? <span>{footerLabel}</span> : undefined}
-                    onDismiss={footerLabel ? () => undefined : undefined}
                   />
                 </div>
               )

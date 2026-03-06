@@ -72,4 +72,40 @@ describe('center primitives adapters', () => {
       expect(toCoordinatorStatusBadgeState({ activeAgent: agent })).toBe('running')
     }
   )
+
+  it('maps failed agent status to error badge state', () => {
+    const agent: SessionAgentRecord = {
+      id: 'agent-1',
+      sessionId: 'session-1',
+      name: 'Coordinator',
+      role: 'Coordinator',
+      kind: 'coordinator',
+      status: 'failed',
+      avatarColor: '#60d394',
+      sortOrder: 0,
+      createdAt: '2026-03-06T00:00:00.000Z',
+      updatedAt: '2026-03-06T00:00:00.000Z'
+    }
+
+    expect(toCoordinatorStatusBadgeState({ activeAgent: agent })).toBe('error')
+  })
+
+  it('maps failed agent status to error even when conversationRunState is idle', () => {
+    const agent: SessionAgentRecord = {
+      id: 'agent-1',
+      sessionId: 'session-1',
+      name: 'Coordinator',
+      role: 'Coordinator',
+      kind: 'coordinator',
+      status: 'failed',
+      avatarColor: '#60d394',
+      sortOrder: 0,
+      createdAt: '2026-03-06T00:00:00.000Z',
+      updatedAt: '2026-03-06T00:00:00.000Z'
+    }
+
+    expect(
+      toCoordinatorStatusBadgeState({ activeAgent: agent, conversationRunState: 'idle' })
+    ).toBe('error')
+  })
 })

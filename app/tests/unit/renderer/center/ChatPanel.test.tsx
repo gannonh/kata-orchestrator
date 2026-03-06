@@ -98,6 +98,9 @@ describe('ChatPanel', () => {
   })
 
   it('renders pasted-context affordances through the real center panel path', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-01T00:00:10Z'))
+
     mockHook.mockReturnValue({
       state: idleState({
         runState: 'idle',
@@ -120,6 +123,8 @@ describe('ChatPanel', () => {
     expect(screen.getByText('Pasted 205 lines')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Dismiss message' })).toBeTruthy()
     expect(screen.getByRole('status', { name: 'Stopped' })).toBeTruthy()
+
+    vi.useRealTimers()
   })
 
   it('removes dismissed pasted-context messages from the rendered conversation list', () => {

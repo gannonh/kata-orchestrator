@@ -11,6 +11,7 @@ describe('center primitives index', () => {
     expect(typeof primitives.ConversationMessage).toBe('function')
     expect(typeof primitives.ConversationMessageCard).toBe('function')
     expect(typeof primitives.ConversationStatusBadge).toBe('function')
+    expect(typeof primitives.toCoordinatorStatusBadgeState).toBe('function')
     expect(typeof primitives.toPrimitiveMessage).toBe('function')
   })
 })
