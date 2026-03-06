@@ -52,4 +52,18 @@ describe('normalizeMarkdownForRender', () => {
 
     expect(normalizeMarkdownForRender(content, 'streaming')).toBe(content)
   })
+
+  it('does not treat a backtick line with trailing info as a closing fence', () => {
+    const content = ['```ts', 'const ready = true', '```not a closer'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(
+      ['```ts', 'const ready = true', '```not a closer', '```'].join('\n')
+    )
+  })
+
+  it('does not treat four-space indented code as a fenced opener', () => {
+    const content = ['    ```ts', '    const ready = true'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(content)
+  })
 })

@@ -3,16 +3,24 @@ export type MarkdownRenderMode = 'settled' | 'streaming'
 type FenceInfo = {
   length: number
   prefix: string
+  suffix: string
 }
 
-function consumeLeadingWhitespace(line: string, startIndex: number): number {
+type WhitespaceInfo = {
+  index: number
+  width: number
+}
+
+function consumeLeadingWhitespace(line: string, startIndex: number): WhitespaceInfo {
   let index = startIndex
+  let width = 0
 
   while (line[index] === ' ' || line[index] === '\t') {
+    width += line[index] === '\t' ? 4 : 1
     index += 1
   }
 
-  return index
+  return { index, width }
 }
 
 function consumeOrderedListMarker(line: string, startIndex: number): number | null {
@@ -45,12 +53,16 @@ function consumeListMarker(line: string, startIndex: number): number | null {
 }
 
 function getFenceInfo(line: string): FenceInfo | null {
-  let index = consumeLeadingWhitespace(line, 0)
+  let whitespace = consumeLeadingWhitespace(line, 0)
+  let index = whitespace.index
+  let fenceIndent = whitespace.width
 
   while (true) {
     if (line[index] === '>') {
       index += 1
-      index = consumeLeadingWhitespace(line, index)
+      whitespace = consumeLeadingWhitespace(line, index)
+      index = whitespace.index
+      fenceIndent = whitespace.width
       continue
     }
 
@@ -59,7 +71,13 @@ function getFenceInfo(line: string): FenceInfo | null {
       break
     }
 
-    index = consumeLeadingWhitespace(line, nextIndex)
+    whitespace = consumeLeadingWhitespace(line, nextIndex)
+    index = whitespace.index
+    fenceIndent = whitespace.width
+  }
+
+  if (fenceIndent > 3) {
+    return null
   }
 
   let fenceEnd = index
@@ -73,7 +91,8 @@ function getFenceInfo(line: string): FenceInfo | null {
 
   return {
     length: fenceEnd - index,
-    prefix: line.slice(0, index)
+    prefix: line.slice(0, index),
+    suffix: line.slice(fenceEnd)
   }
 }
 
@@ -98,7 +117,7 @@ export function normalizeMarkdownForRender(
       continue
     }
 
-    if (fence.length >= activeFence.length) {
+    if (fence.length >= activeFence.length && /^[ \t]*$/.test(fence.suffix)) {
       activeFence = null
     }
   }
