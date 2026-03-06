@@ -114,4 +114,66 @@ describe('parseSpecMarkdown', () => {
       ].join('\n')
     ])
   })
+
+  it('closing fence requires same char and at least same length as opener', () => {
+    const markdown = [
+      '## Acceptance Criteria',
+      '- Item with nested fences:',
+      '  ````ts',
+      '  ```js',
+      '  const x = 1',
+      '  ```',
+      '  ````'
+    ].join('\n')
+
+    const parsed = parseSpecMarkdown(markdown)
+
+    expect(parsed.sections.acceptanceCriteria).toHaveLength(1)
+    expect(parsed.sections.acceptanceCriteria[0]).toContain('```js')
+    expect(parsed.sections.acceptanceCriteria[0]).toContain('````')
+  })
+
+  it('closing fence must not have an info string', () => {
+    const markdown = [
+      '## Acceptance Criteria',
+      '- Two consecutive code blocks:',
+      '  ```ts',
+      '  const a = 1',
+      '  ```',
+      '  ```js',
+      '  const b = 2',
+      '  ```'
+    ].join('\n')
+
+    const parsed = parseSpecMarkdown(markdown)
+
+    // Both code blocks should remain in a single list item
+    expect(parsed.sections.acceptanceCriteria).toHaveLength(1)
+    const item = parsed.sections.acceptanceCriteria[0]
+    expect(item).toContain('```ts')
+    expect(item).toContain('```js')
+  })
+
+  it('does not split sections on headings inside fenced code blocks', () => {
+    const markdown = [
+      '## Goal',
+      'Build a parser.',
+      '',
+      '```markdown',
+      '## Acceptance Criteria',
+      '- This is example markdown',
+      '```',
+      '',
+      'Still in Goal section.',
+      '',
+      '## Acceptance Criteria',
+      '- Real criteria'
+    ].join('\n')
+
+    const parsed = parseSpecMarkdown(markdown)
+
+    expect(parsed.sections.goal).toContain('## Acceptance Criteria')
+    expect(parsed.sections.goal).toContain('Still in Goal section.')
+    expect(parsed.sections.acceptanceCriteria).toEqual(['Real criteria'])
+  })
 })

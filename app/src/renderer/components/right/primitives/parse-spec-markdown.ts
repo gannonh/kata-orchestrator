@@ -35,8 +35,30 @@ export function parseSpecMarkdown(markdown: string): ParsedSpecMarkdownDocument 
   const sectionLines = new Map<KnownSectionKey, IndexedLine[]>()
   const lines = markdown.split(/\r?\n/)
   let currentSection: KnownSectionKey | null = null
+  let sectionFenceMarker: string | null = null
 
   lines.forEach((line, lineIndex) => {
+    const trimmed = line.trim()
+
+    if (sectionFenceMarker) {
+      if (isMatchingFenceLine(trimmed, sectionFenceMarker)) {
+        sectionFenceMarker = null
+      }
+      if (currentSection) {
+        sectionLines.get(currentSection)!.push({ content: line, lineIndex })
+      }
+      return
+    }
+
+    const fenceMarker = getFenceMarker(trimmed)
+    if (fenceMarker) {
+      sectionFenceMarker = fenceMarker
+      if (currentSection) {
+        sectionLines.get(currentSection)!.push({ content: line, lineIndex })
+      }
+      return
+    }
+
     const headingMatch = line.match(/^##\s+(.+?)\s*$/)
 
     if (headingMatch) {
@@ -236,8 +258,10 @@ function getFenceMarker(line: string): string | null {
 }
 
 function isMatchingFenceLine(line: string, openFenceMarker: string): boolean {
-  const marker = getFenceMarker(line)
-  return marker !== null && marker[0] === openFenceMarker[0]
+  const match = line.match(/^(`{3,}|~{3,})[ \t]*$/)
+  const marker = match?.[1]
+
+  return marker !== undefined && marker[0] === openFenceMarker[0] && marker.length >= openFenceMarker.length
 }
 
 function isNestedListItem(line: string): boolean {
