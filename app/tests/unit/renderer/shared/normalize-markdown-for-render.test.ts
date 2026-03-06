@@ -30,4 +30,26 @@ describe('normalizeMarkdownForRender', () => {
 
     expect(normalizeMarkdownForRender(content, 'streaming')).toBe(content)
   })
+
+  it('closes unterminated quoted fences while preserving the quote prefix', () => {
+    const content = ['> ```ts', '> const ready = true'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(
+      ['> ```ts', '> const ready = true', '> ```'].join('\n')
+    )
+  })
+
+  it('closes unterminated indented fences using the matching fence length', () => {
+    const content = ['  ````ts', '  const ready = true'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(
+      ['  ````ts', '  const ready = true', '  ````'].join('\n')
+    )
+  })
+
+  it('does not append a closing fence for balanced quoted fences with longer markers', () => {
+    const content = ['> ````md', '> - item', '> ````'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(content)
+  })
 })
