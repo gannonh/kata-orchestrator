@@ -1,5 +1,6 @@
 export { ConversationBlocks, ConversationContextChipRow, ConversationToolCallBlock } from './ConversationBlocks'
 export { ConversationMessage } from './ConversationMessage'
+export { ConversationMessageCard } from './ConversationMessageCard'
 export { ConversationMessageActions } from './ConversationMessageActions'
 export { ConversationStatusBadge } from './ConversationStatusBadge'
 export { ConversationStream } from './ConversationStream'
