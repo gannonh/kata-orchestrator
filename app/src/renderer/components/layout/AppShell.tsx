@@ -56,6 +56,38 @@ function getDocumentSplit(documentWidth: number, offset: number): DocumentSplit 
   }
 }
 
+export function observeShellWidth(
+  shellElement: HTMLDivElement | null,
+  onWidthChange: (width: number) => void
+): (() => void) | void {
+  if (!shellElement) {
+    return
+  }
+
+  const updateWidth = (): void => {
+    onWidthChange(shellElement.clientWidth)
+  }
+
+  updateWidth()
+
+  if (typeof ResizeObserver === 'undefined') {
+    window.addEventListener('resize', updateWidth)
+    return () => {
+      window.removeEventListener('resize', updateWidth)
+    }
+  }
+
+  const observer = new ResizeObserver((entries) => {
+    const entry = entries[0]
+    onWidthChange(entry?.contentRect.width ?? shellElement.clientWidth)
+  })
+  observer.observe(shellElement)
+
+  return () => {
+    observer.disconnect()
+  }
+}
+
 export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShellProps = {}) {
   const shellRef = useRef<HTMLDivElement | null>(null)
   const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT)
@@ -102,33 +134,7 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
   }, [availableWidth])
 
   useLayoutEffect(() => {
-    const shellElement = shellRef.current
-    if (!shellElement) {
-      return
-    }
-
-    const updateWidth = (): void => {
-      setAvailableWidth(shellElement.clientWidth)
-    }
-
-    updateWidth()
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateWidth)
-      return () => {
-        window.removeEventListener('resize', updateWidth)
-      }
-    }
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0]
-      setAvailableWidth(entry?.contentRect.width ?? shellElement.clientWidth)
-    })
-    observer.observe(shellElement)
-
-    return () => {
-      observer.disconnect()
-    }
+    return observeShellWidth(shellRef.current, setAvailableWidth)
   }, [])
 
   const effectiveLeftWidth = leftCollapsed ? LEFT_COLLAPSED : leftWidth

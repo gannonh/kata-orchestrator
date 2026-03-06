@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
-import { parseStructuredSpec } from '../components/right/spec-parser'
 import {
-  cycleTaskStatus,
-  updateTaskLineInMarkdown
-} from '../components/right/spec-task-markdown'
+  cycleTaskBlockStatus,
+  updateTaskBlockLineInMarkdown
+} from '../components/right/primitives/task-block-markdown'
+import { parseSpecMarkdown } from '../components/right/primitives/parse-spec-markdown'
 import type { LatestRunDraft, StructuredSpecDocument } from '../types/spec-document'
 import { isPersistedSpecDocument } from '../../shared/types/spec-document'
 import type { PersistedSpecDocument } from '../../shared/types/spec-document'
@@ -24,7 +24,7 @@ function buildCacheKey(spaceId: string, sessionId: string): string {
 function readFallbackDocument(storageKey: string): StructuredSpecDocument {
   const cached = fallbackDocumentCache.get(storageKey)
   if (!cached) {
-    return parseStructuredSpec('')
+    return parseSpecMarkdown('')
   }
 
   return buildDocument(cached.markdown, cached.appliedRunId, cached.updatedAt)
@@ -48,7 +48,7 @@ function buildDocument(
   appliedRunId?: string,
   updatedAt?: string
 ): StructuredSpecDocument {
-  const parsed = parseStructuredSpec(markdown)
+  const parsed = parseSpecMarkdown(markdown)
 
   const document: StructuredSpecDocument = {
     ...parsed
@@ -253,8 +253,8 @@ export function useSpecDocument({ spaceId, sessionId, enabled = true }: UseSpecD
         return
       }
 
-      const nextStatus = cycleTaskStatus(currentTask.status)
-      const nextMarkdown = updateTaskLineInMarkdown(
+      const nextStatus = cycleTaskBlockStatus(currentTask.status)
+      const nextMarkdown = updateTaskBlockLineInMarkdown(
         currentDocument.markdown,
         currentTask.markdownLineIndex,
         nextStatus

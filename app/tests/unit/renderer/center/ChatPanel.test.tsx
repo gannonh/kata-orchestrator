@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { SessionConversationState } from '../../../../src/renderer/types/session-conversation'
+import { ChatPanel } from '../../../../src/renderer/components/center/ChatPanel'
 
 const mockHook = vi.fn<
   [string | null, (string | null)?],
@@ -39,13 +40,6 @@ function idleState(
 }
 
 describe('ChatPanel', () => {
-  let ChatPanel: typeof import('../../../../src/renderer/components/center/ChatPanel').ChatPanel
-
-  beforeEach(async () => {
-    const mod = await import('../../../../src/renderer/components/center/ChatPanel')
-    ChatPanel = mod.ChatPanel
-  })
-
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
