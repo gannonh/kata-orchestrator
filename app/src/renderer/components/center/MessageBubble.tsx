@@ -1,8 +1,7 @@
-import { MarkdownRenderer } from '../shared/MarkdownRenderer'
-import { cn } from '../../lib/cn'
 import { type ChatMessage } from '../../types/chat'
 import { type ConversationMessage } from '../../types/session-conversation'
 import { MessageActionRow } from './MessageActionRow'
+import { ConversationMessage as ConversationMessagePrimitive, toPrimitiveMessage } from './primitives'
 import { stripDecisionActionLines, type DecisionState, type InlineDecisionActionId, type InlineDecisionCard } from './message-decision-parser'
 
 type BubbleMessage = ChatMessage | ConversationMessage
@@ -24,33 +23,29 @@ export function MessageBubble({
   decisionState = 'available',
   onDecisionAction
 }: MessageBubbleProps) {
-  const isUser = message.role === 'user'
-  const isCollapsed = variant === 'collapsed' && Boolean(summary?.trim())
-  const shouldRenderDecisionCard = message.role === 'agent' && Boolean(decisionCard)
-  const rawContent = isCollapsed ? summary ?? '' : message.content
-  const displayContent = shouldRenderDecisionCard ? stripDecisionActionLines(rawContent) : rawContent
+  const primitiveMessage = toPrimitiveMessage(message)
+  const messageWithSummary = summary
+    ? { ...primitiveMessage, summary }
+    : primitiveMessage
+
+  const shouldRenderDecisionCard = primitiveMessage.role === 'agent' && Boolean(decisionCard)
+  const displayMessage = shouldRenderDecisionCard
+    ? {
+        ...messageWithSummary,
+        content: stripDecisionActionLines(messageWithSummary.content),
+        summary: messageWithSummary.summary
+          ? stripDecisionActionLines(messageWithSummary.summary)
+          : undefined
+      }
+    : messageWithSummary
   const isDecisionDisabled = decisionState === 'pending' || decisionState === 'resolved'
 
   return (
-    <article className={cn('flex flex-col gap-2', isUser ? 'items-end' : 'items-start')}>
-      <span className="text-xs uppercase tracking-wide text-muted-foreground">
-        {isUser ? 'You' : 'Kata'}
-      </span>
-      <div
-        className={cn(
-          'max-w-[85%] rounded-xl border px-4 py-3',
-          isUser
-            ? 'border-primary/20 bg-primary/10 text-foreground'
-            : 'bg-card text-muted-foreground',
-          isCollapsed ? 'border-dashed' : ''
-        )}
-      >
-        {isUser ? (
-          <p className="m-0 whitespace-pre-wrap text-sm leading-6">{displayContent}</p>
-        ) : (
-          <MarkdownRenderer content={displayContent} />
-        )}
-      </div>
+    <div className="flex flex-col gap-2">
+      <ConversationMessagePrimitive
+        message={displayMessage}
+        variant={variant}
+      />
       {shouldRenderDecisionCard && decisionCard ? (
         <div className="max-w-[85%] space-y-2 px-1">
           <p className="text-xs text-muted-foreground">{decisionCard.promptLabel}</p>
@@ -65,6 +60,6 @@ export function MessageBubble({
           {decisionState === 'resolved' ? <p className="text-xs text-muted-foreground">Decision sent</p> : null}
         </div>
       ) : null}
-    </article>
+    </div>
   )
 }

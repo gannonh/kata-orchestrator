@@ -11,7 +11,7 @@ describe('deriveMockChatPresentation', () => {
 
     expect(result.viewState).toBe('contextReading')
     expect(result.blocks.some((block) => block.type === 'contextChipRow')).toBe(true)
-    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'thinking')).toBe(true)
+    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'pending')).toBe(true)
   })
 
   it('maps to pastedContext and stopped when paste markers are present and streaming is false', () => {
@@ -21,7 +21,7 @@ describe('deriveMockChatPresentation', () => {
     })
 
     expect(result.viewState).toBe('pastedContext')
-    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'stopped')).toBe(true)
+    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'idle')).toBe(true)
   })
 
   it('maps to analyzing and emits a collapsed summary block when forced', () => {
@@ -33,7 +33,7 @@ describe('deriveMockChatPresentation', () => {
 
     expect(result.viewState).toBe('analyzing')
     expect(result.blocks.some((block) => block.type === 'collapsedSummary')).toBe(true)
-    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'thinking')).toBe(true)
+    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'pending')).toBe(true)
   })
 
   it('infers analyzing from user content while streaming and truncates collapsed summaries', () => {

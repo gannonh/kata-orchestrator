@@ -37,6 +37,19 @@ describe('MockChatPanel', () => {
     expect(screen.getByText('Ship slice A')).toBeTruthy()
   })
 
+  it('renders analyzing preview context chips during pending runs', () => {
+    render(<MockChatPanel />)
+
+    fireEvent.change(screen.getByLabelText('Message input'), {
+      target: { value: 'I would like to build the following product for my team' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
+    expect(screen.getByText('# Kata Cloud (Kata V2)')).toBeTruthy()
+    expect(screen.getByText('## Context...')).toBeTruthy()
+  })
+
   it('renders the deterministic agent response after the pending run completes', () => {
     render(<MockChatPanel />)
 

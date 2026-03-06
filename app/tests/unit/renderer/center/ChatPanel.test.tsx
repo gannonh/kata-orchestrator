@@ -59,6 +59,23 @@ describe('ChatPanel', () => {
     expect(screen.getByLabelText('Message input')).toBeTruthy()
   })
 
+  it('renders pending run state with primitive status semantics', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        runState: 'pending',
+        messages: [
+          { id: 'm1', role: 'user', content: 'Plan this slice', createdAt: '2026-03-01T00:00:00Z' }
+        ]
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
+  })
+
   it('passes sessionId to useIpcSessionConversation', () => {
     mockHook.mockReturnValue({
       state: idleState(),
