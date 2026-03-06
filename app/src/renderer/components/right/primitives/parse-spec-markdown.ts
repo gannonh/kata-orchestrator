@@ -74,49 +74,35 @@ function normalizeHeading(value: string): string {
 }
 
 function normalizeTextBlock(lines: IndexedLine[]): string {
-  const values = lines.map((line) => line.content.trimEnd())
-
-  let start = 0
-  let end = values.length
-
-  while (start < end && values[start].trim() === '') {
-    start += 1
-  }
-
-  while (end > start && values[end - 1].trim() === '') {
-    end -= 1
-  }
-
-  return values.slice(start, end).join('\n')
+  return trimBlankEdges(lines.map((line) => line.content.trimEnd())).join('\n')
 }
 
 function normalizeListItems(lines: IndexedLine[]): string[] {
   const items: string[] = []
+  let currentItemLines: string[] = []
 
   lines.forEach(({ content }) => {
-    const listItemMatch = content.match(/^(?:[-*+]\s+|\d+[.)]\s+)(.+?)\s*$/)
+    const trimmedEnd = content.trimEnd()
+    const listItemMatch = trimmedEnd.match(/^(?:[-*+]\s+|\d+[.)]\s+)(.+?)\s*$/)
+
     if (listItemMatch) {
-      items.push(listItemMatch[1].trim())
+      pushNormalizedListItem(items, currentItemLines)
+      currentItemLines = [listItemMatch[1].trim()]
       return
     }
 
-    const nestedListMatch = content.match(/^\s+(?:[-*+]\s+|\d+[.)]\s+).+$/)
-    if (nestedListMatch) {
+    if (currentItemLines.length > 0) {
+      currentItemLines.push(trimmedEnd)
       return
     }
 
-    const continuationMatch = content.match(/^\s+(.+?)\s*$/)
-    if (continuationMatch && items.length > 0) {
-      const previousIndex = items.length - 1
-      items[previousIndex] = `${items[previousIndex]} ${continuationMatch[1].trim()}`
-      return
-    }
-
-    const trimmed = content.trim()
+    const trimmed = trimmedEnd.trim()
     if (trimmed) {
-      items.push(trimmed)
+      currentItemLines = [trimmed]
     }
   })
+
+  pushNormalizedListItem(items, currentItemLines)
 
   return items
 }
@@ -154,4 +140,59 @@ function statusForMarker(marker: string): ParsedSpecTaskStatus {
   }
 
   return 'not_started'
+}
+
+function trimBlankEdges(values: string[]): string[] {
+  let start = 0
+  let end = values.length
+
+  while (start < end && values[start].trim() === '') {
+    start += 1
+  }
+
+  while (end > start && values[end - 1].trim() === '') {
+    end -= 1
+  }
+
+  return values.slice(start, end)
+}
+
+function pushNormalizedListItem(items: string[], itemLines: string[]): void {
+  const normalized = normalizeListItem(itemLines)
+  if (normalized) {
+    items.push(normalized)
+  }
+}
+
+function normalizeListItem(lines: string[]): string {
+  const trimmedLines = trimBlankEdges(lines)
+
+  if (trimmedLines.length === 0) {
+    return ''
+  }
+
+  const [firstLine, ...continuationLines] = trimmedLines
+  const dedentedContinuationLines = dedentLines(continuationLines)
+
+  return trimBlankEdges([firstLine, ...dedentedContinuationLines]).join('\n')
+}
+
+function dedentLines(lines: string[]): string[] {
+  const nonBlankLines = lines.filter((line) => line.trim() !== '')
+  if (nonBlankLines.length === 0) {
+    return lines
+  }
+
+  const sharedIndent = Math.min(
+    ...nonBlankLines.map((line) => {
+      const match = line.match(/^\s*/)
+      return match?.[0].length ?? 0
+    })
+  )
+
+  if (sharedIndent === 0) {
+    return lines
+  }
+
+  return lines.map((line) => line.slice(Math.min(sharedIndent, line.length)))
 }
