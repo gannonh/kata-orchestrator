@@ -34,6 +34,11 @@ import {
   createTaskActivityProjector,
   type TaskActivitySeedItem
 } from './task-activity-projector'
+import {
+  buildSpecArtifactPath,
+  loadSpecArtifactDocument,
+  saveSpecArtifactDocument
+} from './spec-artifact-service'
 import { createSessionAgentRegistry } from './session-agent-registry'
 import { createAgentRunner } from './agent-runner'
 import type { AgentRunner } from './agent-runner'
@@ -52,7 +57,11 @@ import type {
   SpaceRecord,
   WorkspaceMode
 } from '../shared/types/space'
-import type { PersistedSpecDocument } from '../shared/types/spec-document'
+import type {
+  PersistedSpecDocument,
+  SpecArtifactFrontmatter,
+  SpecArtifactStatus
+} from '../shared/types/spec-document'
 
 const OPEN_EXTERNAL_URL_CHANNEL = 'kata:openExternalUrl'
 const APP_BOOTSTRAP_CHANNEL = 'app:bootstrap'
@@ -305,6 +314,8 @@ function parseSpecSaveInput(input: unknown): {
   spaceId: string
   sessionId: string
   markdown: string
+  status?: SpecArtifactStatus
+  sourceRunId?: string
   appliedRunId?: string
   appliedAt?: string
 } {
@@ -320,6 +331,15 @@ function parseSpecSaveInput(input: unknown): {
   if (input.appliedRunId !== undefined && typeof input.appliedRunId !== 'string') {
     throw new Error('spec:save appliedRunId must be a string when provided')
   }
+  if (
+    input.sourceRunId !== undefined &&
+    typeof input.sourceRunId !== 'string'
+  ) {
+    throw new Error('spec:save sourceRunId must be a string when provided')
+  }
+  if (input.status !== undefined && input.status !== 'drafting' && input.status !== 'ready') {
+    throw new Error('spec:save status must be drafting or ready when provided')
+  }
   if (input.appliedAt !== undefined && typeof input.appliedAt !== 'string') {
     throw new Error('spec:save appliedAt must be a string when provided')
   }
@@ -328,6 +348,8 @@ function parseSpecSaveInput(input: unknown): {
     spaceId: input.spaceId,
     sessionId: input.sessionId,
     markdown: input.markdown,
+    status: input.status,
+    sourceRunId: input.sourceRunId,
     appliedRunId: input.appliedRunId,
     appliedAt: input.appliedAt
   }
@@ -380,6 +402,7 @@ function buildSpecDocumentKey(spaceId: string, sessionId: string): string {
 
 function seedBaselineContextResources(
   sessionId: string,
+  spaceRootPath: string,
   createdAt: string
 ): Record<string, SessionContextResourceRecord> {
   const specResource: SessionContextResourceRecord = {
@@ -387,6 +410,7 @@ function seedBaselineContextResources(
     sessionId,
     kind: 'spec',
     label: 'Spec',
+    sourcePath: buildSpecArtifactPath(spaceRootPath, sessionId),
     sortOrder: 0,
     createdAt,
     updatedAt: createdAt
@@ -441,6 +465,25 @@ function parseTaskSeedItemsFromMarkdown(markdown: string): TaskActivitySeedItem[
   }
 
   return seeds
+}
+
+function buildSpecArtifactFrontmatter(
+  existing: PersistedSpecDocument | undefined,
+  input: {
+    status?: SpecArtifactStatus
+    sourceRunId?: string
+    appliedRunId?: string
+  },
+  updatedAt: string
+): SpecArtifactFrontmatter {
+  const fallbackFrontmatter = existing?.lastGoodFrontmatter ?? existing?.frontmatter
+  const sourceRunId = input.sourceRunId ?? input.appliedRunId ?? fallbackFrontmatter?.sourceRunId
+
+  return {
+    status: input.status ?? fallbackFrontmatter?.status ?? 'drafting',
+    updatedAt,
+    ...(sourceRunId !== undefined && { sourceRunId })
+  }
 }
 
 function taskStatusForMarker(marker: string): 'not_started' | 'in_progress' | 'complete' {
@@ -675,7 +718,11 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       sessions: { ...state.sessions, [createdSession.id]: createdSession },
       contextResources: {
         ...state.contextResources,
-        ...seedBaselineContextResources(createdSession.id, createdSession.createdAt)
+        ...seedBaselineContextResources(
+          createdSession.id,
+          state.spaces[parsedInput.spaceId].rootPath,
+          createdSession.createdAt
+        )
       },
       activeSpaceId: parsedInput.spaceId,
       activeSessionId: createdSession.id
@@ -757,7 +804,21 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     const state = stateStore.load()
     assertSpecScope(state, spaceId, sessionId)
     const key = buildSpecDocumentKey(spaceId, sessionId)
-    return state.specDocuments[key] ?? null
+    const specDocument = await loadSpecArtifactDocument({
+      sourcePath: buildSpecArtifactPath(state.spaces[spaceId].rootPath, sessionId),
+      fallbackUpdatedAt: new Date().toISOString(),
+      previous: state.specDocuments[key]
+    })
+
+    stateStore.save({
+      ...state,
+      specDocuments: {
+        ...state.specDocuments,
+        [key]: specDocument
+      }
+    })
+
+    return specDocument
   })
 
   ipcMain.handle(SPEC_SAVE_CHANNEL, async (_event, input: unknown) => {
@@ -767,15 +828,12 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     const key = buildSpecDocumentKey(parsedInput.spaceId, parsedInput.sessionId)
     const existing = state.specDocuments[key]
     const updatedAt = new Date().toISOString()
-
-    const specDocument: PersistedSpecDocument = {
+    const specDocument = await saveSpecArtifactDocument({
+      sourcePath: buildSpecArtifactPath(state.spaces[parsedInput.spaceId].rootPath, parsedInput.sessionId),
+      frontmatter: buildSpecArtifactFrontmatter(existing, parsedInput, updatedAt),
       markdown: parsedInput.markdown,
-      updatedAt,
-      ...(existing?.appliedRunId !== undefined && { appliedRunId: existing.appliedRunId }),
-      ...(existing?.appliedAt !== undefined && { appliedAt: existing.appliedAt }),
-      ...(parsedInput.appliedRunId !== undefined && { appliedRunId: parsedInput.appliedRunId }),
-      ...(parsedInput.appliedAt !== undefined && { appliedAt: parsedInput.appliedAt })
-    }
+      previous: existing
+    })
 
     stateStore.save({
       ...state,
@@ -800,13 +858,19 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     }
     const key = buildSpecDocumentKey(parsedInput.spaceId, parsedInput.sessionId)
     const appliedAt = new Date().toISOString()
-
-    const specDocument: PersistedSpecDocument = {
+    const existing = state.specDocuments[key]
+    const specDocument = await saveSpecArtifactDocument({
+      sourcePath: buildSpecArtifactPath(state.spaces[parsedInput.spaceId].rootPath, parsedInput.sessionId),
+      frontmatter: buildSpecArtifactFrontmatter(
+        existing,
+        {
+          sourceRunId: parsedInput.draft.runId
+        },
+        appliedAt
+      ),
       markdown: parsedInput.draft.content,
-      updatedAt: appliedAt,
-      appliedRunId: parsedInput.draft.runId,
-      appliedAt
-    }
+      previous: existing
+    })
 
     const existingRun = state.runs[parsedInput.draft.runId]
     stateStore.save({

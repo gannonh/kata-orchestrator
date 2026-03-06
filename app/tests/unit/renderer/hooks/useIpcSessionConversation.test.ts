@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SessionRuntimeEvent } from '../../../../src/renderer/types/session-runtime-adapter'
+import type { PersistedSpecDocument } from '../../../../src/shared/types/spec-document'
 import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../../../src/shared/types/run'
 
 let onRunEventCallback: ((event: SessionRuntimeEvent) => void) | null = null
@@ -14,6 +15,42 @@ const mockOnRunEvent = vi.fn((cb: (event: SessionRuntimeEvent) => void) => {
     onRunEventCallback = null
   }
 })
+
+function buildPersistedSpecDocument(
+  markdown: string,
+  overrides: Partial<PersistedSpecDocument> = {}
+): PersistedSpecDocument {
+  const updatedAt = overrides.updatedAt ?? '2026-03-04T19:00:00.000Z'
+  const baseSourceRunId =
+    overrides.frontmatter?.sourceRunId ?? overrides.appliedRunId
+  const frontmatter = {
+    status: 'drafting' as const,
+    updatedAt,
+    ...(baseSourceRunId !== undefined && { sourceRunId: baseSourceRunId }),
+    ...overrides.frontmatter
+  }
+
+  return {
+    sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+    raw:
+      overrides.raw ??
+      [
+        '---',
+        `status: ${frontmatter.status}`,
+        `updatedAt: ${frontmatter.updatedAt}`,
+        ...(frontmatter.sourceRunId ? [`sourceRunId: ${frontmatter.sourceRunId}`] : []),
+        '---',
+        '',
+        markdown
+      ].join('\n'),
+    markdown,
+    frontmatter,
+    diagnostics: overrides.diagnostics ?? [],
+    updatedAt,
+    ...(frontmatter.sourceRunId !== undefined && { appliedRunId: frontmatter.sourceRunId }),
+    ...overrides
+  }
+}
 
 beforeEach(() => {
   vi.resetModules()
@@ -551,24 +588,31 @@ describe('useIpcSessionConversation', () => {
   })
 
   it('rehydrates task activity snapshot from persisted spec document on session load', async () => {
-    mockSpecGet.mockResolvedValue({
-      markdown: [
-        '## Goal',
-        'Persisted goal',
-        '## Tasks',
-        '- [ ] Template task to ignore',
-        '',
-        '## Acceptance Criteria',
-        '1. Keep the latest tasks block',
-        '',
-        '## Tasks',
-        '- [/] Apply the structured draft',
-        '- [x] Keep the runtime wiring stable'
-      ].join('\n'),
-      updatedAt: '2026-03-04T19:00:00.000Z',
-      appliedRunId: 'run-applied',
-      appliedAt: '2026-03-04T19:00:00.000Z'
-    })
+    mockSpecGet.mockResolvedValue(
+      buildPersistedSpecDocument(
+        [
+          '## Goal',
+          'Persisted goal',
+          '## Tasks',
+          '- [ ] Template task to ignore',
+          '',
+          '## Acceptance Criteria',
+          '1. Keep the latest tasks block',
+          '',
+          '## Tasks',
+          '- [/] Apply the structured draft',
+          '- [x] Keep the runtime wiring stable'
+        ].join('\n'),
+        {
+          updatedAt: '2026-03-04T19:00:00.000Z',
+          frontmatter: {
+            status: 'drafting',
+            updatedAt: '2026-03-04T19:00:00.000Z',
+            sourceRunId: 'run-applied'
+          }
+        }
+      )
+    )
 
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
@@ -1034,12 +1078,16 @@ describe('useIpcSessionConversation', () => {
     rerender({ sessionId: 's-2' })
 
     await act(async () => {
-      resolveFirstSpecGet?.({
-        markdown: '## Tasks\n- [/] Stale task',
-        updatedAt: '2026-03-04T19:00:00.000Z',
-        appliedRunId: 'run-stale',
-        appliedAt: '2026-03-04T19:00:00.000Z'
-      })
+      resolveFirstSpecGet?.(
+        buildPersistedSpecDocument('## Tasks\n- [/] Stale task', {
+          updatedAt: '2026-03-04T19:00:00.000Z',
+          frontmatter: {
+            status: 'drafting',
+            updatedAt: '2026-03-04T19:00:00.000Z',
+            sourceRunId: 'run-stale'
+          }
+        })
+      )
       await Promise.resolve()
     })
 
@@ -1062,12 +1110,16 @@ describe('useIpcSessionConversation', () => {
   })
 
   it('returns undefined snapshot when persisted spec has no tasks', async () => {
-    mockSpecGet.mockResolvedValue({
-      markdown: '## Goal\nJust a goal, no tasks section',
-      updatedAt: '2026-03-04T19:00:00.000Z',
-      appliedRunId: 'run-notasks',
-      appliedAt: '2026-03-04T19:00:00.000Z'
-    })
+    mockSpecGet.mockResolvedValue(
+      buildPersistedSpecDocument('## Goal\nJust a goal, no tasks section', {
+        updatedAt: '2026-03-04T19:00:00.000Z',
+        frontmatter: {
+          status: 'drafting',
+          updatedAt: '2026-03-04T19:00:00.000Z',
+          sourceRunId: 'run-notasks'
+        }
+      })
+    )
 
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
@@ -1082,11 +1134,11 @@ describe('useIpcSessionConversation', () => {
   })
 
   it('generates a fallback runId when persisted spec has no appliedRunId', async () => {
-    mockSpecGet.mockResolvedValue({
-      markdown: '## Tasks\n- [x] Done task',
-      updatedAt: '2026-03-04T19:00:00.000Z',
-      appliedAt: '2026-03-04T19:00:00.000Z'
-    })
+    mockSpecGet.mockResolvedValue(
+      buildPersistedSpecDocument('## Tasks\n- [x] Done task', {
+        updatedAt: '2026-03-04T19:00:00.000Z'
+      })
+    )
 
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
@@ -1099,16 +1151,23 @@ describe('useIpcSessionConversation', () => {
   })
 
   it('skips non-checkbox lines in parseTaskItemsFromMarkdown', async () => {
-    mockSpecGet.mockResolvedValue({
-      markdown: [
-        '## Tasks',
-        'This is a description line',
-        '- [/] Real task'
-      ].join('\n'),
-      updatedAt: '2026-03-04T19:00:00.000Z',
-      appliedRunId: 'run-desc',
-      appliedAt: '2026-03-04T19:00:00.000Z'
-    })
+    mockSpecGet.mockResolvedValue(
+      buildPersistedSpecDocument(
+        [
+          '## Tasks',
+          'This is a description line',
+          '- [/] Real task'
+        ].join('\n'),
+        {
+          updatedAt: '2026-03-04T19:00:00.000Z',
+          frontmatter: {
+            status: 'drafting',
+            updatedAt: '2026-03-04T19:00:00.000Z',
+            sourceRunId: 'run-desc'
+          }
+        }
+      )
+    )
 
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
@@ -1122,12 +1181,16 @@ describe('useIpcSessionConversation', () => {
   })
 
   it('falls back to slug "task" when title contains only special characters', async () => {
-    mockSpecGet.mockResolvedValue({
-      markdown: ['## Tasks', '- [ ] !!!'].join('\n'),
-      updatedAt: '2026-03-04T19:00:00.000Z',
-      appliedRunId: 'run-special',
-      appliedAt: '2026-03-04T19:00:00.000Z'
-    })
+    mockSpecGet.mockResolvedValue(
+      buildPersistedSpecDocument(['## Tasks', '- [ ] !!!'].join('\n'), {
+        updatedAt: '2026-03-04T19:00:00.000Z',
+        frontmatter: {
+          status: 'drafting',
+          updatedAt: '2026-03-04T19:00:00.000Z',
+          sourceRunId: 'run-special'
+        }
+      })
+    )
 
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
@@ -1141,12 +1204,16 @@ describe('useIpcSessionConversation', () => {
   })
 
   it('disambiguates duplicate task titles with numeric suffixes', async () => {
-    mockSpecGet.mockResolvedValue({
-      markdown: ['## Tasks', '- [ ] Build', '- [/] Build', '- [x] Build'].join('\n'),
-      updatedAt: '2026-03-04T19:00:00.000Z',
-      appliedRunId: 'run-dup',
-      appliedAt: '2026-03-04T19:00:00.000Z'
-    })
+    mockSpecGet.mockResolvedValue(
+      buildPersistedSpecDocument(['## Tasks', '- [ ] Build', '- [/] Build', '- [x] Build'].join('\n'), {
+        updatedAt: '2026-03-04T19:00:00.000Z',
+        frontmatter: {
+          status: 'drafting',
+          updatedAt: '2026-03-04T19:00:00.000Z',
+          sourceRunId: 'run-dup'
+        }
+      })
+    )
 
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'

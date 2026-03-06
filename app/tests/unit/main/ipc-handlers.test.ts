@@ -14,6 +14,9 @@ const {
   mockShowOpenDialog,
   mockProvisionManagedWorkspace,
   mockFsAccess,
+  mockFsMkdir,
+  mockFsReadFile,
+  mockFsWriteFile,
   mockExecFile,
   mockCreateSessionAgentRegistry,
   mockRegistrySeedBaselineAgents,
@@ -25,6 +28,9 @@ const {
   mockShowOpenDialog: vi.fn(),
   mockProvisionManagedWorkspace: vi.fn(),
   mockFsAccess: vi.fn(),
+  mockFsMkdir: vi.fn(),
+  mockFsReadFile: vi.fn(),
+  mockFsWriteFile: vi.fn(),
   mockExecFile: vi.fn(),
   mockCreateSessionAgentRegistry: vi.fn(),
   mockRegistrySeedBaselineAgents: vi.fn(),
@@ -52,12 +58,18 @@ vi.mock('node:fs', async () => {
       ...actual,
       promises: {
         ...actual.promises,
-        access: mockFsAccess
+        access: mockFsAccess,
+        mkdir: mockFsMkdir,
+        readFile: mockFsReadFile,
+        writeFile: mockFsWriteFile
       }
     },
     promises: {
       ...actual.promises,
-      access: mockFsAccess
+      access: mockFsAccess,
+      mkdir: mockFsMkdir,
+      readFile: mockFsReadFile,
+      writeFile: mockFsWriteFile
     }
   }
 })
@@ -132,6 +144,9 @@ describe('registerIpcHandlers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockProvisionManagedWorkspace.mockReset()
+    mockFsMkdir.mockResolvedValue(undefined)
+    mockFsWriteFile.mockResolvedValue(undefined)
+    mockFsReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
     mockCreateSessionAgentRegistry.mockImplementation((getState: () => AppState, setState: (next: AppState) => void) => ({
       seedBaselineAgents: mockRegistrySeedBaselineAgents.mockImplementation(
         (sessionId: string, createdAt: string) => {
@@ -613,6 +628,14 @@ describe('registerIpcHandlers', () => {
         sessionId: (createdSession as { id: string }).id,
         kind: 'spec',
         label: 'Spec',
+        sourcePath: path.join(
+          existingSpace.rootPath,
+          '.kata',
+          'sessions',
+          (createdSession as { id: string }).id,
+          'notes',
+          'spec.md'
+        ),
         sortOrder: 0
       })
     ])
@@ -1078,7 +1101,7 @@ describe('registerIpcHandlers', () => {
     )
   })
 
-  it('spec:get returns persisted spec document by <spaceId>:<sessionId> key', async () => {
+  it('spec:get creates and returns the default scaffold when the file does not exist', async () => {
     const store = createMockStore({
       ...createDefaultAppState(),
       spaces: {
@@ -1089,21 +1112,29 @@ describe('registerIpcHandlers', () => {
       },
       sessions: {
         'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
-      },
-      specDocuments: {
-        'space-1:session-1': {
-          markdown: '# Persisted',
-          updatedAt: '2026-03-03T00:00:00.000Z'
-        }
       }
     })
     registerIpcHandlers(store)
 
     const handler = getHandlersByChannel().get('spec:get')!
-    await expect(handler({}, { spaceId: 'space-1', sessionId: 'session-1' })).resolves.toEqual({
-      markdown: '# Persisted',
-      updatedAt: '2026-03-03T00:00:00.000Z'
-    })
+    const result = await handler({}, { spaceId: 'space-1', sessionId: 'session-1' })
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
+        markdown: expect.stringContaining('## Goal'),
+        frontmatter: expect.objectContaining({
+          status: 'drafting'
+        }),
+        diagnostics: []
+      })
+    )
+    expect(mockFsMkdir).toHaveBeenCalledWith('/tmp/r/.kata/sessions/session-1/notes', { recursive: true })
+    expect(mockFsWriteFile).toHaveBeenCalledWith(
+      '/tmp/r/.kata/sessions/session-1/notes/spec.md',
+      expect.stringContaining('## Goal'),
+      'utf-8'
+    )
   })
 
   it('spec:get throws for unknown spaceId', async () => {
@@ -1151,7 +1182,7 @@ describe('registerIpcHandlers', () => {
     )
   })
 
-  it('spec:save upserts markdown with updatedAt and optional applied fields', async () => {
+  it('spec:save writes the file-backed projection and derives sourceRunId from appliedRunId', async () => {
     const state = {
       ...createDefaultAppState(),
       spaces: {
@@ -1172,30 +1203,37 @@ describe('registerIpcHandlers', () => {
       spaceId: 'space-1',
       sessionId: 'session-1',
       markdown: '# Updated markdown',
-      appliedRunId: 'run-55',
-      appliedAt: '2026-03-03T00:12:00.000Z'
+      appliedRunId: 'run-55'
     })
 
     expect(result).toEqual(expect.objectContaining({
+      sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
       markdown: '# Updated markdown',
       appliedRunId: 'run-55',
-      appliedAt: '2026-03-03T00:12:00.000Z',
+      frontmatter: expect.objectContaining({
+        status: 'drafting',
+        sourceRunId: 'run-55'
+      }),
+      raw: expect.stringContaining('sourceRunId: run-55'),
       updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
     }))
     expect(store.save).toHaveBeenCalledWith({
       ...state,
       specDocuments: {
         'space-1:session-1': expect.objectContaining({
+          sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
           markdown: '# Updated markdown',
           appliedRunId: 'run-55',
-          appliedAt: '2026-03-03T00:12:00.000Z',
+          frontmatter: expect.objectContaining({
+            sourceRunId: 'run-55'
+          }),
           updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
         })
       }
     })
   })
 
-  it('spec:save preserves existing applied metadata when omitted from input', async () => {
+  it('spec:save preserves existing frontmatter metadata when omitted from input', async () => {
     const state = {
       ...createDefaultAppState(),
       spaces: {
@@ -1209,10 +1247,23 @@ describe('registerIpcHandlers', () => {
       },
       specDocuments: {
         'space-1:session-1': {
+          sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
+          raw: '---\nstatus: ready\nupdatedAt: 2026-03-03T00:00:00.000Z\nsourceRunId: run-existing\n---\n\n# Existing',
           markdown: '# Existing',
           updatedAt: '2026-03-03T00:00:00.000Z',
+          frontmatter: {
+            status: 'ready',
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            sourceRunId: 'run-existing'
+          },
+          diagnostics: [],
           appliedRunId: 'run-existing',
-          appliedAt: '2026-03-03T00:01:00.000Z'
+          lastGoodMarkdown: '# Existing',
+          lastGoodFrontmatter: {
+            status: 'ready',
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            sourceRunId: 'run-existing'
+          }
         }
       }
     }
@@ -1229,12 +1280,15 @@ describe('registerIpcHandlers', () => {
     expect(result).toEqual(expect.objectContaining({
       markdown: '# Updated without explicit applied metadata',
       appliedRunId: 'run-existing',
-      appliedAt: '2026-03-03T00:01:00.000Z',
+      frontmatter: expect.objectContaining({
+        status: 'ready',
+        sourceRunId: 'run-existing'
+      }),
       updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
     }))
   })
 
-  it('spec:applyDraft saves markdown/applied metadata and marks run draft applied', async () => {
+  it('spec:applyDraft writes the draft into the file-backed projection and marks run draft applied', async () => {
     const state = {
       ...createDefaultAppState(),
       spaces: {
@@ -1268,17 +1322,23 @@ describe('registerIpcHandlers', () => {
     })
 
     expect(result).toEqual(expect.objectContaining({
+      sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
       markdown: '## Applied draft',
       appliedRunId: 'run-10',
-      appliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      frontmatter: expect.objectContaining({
+        sourceRunId: 'run-10'
+      }),
       updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
     }))
     expect(store.save).toHaveBeenCalledWith(expect.objectContaining({
       specDocuments: {
         'space-1:session-1': expect.objectContaining({
+          sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
           markdown: '## Applied draft',
           appliedRunId: 'run-10',
-          appliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+          frontmatter: expect.objectContaining({
+            sourceRunId: 'run-10'
+          }),
           updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
         })
       },

@@ -10,7 +10,11 @@ import type {
 } from '../shared/types/space'
 import type { RunRecord } from '../shared/types/run'
 import type { SessionRuntimeEvent } from '../renderer/types/session-runtime-adapter'
-import type { LatestRunDraft, PersistedSpecDocument } from '../shared/types/spec-document'
+import type {
+  LatestRunDraft,
+  PersistedSpecDocument,
+  SpecArtifactStatus
+} from '../shared/types/spec-document'
 
 const OPEN_EXTERNAL_URL_CHANNEL = 'kata:openExternalUrl'
 const APP_BOOTSTRAP_CHANNEL = 'app:bootstrap'
@@ -91,6 +95,8 @@ const kataApi = {
     spaceId: string
     sessionId: string
     markdown: string
+    status?: SpecArtifactStatus
+    sourceRunId?: string
     appliedRunId?: string
     appliedAt?: string
   }): Promise<PersistedSpecDocument> =>

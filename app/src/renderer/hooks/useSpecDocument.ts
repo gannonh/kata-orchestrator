@@ -6,6 +6,7 @@ import {
 } from '../components/right/primitives/task-block-markdown'
 import { parseSpecMarkdown } from '../components/right/primitives/parse-spec-markdown'
 import type { LatestRunDraft, StructuredSpecDocument } from '../types/spec-document'
+import type { SpecArtifactStatus } from '../../shared/types/spec-document'
 import { isPersistedSpecDocument } from '../../shared/types/spec-document'
 import type { PersistedSpecDocument } from '../../shared/types/spec-document'
 
@@ -15,7 +16,7 @@ interface UseSpecDocumentParams {
   enabled?: boolean
 }
 
-const fallbackDocumentCache = new Map<string, PersistedSpecDocument>()
+const fallbackDocumentCache = new Map<string, StructuredSpecDocument>()
 
 function buildCacheKey(spaceId: string, sessionId: string): string {
   return `${spaceId}:${sessionId}`
@@ -24,45 +25,56 @@ function buildCacheKey(spaceId: string, sessionId: string): string {
 function readFallbackDocument(storageKey: string): StructuredSpecDocument {
   const cached = fallbackDocumentCache.get(storageKey)
   if (!cached) {
-    return parseSpecMarkdown('')
+    return buildDocument({
+      markdown: ''
+    })
   }
 
-  return buildDocument(cached.markdown, cached.appliedRunId, cached.updatedAt)
+  return cached
 }
 
 function cacheDocument(storageKey: string, document: StructuredSpecDocument) {
-  const cached: PersistedSpecDocument = {
-    markdown: document.markdown,
-    updatedAt: document.updatedAt
-  }
-
-  if (document.appliedRunId !== undefined) {
-    cached.appliedRunId = document.appliedRunId
-  }
-
-  fallbackDocumentCache.set(storageKey, cached)
+  fallbackDocumentCache.set(storageKey, document)
 }
 
-function buildDocument(
-  markdown: string,
-  appliedRunId?: string,
+function buildDocument(input: {
+  markdown: string
+  sourcePath?: string
+  raw?: string
+  status?: SpecArtifactStatus
+  diagnostics?: PersistedSpecDocument['diagnostics']
   updatedAt?: string
-): StructuredSpecDocument {
-  const parsed = parseSpecMarkdown(markdown)
+  sourceRunId?: string
+}): StructuredSpecDocument {
+  const parsed = parseSpecMarkdown(input.markdown)
 
   const document: StructuredSpecDocument = {
-    ...parsed
+    ...parsed,
+    sourcePath: input.sourcePath ?? '',
+    raw: input.raw ?? input.markdown,
+    status: input.status ?? 'drafting',
+    diagnostics: input.diagnostics ?? [],
+    updatedAt: input.updatedAt ?? ''
   }
 
-  if (appliedRunId) {
-    document.appliedRunId = appliedRunId
-  }
-
-  if (updatedAt) {
-    document.updatedAt = updatedAt
+  if (input.sourceRunId) {
+    document.sourceRunId = input.sourceRunId
+    document.appliedRunId = input.sourceRunId
   }
 
   return document
+}
+
+function buildDocumentFromPersisted(persistedDocument: PersistedSpecDocument): StructuredSpecDocument {
+  return buildDocument({
+    sourcePath: persistedDocument.sourcePath,
+    raw: persistedDocument.raw,
+    markdown: persistedDocument.markdown,
+    status: persistedDocument.frontmatter.status,
+    diagnostics: persistedDocument.diagnostics,
+    updatedAt: persistedDocument.updatedAt,
+    sourceRunId: persistedDocument.frontmatter.sourceRunId
+  })
 }
 
 export function useSpecDocument({ spaceId, sessionId, enabled = true }: UseSpecDocumentParams) {
@@ -127,14 +139,9 @@ export function useSpecDocument({ spaceId, sessionId, enabled = true }: UseSpecD
         return
       }
 
-      fallbackDocumentCache.set(expectedStorageKey, persistedDocument)
-      setDocumentState(
-        buildDocument(
-          persistedDocument.markdown,
-          persistedDocument.appliedRunId,
-          persistedDocument.updatedAt
-        )
-      )
+      const nextDocument = buildDocumentFromPersisted(persistedDocument)
+      fallbackDocumentCache.set(expectedStorageKey, nextDocument)
+      setDocumentState(nextDocument)
     },
     [setDocumentState]
   )
@@ -191,14 +198,18 @@ export function useSpecDocument({ spaceId, sessionId, enabled = true }: UseSpecD
         spaceId: string
         sessionId: string
         markdown: string
-        appliedRunId?: string
+        status?: SpecArtifactStatus
+        sourceRunId?: string
       } = {
         spaceId,
         sessionId,
         markdown: nextDocument.markdown
       }
-      if (nextDocument.appliedRunId !== undefined) {
-        input.appliedRunId = nextDocument.appliedRunId
+      if (nextDocument.status !== undefined) {
+        input.status = nextDocument.status
+      }
+      if (nextDocument.sourceRunId !== undefined) {
+        input.sourceRunId = nextDocument.sourceRunId
       }
 
       void specSave(input)
@@ -214,7 +225,16 @@ export function useSpecDocument({ spaceId, sessionId, enabled = true }: UseSpecD
 
   const setMarkdown = useCallback(
     (markdown: string) => {
-      persistDocument(buildDocument(markdown, documentRef.current.appliedRunId))
+      persistDocument(
+        buildDocument({
+          markdown,
+          sourcePath: documentRef.current.sourcePath,
+          status: documentRef.current.status,
+          diagnostics: documentRef.current.diagnostics,
+          updatedAt: documentRef.current.updatedAt,
+          sourceRunId: documentRef.current.sourceRunId
+        })
+      )
     },
     [persistDocument]
   )
@@ -224,7 +244,13 @@ export function useSpecDocument({ spaceId, sessionId, enabled = true }: UseSpecD
       mutationVersionRef.current += 1
       const currentMutationVersion = mutationVersionRef.current
 
-      const nextDocument = buildDocument(draft.content, draft.runId)
+      const nextDocument = buildDocument({
+        markdown: draft.content,
+        sourcePath: documentRef.current.sourcePath,
+        status: documentRef.current.status,
+        updatedAt: draft.generatedAt,
+        sourceRunId: draft.runId
+      })
       cacheDocument(storageKey, nextDocument)
       setDocumentState(nextDocument)
 
@@ -260,7 +286,16 @@ export function useSpecDocument({ spaceId, sessionId, enabled = true }: UseSpecD
         nextStatus
       )
 
-      persistDocument(buildDocument(nextMarkdown, currentDocument.appliedRunId))
+      persistDocument(
+        buildDocument({
+          markdown: nextMarkdown,
+          sourcePath: currentDocument.sourcePath,
+          status: currentDocument.status,
+          diagnostics: currentDocument.diagnostics,
+          updatedAt: currentDocument.updatedAt,
+          sourceRunId: currentDocument.sourceRunId
+        })
+      )
     },
     [persistDocument]
   )

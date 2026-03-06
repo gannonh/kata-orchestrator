@@ -1,9 +1,11 @@
+import fs from 'node:fs'
 import path from 'node:path'
 
 import type {
   SpecArtifactDiagnostic,
   SpecArtifactFrontmatter,
-  SpecArtifactStatus
+  SpecArtifactStatus,
+  PersistedSpecDocument
 } from '../shared/types/spec-document'
 
 const DEFAULT_STATUS: SpecArtifactStatus = 'drafting'
@@ -14,6 +16,13 @@ export type ParsedSpecArtifactFile = {
   markdown: string
   frontmatter: SpecArtifactFrontmatter
   diagnostics: SpecArtifactDiagnostic[]
+}
+
+type PersistedSpecArtifactProjectionInput = {
+  sourcePath: string
+  raw: string
+  fallbackUpdatedAt: string
+  previous?: PersistedSpecDocument
 }
 
 export function buildSpecArtifactPath(spaceRootPath: string, sessionId: string): string {
@@ -88,6 +97,83 @@ export function serializeSpecArtifactFile(input: {
   lines.push(FRONTMATTER_DELIMITER, '', input.markdown)
 
   return lines.join('\n')
+}
+
+export function buildPersistedSpecDocument(
+  input: PersistedSpecArtifactProjectionInput
+): PersistedSpecDocument {
+  const parsed = parseSpecArtifactFile(input.raw)
+  const currentIsValid = parsed.diagnostics.length === 0
+  const previous = input.previous
+  const previousLastGoodMarkdown =
+    previous?.diagnostics.length === 0 ? previous.markdown : previous?.lastGoodMarkdown
+  const previousLastGoodFrontmatter =
+    previous?.diagnostics.length === 0 ? previous.frontmatter : previous?.lastGoodFrontmatter
+  const lastGoodMarkdown = currentIsValid ? parsed.markdown : previousLastGoodMarkdown
+  const lastGoodFrontmatter = currentIsValid ? parsed.frontmatter : previousLastGoodFrontmatter
+
+  return {
+    sourcePath: input.sourcePath,
+    raw: input.raw,
+    markdown: parsed.markdown,
+    frontmatter: parsed.frontmatter,
+    diagnostics: parsed.diagnostics,
+    updatedAt: parsed.frontmatter.updatedAt || input.fallbackUpdatedAt,
+    ...(lastGoodMarkdown !== undefined && { lastGoodMarkdown }),
+    ...(lastGoodFrontmatter !== undefined && { lastGoodFrontmatter }),
+    ...(parsed.frontmatter.sourceRunId !== undefined && {
+      appliedRunId: parsed.frontmatter.sourceRunId
+    })
+  }
+}
+
+export async function loadSpecArtifactDocument(input: {
+  sourcePath: string
+  fallbackUpdatedAt: string
+  previous?: PersistedSpecDocument
+}): Promise<PersistedSpecDocument> {
+  let raw: string
+
+  try {
+    raw = await fs.promises.readFile(input.sourcePath, 'utf-8')
+  } catch (error) {
+    if (!isErrnoCode(error, 'ENOENT')) {
+      throw error
+    }
+
+    raw = buildDefaultSpecArtifact(input.fallbackUpdatedAt)
+    await fs.promises.mkdir(path.dirname(input.sourcePath), { recursive: true })
+    await fs.promises.writeFile(input.sourcePath, raw, 'utf-8')
+  }
+
+  return buildPersistedSpecDocument({
+    sourcePath: input.sourcePath,
+    raw,
+    fallbackUpdatedAt: input.fallbackUpdatedAt,
+    previous: input.previous
+  })
+}
+
+export async function saveSpecArtifactDocument(input: {
+  sourcePath: string
+  frontmatter: SpecArtifactFrontmatter
+  markdown: string
+  previous?: PersistedSpecDocument
+}): Promise<PersistedSpecDocument> {
+  const raw = serializeSpecArtifactFile({
+    frontmatter: input.frontmatter,
+    markdown: input.markdown
+  })
+
+  await fs.promises.mkdir(path.dirname(input.sourcePath), { recursive: true })
+  await fs.promises.writeFile(input.sourcePath, raw, 'utf-8')
+
+  return buildPersistedSpecDocument({
+    sourcePath: input.sourcePath,
+    raw,
+    fallbackUpdatedAt: input.frontmatter.updatedAt,
+    previous: input.previous
+  })
 }
 
 function splitFrontmatter(raw: string): { frontmatter: string; markdown: string } | null {
@@ -187,6 +273,14 @@ function parseFrontmatter(frontmatterBlock: string): {
     return { frontmatter: buildFallbackFrontmatter(), diagnostics }
   }
 
+  if (candidate.status !== 'drafting' && candidate.status !== 'ready') {
+    return { frontmatter: buildFallbackFrontmatter(), diagnostics }
+  }
+
+  if (typeof candidate.updatedAt !== 'string' || candidate.updatedAt.length === 0) {
+    return { frontmatter: buildFallbackFrontmatter(), diagnostics }
+  }
+
   return {
     frontmatter: {
       status: candidate.status,
@@ -202,4 +296,13 @@ function buildFallbackFrontmatter(): SpecArtifactFrontmatter {
     status: DEFAULT_STATUS,
     updatedAt: ''
   }
+}
+
+function isErrnoCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === code
+  )
 }

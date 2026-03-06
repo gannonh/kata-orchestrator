@@ -3,27 +3,84 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RightPanel } from '../../../../src/renderer/components/layout/RightPanel'
 import { mockProject } from '../../../../src/renderer/mock/project'
+import type { PersistedSpecDocument } from '../../../../src/shared/types/spec-document'
+
+vi.mock('lucide-react', () => ({
+  ChevronDown: () => null,
+  ChevronUp: () => null,
+  Bot: () => null,
+  FileText: () => null,
+  Globe: () => null,
+  Plus: () => null,
+  Terminal: () => null,
+  X: () => null
+}))
 
 const mockSpecGet = vi.fn()
 const mockSpecSave = vi.fn()
 const mockSpecApplyDraft = vi.fn()
 
+function buildPersistedSpecDocument(
+  markdown: string,
+  overrides: Partial<PersistedSpecDocument> = {}
+): PersistedSpecDocument {
+  const updatedAt = overrides.updatedAt ?? '2026-03-03T00:00:00.000Z'
+  const baseSourceRunId =
+    overrides.frontmatter?.sourceRunId ?? overrides.appliedRunId
+  const frontmatter = {
+    status: 'drafting' as const,
+    updatedAt,
+    ...(baseSourceRunId !== undefined && { sourceRunId: baseSourceRunId }),
+    ...overrides.frontmatter
+  }
+
+  return {
+    sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+    raw:
+      overrides.raw ??
+      [
+        '---',
+        `status: ${frontmatter.status}`,
+        `updatedAt: ${frontmatter.updatedAt}`,
+        ...(frontmatter.sourceRunId ? [`sourceRunId: ${frontmatter.sourceRunId}`] : []),
+        '---',
+        '',
+        markdown
+      ].join('\n'),
+    markdown,
+    frontmatter,
+    diagnostics: overrides.diagnostics ?? [],
+    updatedAt,
+    ...(frontmatter.sourceRunId !== undefined && { appliedRunId: frontmatter.sourceRunId }),
+    ...overrides
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 
   mockSpecGet.mockResolvedValue(null)
-  mockSpecSave.mockImplementation(async (input: { markdown: string; appliedRunId?: string }) => ({
-    markdown: input.markdown,
-    updatedAt: '2026-03-03T00:00:00.000Z',
-    appliedRunId: input.appliedRunId
-  }))
+  mockSpecSave.mockImplementation(
+    async (input: { markdown: string; status?: 'drafting' | 'ready'; sourceRunId?: string }) =>
+      buildPersistedSpecDocument(input.markdown, {
+        updatedAt: '2026-03-05T00:00:00.000Z',
+        frontmatter: {
+          status: input.status ?? 'drafting',
+          updatedAt: '2026-03-05T00:00:00.000Z',
+          ...(input.sourceRunId !== undefined && { sourceRunId: input.sourceRunId })
+        }
+      })
+  )
   mockSpecApplyDraft.mockImplementation(
-    async (input: { draft: { runId: string; content: string } }) => ({
-      markdown: input.draft.content,
-      updatedAt: '2026-03-03T00:01:00.000Z',
-      appliedRunId: input.draft.runId,
-      appliedAt: '2026-03-03T00:01:00.000Z'
-    })
+    async (input: { draft: { runId: string; content: string } }) =>
+      buildPersistedSpecDocument(input.draft.content, {
+        updatedAt: '2026-03-05T00:01:00.000Z',
+        frontmatter: {
+          status: 'drafting',
+          updatedAt: '2026-03-05T00:01:00.000Z',
+          sourceRunId: input.draft.runId
+        }
+      })
   )
 
   window.kata = {
@@ -116,7 +173,8 @@ describe('RightPanel draft flow', () => {
           spaceId: 'space-1',
           sessionId: 'session-1',
           markdown: expect.stringContaining('[/] Parse spec sections'),
-          appliedRunId: 'run-1'
+          sourceRunId: 'run-1',
+          status: 'drafting'
         })
       )
       expect(onTaskActivitySnapshotChange).toHaveBeenCalledWith(
@@ -148,17 +206,22 @@ describe('RightPanel draft flow', () => {
           spaceId: 'space-1',
           sessionId: 'session-1',
           markdown: expect.stringContaining('[x] Parse spec sections'),
-          appliedRunId: 'run-1'
+          sourceRunId: 'run-1',
+          status: 'drafting'
         })
       )
     })
   })
 
   it('applies manual task toggle state even when an older snapshot exists', async () => {
-    mockSpecGet.mockResolvedValueOnce({
-      markdown: ['## Goal', 'Persisted goal', '', '## Tasks', '- [ ] Initial task'].join('\n'),
-      updatedAt: '2026-03-03T00:00:00.000Z'
-    })
+    mockSpecGet.mockResolvedValueOnce(
+      buildPersistedSpecDocument(
+        ['## Goal', 'Persisted goal', '', '## Tasks', '- [ ] Initial task'].join('\n'),
+        {
+          updatedAt: '2026-03-03T00:00:00.000Z'
+        }
+      )
+    )
 
     const { rerender } = render(
       <RightPanel
@@ -228,10 +291,14 @@ describe('RightPanel draft flow', () => {
   })
 
   it('enters markdown edit mode and saves the updated document', async () => {
-    mockSpecGet.mockResolvedValueOnce({
-      markdown: ['## Goal', 'Original goal', '', '## Tasks', '- [ ] Initial task'].join('\n'),
-      updatedAt: '2026-03-03T00:00:00.000Z'
-    })
+    mockSpecGet.mockResolvedValueOnce(
+      buildPersistedSpecDocument(
+        ['## Goal', 'Original goal', '', '## Tasks', '- [ ] Initial task'].join('\n'),
+        {
+          updatedAt: '2026-03-03T00:00:00.000Z'
+        }
+      )
+    )
 
     render(
       <RightPanel
@@ -263,18 +330,25 @@ describe('RightPanel draft flow', () => {
   })
 
   it('surfaces and applies a newer run draft after a prior draft has already been applied', async () => {
-    mockSpecGet.mockResolvedValueOnce({
-      markdown: [
-        '## Goal',
-        'Persisted applied goal',
-        '',
-        '## Tasks',
-        '- [ ] Initial task'
-      ].join('\n'),
-      updatedAt: '2026-03-03T00:00:00.000Z',
-      appliedRunId: 'run-1',
-      appliedAt: '2026-03-03T00:00:00.000Z'
-    })
+    mockSpecGet.mockResolvedValueOnce(
+      buildPersistedSpecDocument(
+        [
+          '## Goal',
+          'Persisted applied goal',
+          '',
+          '## Tasks',
+          '- [ ] Initial task'
+        ].join('\n'),
+        {
+          updatedAt: '2026-03-03T00:00:00.000Z',
+          frontmatter: {
+            status: 'drafting',
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            sourceRunId: 'run-1'
+          }
+        }
+      )
+    )
 
     render(
       <RightPanel
@@ -313,10 +387,11 @@ describe('RightPanel draft flow', () => {
       '## Tasks',
       '- [ ] Initial task'
     ].join('\n')
-    mockSpecGet.mockResolvedValueOnce({
-      markdown: persistedMarkdown,
-      updatedAt: '2026-03-03T00:00:00.000Z'
-    })
+    mockSpecGet.mockResolvedValueOnce(
+      buildPersistedSpecDocument(persistedMarkdown, {
+        updatedAt: '2026-03-03T00:00:00.000Z'
+      })
+    )
 
     render(
       <RightPanel

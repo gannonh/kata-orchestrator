@@ -1,3 +1,5 @@
+import type { SpecArtifactDiagnostic, SpecArtifactStatus } from '../../shared/types/spec-document'
+
 export type SpecTaskStatus = 'not_started' | 'in_progress' | 'complete'
 
 export interface StructuredSpecSections {
@@ -17,10 +19,15 @@ export interface SpecTaskItem {
 }
 
 export interface StructuredSpecDocument {
+  sourcePath: string
+  raw: string
   markdown: string
+  status: SpecArtifactStatus
+  diagnostics: SpecArtifactDiagnostic[]
   sections: StructuredSpecSections
   tasks: SpecTaskItem[]
   updatedAt: string
+  sourceRunId?: string
   appliedRunId?: string
 }
 

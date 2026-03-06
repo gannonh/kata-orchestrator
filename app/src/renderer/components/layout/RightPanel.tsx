@@ -65,7 +65,7 @@ export function RightPanel({
         onTaskActivitySnapshotChange?.(
           buildTaskActivitySnapshot({
             sessionId,
-            runId: specDocument.document.appliedRunId ?? `spec-${sessionId}`,
+            runId: specDocument.document.sourceRunId ?? specDocument.document.appliedRunId ?? `spec-${sessionId}`,
             updatedAt,
             tasks: optimisticTasks
           })
@@ -122,7 +122,7 @@ export function RightPanel({
       )
     }
 
-    if (latestDraft && latestDraft.runId !== specDocument.document.appliedRunId) {
+    if (latestDraft && latestDraft.runId !== specDocument.document.sourceRunId) {
       return (
         <SpecTab
           project={project}

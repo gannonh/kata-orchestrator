@@ -30,7 +30,11 @@ const structuredFixtureMarkdown = [
 ].join('\n')
 
 const baseDocument: StructuredSpecDocument = {
+  sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+  raw: '## Goal\nShip it.',
   markdown: '## Goal\nShip it.',
+  status: 'drafting',
+  diagnostics: [],
   sections: {
     goal: 'Ship it.',
     acceptanceCriteria: ['Works'],
@@ -73,14 +77,19 @@ describe('SpecSections', () => {
     expect(screen.getByText('Build')).toBeTruthy()
     expect(screen.getByText('Test')).toBeTruthy()
     expect(screen.getByText('Auto-saved')).toBeTruthy()
-    expect(screen.getByText('Draft applied')).toBeTruthy()
+    expect(screen.getByText(/Source of truth:/)).toBeTruthy()
+    expect(screen.getByText('drafting')).toBeTruthy()
   })
 
   it('renders a realistic canonical fixture with markdown and mixed task states', () => {
     render(
       <SpecSections
         document={{
+          sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+          raw: structuredFixtureMarkdown,
           markdown: structuredFixtureMarkdown,
+          status: 'drafting',
+          diagnostics: [],
           sections: {
             goal: 'Publish a clear `spec` surface.',
             acceptanceCriteria: ['Render canonical sections.'],
@@ -123,17 +132,40 @@ describe('SpecSections', () => {
     expect(screen.getByRole('checkbox', { name: 'Render markdown' })).toBeTruthy()
   })
 
-  it('shows applied run id when present', () => {
+  it('shows trace badge when source run id is present', () => {
     render(
       <SpecSections
-        document={{ ...baseDocument, appliedRunId: 'run-42' }}
+        document={{ ...baseDocument, sourceRunId: 'run-42', appliedRunId: 'run-42' }}
         onToggleTask={vi.fn()}
         onEditMarkdown={vi.fn()}
         commentStatusNote=""
       />
     )
 
-    expect(screen.getByText('Applied from run-42')).toBeTruthy()
+    expect(screen.getByText('Trace: run-42')).toBeTruthy()
+  })
+
+  it('renders artifact diagnostics above the structured sections', () => {
+    render(
+      <SpecSections
+        document={{
+          ...baseDocument,
+          diagnostics: [
+            {
+              code: 'invalid_frontmatter_yaml',
+              message: 'Frontmatter must contain valid key:value entries'
+            }
+          ]
+        }}
+        onToggleTask={vi.fn()}
+        onEditMarkdown={vi.fn()}
+        commentStatusNote=""
+      />
+    )
+
+    expect(screen.getByText('Spec artifact issue')).toBeTruthy()
+    expect(screen.getByText(/invalid_frontmatter_yaml/i)).toBeTruthy()
+    expect(screen.getAllByText(/notes\/spec\.md/i).length).toBeGreaterThanOrEqual(1)
   })
 
   it('calls onEditMarkdown when edit button is clicked', () => {

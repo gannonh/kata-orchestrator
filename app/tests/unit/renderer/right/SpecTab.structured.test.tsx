@@ -5,6 +5,8 @@ import { SpecTab } from '../../../../src/renderer/components/right/SpecTab'
 import { mockProject } from '../../../../src/renderer/mock/project'
 
 const structuredFixtureDocument = {
+  sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+  raw: '---\nstatus: drafting\nupdatedAt: 2026-03-06T00:00:00.000Z\nsourceRunId: run-1\n---\n',
   markdown: [
     '## Goal',
     'Publish a clear `spec` surface.',
@@ -29,6 +31,8 @@ const structuredFixtureDocument = {
     '- [/] Render markdown',
     '- [x] Preserve ids'
   ].join('\n'),
+  status: 'drafting' as const,
+  diagnostics: [],
   sections: {
     goal: 'Publish a clear `spec` surface.',
     acceptanceCriteria: ['Render canonical sections.'],
@@ -113,7 +117,11 @@ describe('SpecTab structured states', () => {
         specState={{
           mode: 'structured_view',
           document: {
+            sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+            raw: ['## Goal', 'Ship the panel', '', '## Tasks', '- [ ] Parse spec'].join('\n'),
             markdown: ['## Goal', 'Ship the panel', '', '## Tasks', '- [ ] Parse spec'].join('\n'),
+            status: 'drafting',
+            diagnostics: [],
             sections: {
               goal: 'Ship the panel',
               acceptanceCriteria: ['Render the required sections'],
@@ -184,7 +192,11 @@ describe('SpecTab structured states', () => {
         specState={{
           mode: 'editing',
           document: {
+            sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+            raw: ['## Goal', 'Initial goal'].join('\n'),
             markdown: ['## Goal', 'Initial goal'].join('\n'),
+            status: 'drafting',
+            diagnostics: [],
             sections: {
               goal: 'Initial goal',
               acceptanceCriteria: [],
@@ -224,7 +236,11 @@ describe('SpecTab structured states', () => {
         specState={{
           mode: 'structured_view',
           document: {
+            sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+            raw: ['## Goal', '', '## Tasks'].join('\n'),
             markdown: ['## Goal', '', '## Tasks'].join('\n'),
+            status: 'drafting',
+            diagnostics: [],
             sections: {
               goal: '',
               acceptanceCriteria: [],
@@ -264,5 +280,32 @@ describe('SpecTab structured states', () => {
     expect(screen.getByText('spec').tagName).toBe('CODE')
     expect(screen.getByText('main').tagName).toBe('CODE')
     expect(screen.getByRole('checkbox', { name: 'Render markdown' })).toBeTruthy()
+  })
+
+  it('shows invalid frontmatter diagnostics without dropping the last good structured view', () => {
+    render(
+      <SpecTab
+        project={mockProject}
+        specState={{
+          mode: 'structured_view',
+          document: {
+            ...structuredFixtureDocument,
+            diagnostics: [
+              {
+                code: 'invalid_frontmatter_yaml',
+                message: 'Frontmatter must contain valid key:value entries'
+              }
+            ]
+          },
+          onToggleTask: vi.fn(),
+          onEditMarkdown: vi.fn(),
+          commentStatusNote: 'Comments are deferred.'
+        }}
+      />
+    )
+
+    expect(screen.getByText(/invalid_frontmatter_yaml/i)).toBeTruthy()
+    expect(screen.getAllByText(/notes\/spec\.md/i).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('heading', { name: 'Goal' })).toBeTruthy()
   })
 })

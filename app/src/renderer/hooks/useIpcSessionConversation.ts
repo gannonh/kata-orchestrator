@@ -217,7 +217,16 @@ function buildTaskActivitySnapshotFromPersistedSpecDocument(
     return undefined
   }
 
-  const tasks = parseTaskItemsFromMarkdown(persistedDocument.markdown)
+  const hasInvalidFrontmatter = persistedDocument.diagnostics.some(
+    (diagnostic) =>
+      diagnostic.code === 'invalid_frontmatter_yaml' ||
+      diagnostic.code === 'invalid_frontmatter_shape'
+  )
+  const markdown =
+    hasInvalidFrontmatter && persistedDocument.lastGoodMarkdown
+      ? persistedDocument.lastGoodMarkdown
+      : persistedDocument.markdown
+  const tasks = parseTaskItemsFromMarkdown(markdown)
   if (tasks.length === 0) {
     return undefined
   }
@@ -231,7 +240,7 @@ function buildTaskActivitySnapshotFromPersistedSpecDocument(
 
   return {
     sessionId,
-    runId: persistedDocument.appliedRunId ?? `spec-${sessionId}`,
+    runId: persistedDocument.frontmatter.sourceRunId ?? persistedDocument.appliedRunId ?? `spec-${sessionId}`,
     items,
     counts: buildTaskCounts(items)
   }
