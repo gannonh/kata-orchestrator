@@ -92,7 +92,22 @@ function normalizeListItems(lines: IndexedLine[]): string[] {
     }
 
     if (currentItemLines.length > 0) {
-      currentItemLines.push(trimmedEnd)
+      if (trimmedEnd.trim() === '') {
+        currentItemLines.push('')
+        return
+      }
+
+      if (isNestedListItem(trimmedEnd)) {
+        return
+      }
+
+      if (isIndentedContinuation(trimmedEnd)) {
+        currentItemLines.push(trimmedEnd)
+        return
+      }
+
+      pushNormalizedListItem(items, currentItemLines)
+      currentItemLines = [trimmedEnd.trim()]
       return
     }
 
@@ -174,6 +189,10 @@ function normalizeListItem(lines: string[]): string {
   const [firstLine, ...continuationLines] = trimmedLines
   const dedentedContinuationLines = dedentLines(continuationLines)
 
+  if (shouldCollapseContinuationLines(dedentedContinuationLines)) {
+    return [firstLine, ...dedentedContinuationLines.map((line) => line.trim())].join(' ')
+  }
+
   return trimBlankEdges([firstLine, ...dedentedContinuationLines]).join('\n')
 }
 
@@ -195,4 +214,22 @@ function dedentLines(lines: string[]): string[] {
   }
 
   return lines.map((line) => line.slice(Math.min(sharedIndent, line.length)))
+}
+
+function isNestedListItem(line: string): boolean {
+  return /^\s+(?:[-*+]\s+|\d+[.)]\s+)/.test(line)
+}
+
+function isIndentedContinuation(line: string): boolean {
+  return /^\s+/.test(line)
+}
+
+function shouldCollapseContinuationLines(lines: string[]): boolean {
+  return (
+    lines.length > 0 &&
+    lines.every((line) => {
+      const trimmed = line.trim()
+      return trimmed !== '' && !/^(?:```|~~~)/.test(trimmed)
+    })
+  )
 }
