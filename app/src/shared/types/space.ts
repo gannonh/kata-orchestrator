@@ -33,7 +33,15 @@ export type SessionRecord = {
   activeModelId?: string
 }
 
-export const SESSION_AGENT_STATUSES = ['idle', 'running', 'blocked', 'complete'] as const
+export const SESSION_AGENT_STATUSES = [
+  'idle',
+  'queued',
+  'delegating',
+  'running',
+  'blocked',
+  'completed',
+  'failed'
+] as const
 export type SessionAgentStatus = (typeof SESSION_AGENT_STATUSES)[number]
 
 export const SESSION_AGENT_KINDS = ['system', 'coordinator', 'specialist'] as const
@@ -50,6 +58,10 @@ export type SessionAgentRecord = {
   delegatedBy?: string
   currentTask?: string
   sortOrder: number
+  activeRunId?: string
+  waveId?: string
+  groupLabel?: string
+  lastActivityAt?: string
   createdAt: string
   updatedAt: string
 }

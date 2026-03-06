@@ -34,6 +34,7 @@ import {
   createTaskActivityProjector,
   type TaskActivitySeedItem
 } from './task-activity-projector'
+import { createSessionAgentRegistry } from './session-agent-registry'
 import { createAgentRunner } from './agent-runner'
 import type { AgentRunner } from './agent-runner'
 import type { AuthStorage } from './auth-storage'
@@ -46,7 +47,6 @@ import type {
   CreateSpaceInput,
   OrchestrationMode,
   ProvisioningMethod,
-  SessionAgentRecord,
   SessionRecord,
   SpaceRecord,
   WorkspaceMode
@@ -450,35 +450,6 @@ function resolveTaskSeedItemsForRun(
   return []
 }
 
-function createBaselineSessionAgentRoster(sessionId: string, createdAt: string): SessionAgentRecord[] {
-  return [
-    {
-      id: randomUUID(),
-      sessionId,
-      name: 'Kata Agents',
-      role: 'System-managed agent group',
-      kind: 'system',
-      status: 'idle',
-      avatarColor: '#334155',
-      sortOrder: 0,
-      createdAt,
-      updatedAt: createdAt
-    },
-    {
-      id: randomUUID(),
-      sessionId,
-      name: 'MVP Planning Coordinator',
-      role: 'Coordinates MVP planning tasks',
-      kind: 'coordinator',
-      status: 'idle',
-      avatarColor: '#0f766e',
-      sortOrder: 1,
-      createdAt,
-      updatedAt: createdAt
-    }
-  ]
-}
-
 function deriveRepoLabel(input: ParsedCreateSpaceInput): string {
   if (input.workspaceMode === 'external') {
     return extractRepoLabel(input.repoUrl)
@@ -669,22 +640,22 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       label: parsedInput.label,
       createdAt: new Date().toISOString()
     }
-    const baselineRosterEntries = createBaselineSessionAgentRoster(
-      createdSession.id,
-      createdSession.createdAt
+    let nextState: AppState = {
+      ...state,
+      sessions: { ...state.sessions, [createdSession.id]: createdSession },
+      activeSpaceId: parsedInput.spaceId,
+      activeSessionId: createdSession.id
+    }
+    const sessionAgentRegistry = createSessionAgentRegistry(
+      () => nextState,
+      (updatedState) => {
+        nextState = updatedState
+      }
     )
+    sessionAgentRegistry.seedBaselineAgents(createdSession.id, createdSession.createdAt)
 
     try {
-      stateStore.save({
-        ...state,
-        sessions: { ...state.sessions, [createdSession.id]: createdSession },
-        agentRoster: {
-          ...state.agentRoster,
-          ...Object.fromEntries(baselineRosterEntries.map((entry) => [entry.id, entry]))
-        },
-        activeSpaceId: parsedInput.spaceId,
-        activeSessionId: createdSession.id
-      })
+      stateStore.save(nextState)
     } catch (saveError) {
       const code = (saveError as NodeJS.ErrnoException).code ?? 'UNKNOWN'
       throw new Error(`Session created but failed to save state (${code})`)
@@ -695,16 +666,10 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
 
   ipcMain.handle(SESSION_AGENT_ROSTER_LIST_CHANNEL, async (_event, input: unknown) => {
     const { sessionId } = parseSessionAgentRosterListInput(input)
+    const state = stateStore.load()
+    const sessionAgentRegistry = createSessionAgentRegistry(() => state, stateStore.save)
 
-    return Object.values(stateStore.load().agentRoster)
-      .filter((entry) => entry.sessionId === sessionId)
-      .sort((left, right) => {
-        if (left.sortOrder !== right.sortOrder) {
-          return left.sortOrder - right.sortOrder
-        }
-
-        return left.createdAt.localeCompare(right.createdAt)
-      })
+    return sessionAgentRegistry.list(sessionId)
   })
 
   ipcMain.handle(SESSION_LIST_BY_SPACE_CHANNEL, async (_event, input: unknown) => {
