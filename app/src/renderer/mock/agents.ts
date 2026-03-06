@@ -79,7 +79,7 @@ export const mockAgents: AgentSummary[] = [
         id: 'bootstrap-shell-state',
         name: 'Bootstrap Shell State',
         role: 'Specialist',
-        status: 'complete',
+        status: 'completed',
         model: 'gpt-5-mini',
         tokenUsage: {
           prompt: 731,
