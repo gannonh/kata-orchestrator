@@ -103,6 +103,19 @@ describe('useSessionAgentRoster', () => {
     ])
   })
 
+  it('still maps seeded roster records while coordinator selectors move prompt preview out of AgentSummary', async () => {
+    mockSessionListBySpace.mockResolvedValue([createSession('session-newest')])
+    mockSessionAgentRosterList.mockResolvedValue([createRosterRecord()])
+
+    const { result } = renderHook(() => useSessionAgentRoster('space-1', null))
+    await flushAsyncWork()
+
+    expect(result.current.agents[0]).toMatchObject({
+      name: 'MVP Planning Coordinator',
+      status: 'idle'
+    })
+  })
+
   it('returns deterministic empty state when required APIs are missing', async () => {
     ;(window as any).kata = {
       sessionListBySpace: mockSessionListBySpace

@@ -33,6 +33,21 @@ export type SessionRecord = {
   activeModelId?: string
 }
 
+export const SESSION_CONTEXT_RESOURCE_KINDS = ['spec', 'note', 'workspace-file', 'manual'] as const
+export type SessionContextResourceKind = (typeof SESSION_CONTEXT_RESOURCE_KINDS)[number]
+
+export type SessionContextResourceRecord = {
+  id: string
+  sessionId: string
+  kind: SessionContextResourceKind
+  label: string
+  sourcePath?: string
+  description?: string
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
 export const SESSION_AGENT_STATUSES = [
   'idle',
   'queued',
@@ -106,6 +121,7 @@ export type AppState = {
   runs: Record<string, RunRecord>
   agentRoster: Record<string, SessionAgentRecord>
   specDocuments: Record<string, PersistedSpecDocument>
+  contextResources: Record<string, SessionContextResourceRecord>
   activeSpaceId: string | null
   activeSessionId: string | null
 }
@@ -117,6 +133,7 @@ export function createDefaultAppState(): AppState {
     runs: {},
     agentRoster: {},
     specDocuments: {},
+    contextResources: {},
     activeSpaceId: null,
     activeSessionId: null
   }

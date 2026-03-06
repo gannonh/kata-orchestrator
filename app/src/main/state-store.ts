@@ -2,15 +2,20 @@ import fs from 'node:fs'
 import path from 'node:path'
 import {
   ORCHESTRATION_MODES,
+  SESSION_CONTEXT_RESOURCE_KINDS,
   SESSION_AGENT_KINDS,
   SESSION_AGENT_STATUSES,
   SPACE_STATUSES,
   WORKSPACE_MODES,
   createDefaultAppState
 } from '../shared/types/space'
-import type { AppState, SessionAgentRecord } from '../shared/types/space'
-import { INTERRUPTED_RUN_ERROR_MESSAGE, RUN_STATUSES } from '../shared/types/run'
-import type { PersistedMessage } from '../shared/types/run'
+import type { AppState, SessionAgentRecord, SessionContextResourceRecord } from '../shared/types/space'
+import {
+  INTERRUPTED_RUN_ERROR_MESSAGE,
+  RUN_CONTEXT_REFERENCE_KINDS,
+  RUN_STATUSES
+} from '../shared/types/run'
+import type { PersistedMessage, RunContextReferenceRecord, RunRecord } from '../shared/types/run'
 import { isPersistedSpecDocument } from '../shared/types/spec-document'
 import type { PersistedSpecDocument } from '../shared/types/spec-document'
 
@@ -82,6 +87,26 @@ function isPersistedMessage(value: unknown): value is PersistedMessage {
   )
 }
 
+function isRunContextReferenceRecord(value: unknown): value is RunContextReferenceRecord {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    typeof value.id === 'string' &&
+    typeof value.kind === 'string' &&
+    RUN_CONTEXT_REFERENCE_KINDS.includes(value.kind as RunContextReferenceRecord['kind']) &&
+    typeof value.label === 'string' &&
+    (value.resourceId === undefined || typeof value.resourceId === 'string') &&
+    (value.excerpt === undefined || typeof value.excerpt === 'string') &&
+    (value.lineCount === undefined ||
+      (typeof value.lineCount === 'number' && Number.isFinite(value.lineCount))) &&
+    typeof value.sortOrder === 'number' &&
+    Number.isFinite(value.sortOrder) &&
+    typeof value.capturedAt === 'string'
+  )
+}
+
 function isRunRecord(value: unknown): boolean {
   if (!isRecord(value)) return false
   return (
@@ -98,6 +123,23 @@ function isRunRecord(value: unknown): boolean {
     (value.errorMessage === undefined || typeof value.errorMessage === 'string') &&
     Array.isArray(value.messages) &&
     value.messages.every(isPersistedMessage)
+  )
+}
+
+function isSessionContextResourceRecord(value: unknown): value is SessionContextResourceRecord {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.sessionId === 'string' &&
+    typeof value.kind === 'string' &&
+    SESSION_CONTEXT_RESOURCE_KINDS.includes(value.kind as SessionContextResourceRecord['kind']) &&
+    typeof value.label === 'string' &&
+    (value.sourcePath === undefined || typeof value.sourcePath === 'string') &&
+    (value.description === undefined || typeof value.description === 'string') &&
+    typeof value.sortOrder === 'number' &&
+    Number.isFinite(value.sortOrder) &&
+    typeof value.createdAt === 'string' &&
+    typeof value.updatedAt === 'string'
   )
 }
 
@@ -159,6 +201,7 @@ type PersistedAppState = {
   sessions: AppState['sessions']
   runs?: AppState['runs']
   agentRoster?: unknown
+  contextResources?: unknown
   specDocuments?: unknown
   activeSpaceId: string | null
   activeSessionId: string | null
@@ -230,6 +273,70 @@ function normalizeAgentRoster(value: unknown): AppState['agentRoster'] {
   return normalized
 }
 
+function normalizeContextResources(value: unknown): AppState['contextResources'] {
+  if (!isRecord(value)) {
+    return {}
+  }
+
+  const normalized = Object.create(null) as AppState['contextResources']
+
+  for (const [key, record] of Object.entries(value)) {
+    if (isUnsafeRecordKey(key)) {
+      console.warn('[StateStore] Dropping unsafe context resource key:', key)
+      continue
+    }
+
+    if (!isRecord(record) || record.id !== key) {
+      console.warn('[StateStore] Dropping invalid context resource entry:', key)
+      continue
+    }
+
+    if (isSessionContextResourceRecord(record)) {
+      normalized[key] = record
+    } else {
+      console.warn('[StateStore] Dropping invalid context resource entry:', key)
+    }
+  }
+
+  return normalized
+}
+
+function normalizeRunContextReferences(value: unknown): RunRecord['contextReferences'] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.filter((item) => {
+    if (isRunContextReferenceRecord(item)) {
+      return true
+    }
+    console.warn('[StateStore] Dropping invalid run context reference:', item)
+    return false
+  })
+}
+
+function normalizeRunRecord(value: RunRecord & { contextReferences?: unknown }): RunRecord {
+  return {
+    ...value,
+    contextReferences: normalizeRunContextReferences(value.contextReferences)
+  }
+}
+
+function normalizeRuns(value: Record<string, unknown>): AppState['runs'] {
+  const normalized = Object.create(null) as AppState['runs']
+
+  for (const [key, record] of Object.entries(value)) {
+    if (isUnsafeRecordKey(key)) {
+      console.warn('[StateStore] Dropping unsafe run key:', key)
+      continue
+    }
+
+    normalized[key] = normalizeRunRecord(record as RunRecord & { contextReferences?: unknown })
+  }
+
+  return normalized
+}
+
 function normalizeSpecDocuments(value: unknown): AppState['specDocuments'] {
   if (!isRecord(value)) {
     return {}
@@ -257,10 +364,6 @@ function reconcileInterruptedRuns(runs: AppState['runs']): AppState['runs'] {
   const completedAt = new Date().toISOString()
 
   for (const [key, run] of Object.entries(runs)) {
-    if (isUnsafeRecordKey(key)) {
-      console.warn('[StateStore] Dropping unsafe run key:', key)
-      continue
-    }
     if (run.status === 'queued' || run.status === 'running') {
       reconciled[key] = {
         ...run,
@@ -326,13 +429,14 @@ export function createStateStore(filePath: string): StateStore {
           ? parsed.activeSessionId
           : null
 
+      const runs = normalizeRuns(parsed.runs ?? {})
+
       return {
         spaces: parsed.spaces,
         sessions: parsed.sessions,
-        runs: options?.reconcileInterruptedRuns
-          ? reconcileInterruptedRuns(parsed.runs ?? {})
-          : (parsed.runs ?? {}),
+        runs: options?.reconcileInterruptedRuns ? reconcileInterruptedRuns(runs) : runs,
         agentRoster: normalizeAgentRoster(parsed.agentRoster),
+        contextResources: normalizeContextResources(parsed.contextResources),
         specDocuments: normalizeSpecDocuments(parsed.specDocuments),
         activeSpaceId,
         activeSessionId

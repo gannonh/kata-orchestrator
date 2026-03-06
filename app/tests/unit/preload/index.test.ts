@@ -134,6 +134,34 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith('session-agent-roster:list', { sessionId: 'session-1' })
   })
 
+  it('exposes sessionContextResourcesList and invokes the session-context-resources:list channel', async () => {
+    const mockResources = [
+      {
+        id: 'ctx-1',
+        sessionId: 'session-1',
+        kind: 'spec',
+        label: 'Spec',
+        sortOrder: 0,
+        createdAt: 'now',
+        updatedAt: 'now'
+      }
+    ]
+
+    await import('../../../src/preload/index')
+
+    const [, api] = exposeInMainWorld.mock.calls[0] as [
+      string,
+      {
+        sessionContextResourcesList: (input: { sessionId: string }) => Promise<unknown>
+      }
+    ]
+
+    invoke.mockResolvedValueOnce(mockResources)
+
+    await expect(api.sessionContextResourcesList({ sessionId: 'session-1' })).resolves.toEqual(mockResources)
+    expect(invoke).toHaveBeenCalledWith('session-context-resources:list', { sessionId: 'session-1' })
+  })
+
   it('exposes sessionListBySpace and invokes the session:listBySpace channel', async () => {
     const mockSessions = [
       {

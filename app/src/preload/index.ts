@@ -4,6 +4,7 @@ import type {
   CreateSessionInput,
   CreateSpaceInput,
   SessionAgentRecord,
+  SessionContextResourceRecord,
   SessionRecord,
   SpaceRecord
 } from '../shared/types/space'
@@ -19,6 +20,7 @@ const SPACE_GET_CHANNEL = 'space:get'
 const SPACE_SET_ACTIVE_CHANNEL = 'space:setActive'
 const SESSION_CREATE_CHANNEL = 'session:create'
 const SESSION_AGENT_ROSTER_LIST_CHANNEL = 'session-agent-roster:list'
+const SESSION_CONTEXT_RESOURCES_LIST_CHANNEL = 'session-context-resources:list'
 const SESSION_LIST_BY_SPACE_CHANNEL = 'session:listBySpace'
 const SESSION_SET_ACTIVE_CHANNEL = 'session:setActive'
 const SPEC_GET_CHANNEL = 'spec:get'
@@ -75,6 +77,8 @@ const kataApi = {
     invokeTyped<SessionRecord>(SESSION_CREATE_CHANNEL, input),
   sessionAgentRosterList: (input: { sessionId: string }): Promise<SessionAgentRecord[]> =>
     invokeTyped<SessionAgentRecord[]>(SESSION_AGENT_ROSTER_LIST_CHANNEL, input),
+  sessionContextResourcesList: (input: { sessionId: string }): Promise<SessionContextResourceRecord[]> =>
+    invokeTyped<SessionContextResourceRecord[]>(SESSION_CONTEXT_RESOURCES_LIST_CHANNEL, input),
   sessionListBySpace: (input: { spaceId: string }): Promise<SessionRecord[]> =>
     invokeTyped<SessionRecord[]>(SESSION_LIST_BY_SPACE_CHANNEL, input),
   sessionSetActive: (sessionId: string): Promise<{ activeSpaceId: string; activeSessionId: string }> =>

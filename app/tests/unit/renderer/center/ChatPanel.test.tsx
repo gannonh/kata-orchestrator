@@ -175,7 +175,7 @@ describe('ChatPanel', () => {
       retry: vi.fn(),
     })
 
-    render(<ChatPanel sessionId={null} />)
+    render(<ChatPanel sessionId="sess-1" />)
 
     expect(screen.getByText('Hello world')).toBeTruthy()
     expect(screen.getByText('Hi there')).toBeTruthy()
@@ -191,7 +191,7 @@ describe('ChatPanel', () => {
       retry: vi.fn(),
     })
 
-    render(<ChatPanel sessionId={null} />)
+    render(<ChatPanel sessionId="sess-1" />)
 
     fireEvent.change(screen.getByLabelText('Message input'), {
       target: { value: 'Build feature X' },
@@ -199,6 +199,23 @@ describe('ChatPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
     expect(submitPrompt).toHaveBeenCalledWith('Build feature X')
+  })
+
+  it('disables the chat composer when no sessionId is available yet', () => {
+    const submitPrompt = vi.fn()
+    mockHook.mockReturnValue({
+      state: idleState({ runState: 'empty' }),
+      submitPrompt,
+      retry: vi.fn(),
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    const input = screen.getByLabelText('Message input') as HTMLTextAreaElement
+    const sendButton = screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement
+
+    expect(input.disabled).toBe(true)
+    expect(sendButton.disabled).toBe(true)
   })
 
   it('error state shows retry button that calls retry from the hook', () => {
@@ -209,7 +226,7 @@ describe('ChatPanel', () => {
       retry,
     })
 
-    render(<ChatPanel sessionId={null} />)
+    render(<ChatPanel sessionId="sess-1" />)
 
     expect(screen.getByText('Error')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
