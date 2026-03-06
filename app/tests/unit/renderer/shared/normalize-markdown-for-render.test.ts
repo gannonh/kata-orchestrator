@@ -66,4 +66,20 @@ describe('normalizeMarkdownForRender', () => {
 
     expect(normalizeMarkdownForRender(content, 'streaming')).toBe(content)
   })
+
+  it('does not let a plain fence close a quoted fence', () => {
+    const content = ['> ```ts', '> const x = 1', '```', 'after'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(
+      ['> ```ts', '> const x = 1', '```', 'after', '> ```'].join('\n')
+    )
+  })
+
+  it('preserves existing CRLF line endings when appending a synthetic closer', () => {
+    const content = ['```ts', 'const ready = true'].join('\r\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(
+      ['```ts', 'const ready = true', '```'].join('\r\n')
+    )
+  })
 })

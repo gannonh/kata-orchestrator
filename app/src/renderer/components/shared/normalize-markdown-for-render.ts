@@ -1,6 +1,7 @@
 export type MarkdownRenderMode = 'settled' | 'streaming'
 
 type FenceInfo = {
+  containerPrefix: string
   length: number
   prefix: string
   suffix: string
@@ -52,15 +53,27 @@ function consumeListMarker(line: string, startIndex: number): number | null {
   return consumeOrderedListMarker(line, startIndex)
 }
 
+function getLineEnding(content: string): string {
+  const match = content.match(/\r\n|\n|\r/)
+
+  return match?.[0] ?? '\n'
+}
+
 function getFenceInfo(line: string): FenceInfo | null {
   let whitespace = consumeLeadingWhitespace(line, 0)
   let index = whitespace.index
   let fenceIndent = whitespace.width
+  let containerEnd = 0
 
   while (true) {
     if (line[index] === '>') {
-      index += 1
-      whitespace = consumeLeadingWhitespace(line, index)
+      let markerEnd = index + 1
+      if (line[markerEnd] === ' ' || line[markerEnd] === '\t') {
+        markerEnd += 1
+      }
+
+      containerEnd = markerEnd
+      whitespace = consumeLeadingWhitespace(line, markerEnd)
       index = whitespace.index
       fenceIndent = whitespace.width
       continue
@@ -71,6 +84,7 @@ function getFenceInfo(line: string): FenceInfo | null {
       break
     }
 
+    containerEnd = nextIndex
     whitespace = consumeLeadingWhitespace(line, nextIndex)
     index = whitespace.index
     fenceIndent = whitespace.width
@@ -90,6 +104,7 @@ function getFenceInfo(line: string): FenceInfo | null {
   }
 
   return {
+    containerPrefix: line.slice(0, containerEnd),
     length: fenceEnd - index,
     prefix: line.slice(0, index),
     suffix: line.slice(fenceEnd)
@@ -104,9 +119,10 @@ export function normalizeMarkdownForRender(
     return content
   }
 
+  const lineEnding = getLineEnding(content)
   let activeFence: FenceInfo | null = null
 
-  for (const line of content.split('\n')) {
+  for (const line of content.split(/\r\n|\n|\r/)) {
     const fence = getFenceInfo(line)
     if (fence === null) {
       continue
@@ -117,13 +133,17 @@ export function normalizeMarkdownForRender(
       continue
     }
 
-    if (fence.length >= activeFence.length && /^[ \t]*$/.test(fence.suffix)) {
+    if (
+      fence.containerPrefix === activeFence.containerPrefix &&
+      fence.length >= activeFence.length &&
+      /^[ \t]*$/.test(fence.suffix)
+    ) {
       activeFence = null
     }
   }
 
   if (activeFence !== null) {
-    return `${content}\n${activeFence.prefix}${'`'.repeat(activeFence.length)}`
+    return `${content}${lineEnding}${activeFence.prefix}${'`'.repeat(activeFence.length)}`
   }
 
   return content
