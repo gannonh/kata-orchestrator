@@ -52,7 +52,7 @@ describe('MarkdownRenderer', () => {
     expect(milestoneHeading.className).toContain('text-xl')
     expect(notesHeading.className).toContain('text-lg')
     expect(paragraph).toBeTruthy()
-    expect(code.closest('code')?.className).toBe('')
+    expect(code.closest('code')?.className).toContain('bg-muted')
   })
 
   it('handles unterminated fenced code blocks by consuming remaining lines', () => {

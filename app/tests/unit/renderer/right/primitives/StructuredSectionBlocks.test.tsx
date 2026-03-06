@@ -26,4 +26,58 @@ describe('StructuredSectionBlocks', () => {
     expect(screen.getByRole('heading', { name: 'Verification Plan' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Rollback Plan' })).toBeTruthy()
   })
+
+  it('renders inline code inside the Goal section', () => {
+    render(
+      <StructuredSectionBlocks
+        sections={{
+          goal: 'Ship `stable ids` now.',
+          acceptanceCriteria: [],
+          nonGoals: [],
+          assumptions: [],
+          verificationPlan: [],
+          rollbackPlan: []
+        }}
+        renderTasks={() => null}
+      />
+    )
+
+    expect(screen.getByText('stable ids').tagName).toBe('CODE')
+  })
+
+  it('renders fenced code blocks inside multiline section content', () => {
+    render(
+      <StructuredSectionBlocks
+        sections={{
+          goal: ['Use this snippet:', '', '```ts', 'const value = 1', '```'].join('\n'),
+          acceptanceCriteria: [],
+          nonGoals: [],
+          assumptions: [],
+          verificationPlan: [],
+          rollbackPlan: []
+        }}
+        renderTasks={() => null}
+      />
+    )
+
+    expect(screen.getByText('const value = 1')).toBeTruthy()
+  })
+
+  it('renders markdown inside canonical list items', () => {
+    render(
+      <StructuredSectionBlocks
+        sections={{
+          goal: '',
+          acceptanceCriteria: ['Support `markdown` list items'],
+          nonGoals: [],
+          assumptions: [],
+          verificationPlan: [],
+          rollbackPlan: []
+        }}
+        renderTasks={() => null}
+      />
+    )
+
+    expect(screen.getByText('markdown').tagName).toBe('CODE')
+  })
 })

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { MarkdownRenderer } from '../../shared/MarkdownRenderer'
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/card'
 
 import type { ParsedSpecSections } from './spec-markdown-types'
@@ -27,12 +28,17 @@ function SectionList({ title, items, ordered = false }: SectionListProps) {
         {items.length > 0 ? (
           <ListTag
             className={[
-              'space-y-1 pl-5 text-sm text-muted-foreground',
+              'space-y-2 pl-5 text-sm text-muted-foreground',
               ordered ? 'list-decimal' : 'list-disc'
             ].join(' ')}
           >
             {items.map((item, index) => (
-              <li key={`${title}-${index}`}>{item}</li>
+              <li key={`${title}-${index}`}>
+                <MarkdownRenderer
+                  content={item}
+                  className="space-y-2 text-inherit"
+                />
+              </li>
             ))}
           </ListTag>
         ) : (
@@ -51,9 +57,14 @@ export function StructuredSectionBlocks({ sections, renderTasks }: StructuredSec
           <CardTitle className="text-sm uppercase tracking-wide">Goal</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-            {sections.goal || 'No goal yet.'}
-          </p>
+          {sections.goal ? (
+            <MarkdownRenderer
+              content={sections.goal}
+              className="space-y-2"
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">No goal yet.</p>
+          )}
         </CardContent>
       </Card>
 
