@@ -297,6 +297,33 @@ npx agent-browser screenshot /tmp/kata-uat.png
 
 1. If refs become stale, re-run `snapshot -i` and use the new refs.
 
+## Dev Workflow
+
+Use this single workflow in this repo.
+
+1. Start ticket lifecycle
+   - `kata-linear start KAT-<number>`
+2. Design
+   - `superpowers:brainstorming`
+3. Plan
+   - `super
+4. Execute implementation
+   - `superpowers:subagent-driven-development`
+   - `superpowers:test-driven-development`
+   - `superpowers:requesting-code-review`
+5. Verify before claiming completion
+   - `superpowers:verification-before-completion`
+   - `user-acceptance`
+6. PR workflow
+   - `superpowers:finishing-a-development-branch`
+   - `pull-requests` create PR
+   - `gh-address-comments` for PR comments
+   - `gh-fix-ci` for CI failures
+   - `pr-review-plugin:pr-review` for PR reviews
+   - `pull-requests` merge pr when approved and CI is green
+7. Close ticket lifecycle
+   - `kata-linear end KAT-<number>`
+
 Notes:
 
 - Prefer the default `agent-browser` session for this project. If a named session fails to start, use default and reconnect with `connect 9222`.

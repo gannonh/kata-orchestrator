@@ -76,6 +76,82 @@ describe('ChatPanel', () => {
     expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
   })
 
+  it('keeps the visible message list and status badge after primitive wrapper changes', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        runState: 'pending',
+        messages: [
+          { id: 'm1', role: 'user', content: 'Plan the work', createdAt: '2026-03-01T00:00:00Z' },
+          { id: 'm2', role: 'agent', content: 'Draft ready.', createdAt: '2026-03-01T00:00:01Z' }
+        ]
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    expect(screen.getByTestId('message-list')).toBeTruthy()
+    expect(screen.getByText('Plan the work')).toBeTruthy()
+    expect(screen.getByText('Draft ready.')).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
+  })
+
+  it('renders pasted-context affordances through the real center panel path', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-01T00:00:10Z'))
+
+    mockHook.mockReturnValue({
+      state: idleState({
+        runState: 'idle',
+        messages: [
+          {
+            id: 'm1',
+            role: 'user',
+            content: 'Pasted 205 lines\n\nspec text',
+            createdAt: '2026-03-01T00:00:00Z'
+          }
+        ]
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    expect(screen.getByText('Just now')).toBeTruthy()
+    expect(screen.getByText('Pasted 205 lines')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Dismiss message' })).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'Stopped' })).toBeTruthy()
+
+    vi.useRealTimers()
+  })
+
+  it('removes dismissed pasted-context messages from the rendered conversation list', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        runState: 'idle',
+        messages: [
+          {
+            id: 'm1',
+            role: 'user',
+            content: 'Pasted 205 lines\n\nspec text',
+            createdAt: '2026-03-01T00:00:00Z'
+          }
+        ]
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss message' }))
+
+    expect(screen.queryByText('spec text')).toBeNull()
+    expect(document.querySelector('[data-message-id="m1"]')).toBeNull()
+  })
+
   it('passes sessionId to useIpcSessionConversation', () => {
     mockHook.mockReturnValue({
       state: idleState(),

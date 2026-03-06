@@ -29,7 +29,9 @@ describe('MessageBubble', () => {
     )
 
     expect(screen.getByText('You')).toBeTruthy()
-    expect(screen.getByText('Please summarize the current plan.')).toBeTruthy()
+    const contentArticle = screen.getByText('Please summarize the current plan.').closest('article')
+    expect(contentArticle).toBeTruthy()
+    expect(contentArticle?.parentElement?.closest('article')).toBeNull()
   })
 
   it('renders assistant messages using markdown formatting', () => {
@@ -78,8 +80,36 @@ describe('MessageBubble', () => {
       />
     )
 
-    expect(screen.getByText('I would like to build the following product...')).toBeTruthy()
+    const contentArticle = screen.getByText('I would like to build the following product...').closest('article')
+    expect(contentArticle).toBeTruthy()
+    expect(contentArticle?.parentElement?.closest('article')).toBeNull()
     expect(screen.queryByText('Long content that should not be shown when collapsed.')).toBeNull()
+  })
+
+  it('surfaces timestamp, pasted-content footer, and dismiss affordance for pasted user messages', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-03-06T00:00:10.000Z'))
+
+    const onDismiss = vi.fn()
+
+    render(
+      <MessageBubble
+        message={{
+          id: 'user-paste',
+          role: 'user',
+          content: 'Pasted 205 lines\n\nspec text',
+          createdAt: '2026-03-06T00:00:00.000Z'
+        }}
+        onDismiss={onDismiss}
+      />
+    )
+
+    expect(screen.getByText('Just now')).toBeTruthy()
+    expect(screen.getByText('Pasted 205 lines')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss message' }))
+    expect(onDismiss).toHaveBeenCalledWith('user-paste')
+
+    vi.useRealTimers()
   })
 
   it('falls back to full message content when collapsed summary is blank', () => {

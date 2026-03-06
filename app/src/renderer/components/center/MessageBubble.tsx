@@ -1,8 +1,10 @@
 import { type ChatMessage } from '../../types/chat'
 import { type ConversationMessage } from '../../types/session-conversation'
+import { formatRelativeTime } from './format-relative-time'
 import { MessageActionRow } from './MessageActionRow'
-import { ConversationMessage as ConversationMessagePrimitive, toPrimitiveMessage } from './primitives'
 import { stripDecisionActionLines, type DecisionState, type InlineDecisionActionId, type InlineDecisionCard } from './message-decision-parser'
+import { getPastedContentFooter } from './pasted-content-utils'
+import { ConversationMessageCard, toPrimitiveMessage } from './primitives'
 
 type BubbleMessage = ChatMessage | ConversationMessage
 
@@ -13,6 +15,7 @@ type MessageBubbleProps = {
   decisionCard?: InlineDecisionCard
   decisionState?: DecisionState
   onDecisionAction?: (actionId: InlineDecisionActionId) => void
+  onDismiss?: (messageId: string) => void
 }
 
 export function MessageBubble({
@@ -21,7 +24,8 @@ export function MessageBubble({
   summary,
   decisionCard,
   decisionState = 'available',
-  onDecisionAction
+  onDecisionAction,
+  onDismiss
 }: MessageBubbleProps) {
   const primitiveMessage = toPrimitiveMessage(message)
   const messageWithSummary = summary
@@ -39,15 +43,26 @@ export function MessageBubble({
       }
     : messageWithSummary
   const isDecisionDisabled = decisionState === 'pending' || decisionState === 'resolved'
+  const timestampLabel =
+    'createdAt' in message && typeof message.createdAt === 'string'
+      ? formatRelativeTime(message.createdAt)
+      : undefined
+  const footerLabel =
+    primitiveMessage.role === 'user'
+      ? getPastedContentFooter(displayMessage.content)
+      : undefined
 
   return (
     <div className="flex flex-col gap-2">
-      <ConversationMessagePrimitive
+      <ConversationMessageCard
         message={displayMessage}
         variant={variant}
+        timestampLabel={timestampLabel}
+        footer={footerLabel ? <span>{footerLabel}</span> : undefined}
+        onDismiss={footerLabel ? () => onDismiss?.(primitiveMessage.id) : undefined}
       />
       {shouldRenderDecisionCard && decisionCard ? (
-        <div className="max-w-[85%] space-y-2 px-1">
+        <div className="w-full space-y-2 px-1">
           <p className="text-xs text-muted-foreground">{decisionCard.promptLabel}</p>
           <MessageActionRow
             actions={decisionCard.actions}

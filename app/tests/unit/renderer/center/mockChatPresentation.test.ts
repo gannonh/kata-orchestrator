@@ -3,6 +3,37 @@ import { describe, expect, it } from 'vitest'
 import { deriveMockChatPresentation } from '../../../../src/renderer/components/center/mockChatPresentation'
 
 describe('deriveMockChatPresentation', () => {
+  it('emits collapsed summary block for analyzing state', () => {
+    const presentation = deriveMockChatPresentation({
+      messages: [
+        {
+          id: 'u1',
+          role: 'user',
+          content:
+            'I would like to build the following product for which I have created an overview document.'
+        }
+      ],
+      isStreaming: true,
+      forceAnalyzing: true
+    })
+
+    expect(presentation.viewState).toBe('analyzing')
+    expect(
+      presentation.blocks.some((block) => block.type === 'collapsedSummary')
+    ).toBe(true)
+  })
+
+  it('adds context chip row when context-reading or analyzing', () => {
+    const presentation = deriveMockChatPresentation({
+      messages: [{ id: 'u1', role: 'user', content: '# Kata Cloud (Kata V2)' }],
+      isStreaming: true
+    })
+
+    expect(
+      presentation.blocks.some((block) => block.type === 'contextChipRow')
+    ).toBe(true)
+  })
+
   it('maps to contextReading when content includes context markers and streaming is active', () => {
     const result = deriveMockChatPresentation({
       messages: [{ id: 'm1', role: 'user', content: 'Read ## Context now for # Kata Cloud (Kata V2)' }],
@@ -11,7 +42,7 @@ describe('deriveMockChatPresentation', () => {
 
     expect(result.viewState).toBe('contextReading')
     expect(result.blocks.some((block) => block.type === 'contextChipRow')).toBe(true)
-    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'pending')).toBe(true)
+    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'thinking')).toBe(true)
   })
 
   it('documents the target chip labels that will be sourced from coordinator selectors', () => {
@@ -34,7 +65,7 @@ describe('deriveMockChatPresentation', () => {
     })
 
     expect(result.viewState).toBe('pastedContext')
-    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'idle')).toBe(true)
+    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'stopped')).toBe(true)
   })
 
   it('maps to analyzing and emits a collapsed summary block when forced', () => {
@@ -46,7 +77,7 @@ describe('deriveMockChatPresentation', () => {
 
     expect(result.viewState).toBe('analyzing')
     expect(result.blocks.some((block) => block.type === 'collapsedSummary')).toBe(true)
-    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'pending')).toBe(true)
+    expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'thinking')).toBe(true)
   })
 
   it('infers analyzing from user content while streaming and truncates collapsed summaries', () => {
