@@ -427,6 +427,72 @@ describe('createStateStore', () => {
     ])
   })
 
+  test('preserves valid run contextReferences while dropping invalid ones', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {
+          'run-1': {
+            id: 'run-1',
+            sessionId: 'session-1',
+            prompt: 'Prompt',
+            status: 'completed',
+            model: 'm',
+            provider: 'p',
+            createdAt: '2026-03-06T00:00:00.000Z',
+            messages: [],
+            contextReferences: [
+              {
+                id: 'ctx-1',
+                kind: 'resource',
+                label: 'Spec',
+                resourceId: 'resource-spec',
+                sortOrder: 0,
+                capturedAt: '2026-03-06T00:00:01.000Z'
+              },
+              { id: 'bad', kind: 'unknown' },
+              {
+                id: 'ctx-2',
+                kind: 'resource',
+                label: 'Plan',
+                resourceId: 'resource-plan',
+                sortOrder: 1,
+                capturedAt: '2026-03-06T00:00:02.000Z'
+              }
+            ]
+          }
+        },
+        agentRoster: {},
+        contextResources: {},
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.runs['run-1']?.contextReferences).toEqual([
+      {
+        id: 'ctx-1',
+        kind: 'resource',
+        label: 'Spec',
+        resourceId: 'resource-spec',
+        sortOrder: 0,
+        capturedAt: '2026-03-06T00:00:01.000Z'
+      },
+      {
+        id: 'ctx-2',
+        kind: 'resource',
+        label: 'Plan',
+        resourceId: 'resource-plan',
+        sortOrder: 1,
+        capturedAt: '2026-03-06T00:00:02.000Z'
+      }
+    ])
+  })
+
   test('drops non-object run contextReferences entries', () => {
     fs.writeFileSync(
       filePath,

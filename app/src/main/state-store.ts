@@ -302,11 +302,17 @@ function normalizeContextResources(value: unknown): AppState['contextResources']
 }
 
 function normalizeRunContextReferences(value: unknown): RunRecord['contextReferences'] {
-  if (!Array.isArray(value) || !value.every(isRunContextReferenceRecord)) {
+  if (!Array.isArray(value)) {
     return []
   }
 
-  return [...value]
+  return value.filter((item) => {
+    if (isRunContextReferenceRecord(item)) {
+      return true
+    }
+    console.warn('[StateStore] Dropping invalid run context reference:', item)
+    return false
+  })
 }
 
 function normalizeRunRecord(value: RunRecord & { contextReferences?: unknown }): RunRecord {
