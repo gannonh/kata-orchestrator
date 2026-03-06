@@ -583,6 +583,41 @@ describe('registerIpcHandlers', () => {
     ])
   })
 
+  it('session:create seeds the Spec context resource for the new session', async () => {
+    const existingSpace = {
+      id: 'space-1',
+      name: 'Existing',
+      repoUrl: 'https://github.com/user/repo',
+      rootPath: '/Users/me/repo',
+      branch: 'main',
+      orchestrationMode: 'team' as const,
+      createdAt: '2026-02-25T00:00:00.000Z',
+      status: 'active' as const
+    }
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      spaces: { [existingSpace.id]: existingSpace }
+    })
+
+    registerIpcHandlers(store)
+    const sessionCreate = getHandlersByChannel().get('session:create')!
+
+    const createdSession = await sessionCreate({}, { spaceId: existingSpace.id, label: 'Session 2' })
+    const savedState = store.save.mock.calls[0]?.[0] as AppState
+    const sessionResources = Object.values(savedState.contextResources)
+      .filter((entry) => entry.sessionId === (createdSession as { id: string }).id)
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+
+    expect(sessionResources).toEqual([
+      expect.objectContaining({
+        sessionId: (createdSession as { id: string }).id,
+        kind: 'spec',
+        label: 'Spec',
+        sortOrder: 0
+      })
+    ])
+  })
+
   it('session:create wraps save failures with a descriptive error code', async () => {
     const existingSpace = {
       id: 'space-1',
@@ -679,6 +714,49 @@ describe('registerIpcHandlers', () => {
     expect(mockRegistryList).toHaveBeenCalledWith('session-1')
     await expect(rosterList({}, { sessionId: 'missing' })).resolves.toEqual([])
     expect(mockRegistryList).toHaveBeenCalledWith('missing')
+  })
+
+  it('session-context-resources:list returns sorted records for one session', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      contextResources: {
+        'ctx-2': {
+          id: 'ctx-2',
+          sessionId: 'session-1',
+          kind: 'note',
+          label: 'Notes',
+          sortOrder: 0,
+          createdAt: '2026-03-06T00:00:02.000Z',
+          updatedAt: '2026-03-06T00:00:02.000Z'
+        },
+        'ctx-1': {
+          id: 'ctx-1',
+          sessionId: 'session-1',
+          kind: 'spec',
+          label: 'Spec',
+          sortOrder: 0,
+          createdAt: '2026-03-06T00:00:01.000Z',
+          updatedAt: '2026-03-06T00:00:01.000Z'
+        },
+        'ctx-3': {
+          id: 'ctx-3',
+          sessionId: 'session-2',
+          kind: 'manual',
+          label: 'Manual',
+          sortOrder: 0,
+          createdAt: '2026-03-06T00:00:00.000Z',
+          updatedAt: '2026-03-06T00:00:00.000Z'
+        }
+      }
+    })
+
+    registerIpcHandlers(store)
+    const handler = getHandlersByChannel().get('session-context-resources:list')!
+
+    await expect(handler({}, { sessionId: 'session-1' })).resolves.toEqual([
+      expect.objectContaining({ id: 'ctx-1' }),
+      expect.objectContaining({ id: 'ctx-2' })
+    ])
   })
 
   it('session:listBySpace returns sessions for the space sorted by newest first', async () => {
