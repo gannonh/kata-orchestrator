@@ -55,14 +55,12 @@ function summarizeContent(content: string): string {
   return `${compact.slice(0, 85).trimEnd()}...`
 }
 
-function inferViewState({ messages, isStreaming, forceAnalyzing = false }: DeriveMockChatPresentationInput): MockChatViewState {
+function inferViewState(reversedUserMessages: Array<ChatMessage | ConversationMessage>, isStreaming: boolean, forceAnalyzing: boolean): MockChatViewState {
   if (forceAnalyzing) {
     return 'analyzing'
   }
 
-  const userMessages = [...messages].reverse().filter((message) => message.role === 'user')
-
-  for (const message of userMessages) {
+  for (const message of reversedUserMessages) {
     const userContent = message.content
 
     if (/pasted\s+\d+\s+lines/i.test(userContent)) {
@@ -82,12 +80,13 @@ function inferViewState({ messages, isStreaming, forceAnalyzing = false }: Deriv
 }
 
 export function deriveMockChatPresentation(input: DeriveMockChatPresentationInput): MockChatPresentation {
-  const viewState = inferViewState(input)
+  const reversed = [...input.messages].reverse()
+  const reversedUsers = reversed.filter((message) => message.role === 'user')
+  const viewState = inferViewState(reversedUsers, input.isStreaming, input.forceAnalyzing ?? false)
   const statusVariant = toPrimitiveRunState(input.isStreaming ? 'pending' : 'idle')
-  const latestUser = [...input.messages].reverse().find((message) => message.role === 'user')
-  const latestAnalyzingUser = [...input.messages]
-    .reverse()
-    .find((message) => message.role === 'user' && ANALYZING_TRIGGER.test(message.content))
+  const latestUser = reversedUsers[0]
+  const latestAnalyzingUser = reversedUsers
+    .find((message) => ANALYZING_TRIGGER.test(message.content))
   const analyzingTarget =
     viewState === 'analyzing' ? (input.forceAnalyzing ? latestUser : latestAnalyzingUser ?? latestUser) : undefined
 
