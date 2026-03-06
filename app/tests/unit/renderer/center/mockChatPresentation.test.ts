@@ -45,6 +45,19 @@ describe('deriveMockChatPresentation', () => {
     expect(result.blocks.some((block) => block.type === 'statusBadge' && block.variant === 'thinking')).toBe(true)
   })
 
+  it('documents the target chip labels that will be sourced from coordinator selectors', () => {
+    const result = deriveMockChatPresentation({
+      messages: [{ id: 'u1', role: 'user', content: '# Kata Cloud\n## Context' }],
+      isStreaming: true
+    })
+
+    expect(result.blocks.find((block) => block.type === 'contextChipRow')).toEqual(
+      expect.objectContaining({
+        chips: ['# Kata Cloud (Kata V2)', '## Context...']
+      })
+    )
+  })
+
   it('maps to pastedContext and stopped when paste markers are present and streaming is false', () => {
     const result = deriveMockChatPresentation({
       messages: [{ id: 'u1', role: 'user', content: 'Pasted 205 lines\n\nspec text' }],

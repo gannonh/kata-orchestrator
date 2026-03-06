@@ -120,6 +120,7 @@ export function ChatPanel({
         onSend={submitPrompt}
         onRetry={retry}
         runState={state.runState}
+        disabled={!sessionId}
       />
     </div>
   )
