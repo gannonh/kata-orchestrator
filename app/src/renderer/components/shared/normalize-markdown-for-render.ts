@@ -1,7 +1,7 @@
 export type MarkdownRenderMode = 'settled' | 'streaming'
 
 type FenceInfo = {
-  containerPrefix: string
+  containerKey: string
   length: number
   prefix: string
   suffix: string
@@ -59,11 +59,16 @@ function getLineEnding(content: string): string {
   return match?.[0] ?? '\n'
 }
 
+function getContainerKey(markers: string[]): string {
+  return markers.join('|')
+}
+
 function getFenceInfo(line: string): FenceInfo | null {
   let whitespace = consumeLeadingWhitespace(line, 0)
   let index = whitespace.index
   let fenceIndent = whitespace.width
   let containerEnd = 0
+  const containerMarkers: string[] = []
 
   while (true) {
     if (line[index] === '>') {
@@ -73,6 +78,7 @@ function getFenceInfo(line: string): FenceInfo | null {
       }
 
       containerEnd = markerEnd
+      containerMarkers.push('>')
       whitespace = consumeLeadingWhitespace(line, markerEnd)
       index = whitespace.index
       fenceIndent = whitespace.width
@@ -85,6 +91,7 @@ function getFenceInfo(line: string): FenceInfo | null {
     }
 
     containerEnd = nextIndex
+    containerMarkers.push(line.slice(index, nextIndex).trimEnd())
     whitespace = consumeLeadingWhitespace(line, nextIndex)
     index = whitespace.index
     fenceIndent = whitespace.width
@@ -104,7 +111,7 @@ function getFenceInfo(line: string): FenceInfo | null {
   }
 
   return {
-    containerPrefix: line.slice(0, containerEnd),
+    containerKey: getContainerKey(containerMarkers),
     length: fenceEnd - index,
     prefix: line.slice(0, index),
     suffix: line.slice(fenceEnd)
@@ -134,7 +141,7 @@ export function normalizeMarkdownForRender(
     }
 
     if (
-      fence.containerPrefix === activeFence.containerPrefix &&
+      fence.containerKey === activeFence.containerKey &&
       fence.length >= activeFence.length &&
       /^[ \t]*$/.test(fence.suffix)
     ) {
@@ -143,7 +150,9 @@ export function normalizeMarkdownForRender(
   }
 
   if (activeFence !== null) {
-    return `${content}${lineEnding}${activeFence.prefix}${'`'.repeat(activeFence.length)}`
+    const separator = /(?:\r\n|\n|\r)$/.test(content) ? '' : lineEnding
+
+    return `${content}${separator}${activeFence.prefix}${'`'.repeat(activeFence.length)}`
   }
 
   return content

@@ -82,4 +82,18 @@ describe('normalizeMarkdownForRender', () => {
       ['```ts', 'const ready = true', '```'].join('\r\n')
     )
   })
+
+  it('treats structurally equivalent blockquote prefixes as the same container', () => {
+    const content = ['> ```ts', '> const ready = true', '>```'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(content)
+  })
+
+  it('does not double the trailing newline when appending a synthetic closer', () => {
+    const content = ['```ts', 'const ready = true', ''].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(
+      ['```ts', 'const ready = true', '```'].join('\n')
+    )
+  })
 })
