@@ -1,7 +1,7 @@
 import { type ChatMessage } from '../../types/chat'
 import { type ConversationMessage } from '../../types/session-conversation'
 import { MessageActionRow } from './MessageActionRow'
-import { ConversationMessage as ConversationMessagePrimitive, toPrimitiveMessage } from './primitives'
+import { ConversationMessageCard, toPrimitiveMessage } from './primitives'
 import { stripDecisionActionLines, type DecisionState, type InlineDecisionActionId, type InlineDecisionCard } from './message-decision-parser'
 
 type BubbleMessage = ChatMessage | ConversationMessage
@@ -42,7 +42,7 @@ export function MessageBubble({
 
   return (
     <div className="flex flex-col gap-2">
-      <ConversationMessagePrimitive
+      <ConversationMessageCard
         message={displayMessage}
         variant={variant}
       />

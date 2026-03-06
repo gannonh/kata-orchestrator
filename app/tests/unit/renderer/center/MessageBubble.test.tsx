@@ -18,7 +18,7 @@ describe('MessageBubble', () => {
   })
 
   it('renders user messages as plain text bubbles', () => {
-    render(
+    const { container } = render(
       <MessageBubble
         message={{
           id: 'user-1',
@@ -30,6 +30,8 @@ describe('MessageBubble', () => {
 
     expect(screen.getByText('You')).toBeTruthy()
     expect(screen.getByText('Please summarize the current plan.')).toBeTruthy()
+    expect(container.querySelectorAll('article')).toHaveLength(2)
+    expect(container.querySelector('article.rounded-xl.border.border-border\\/70.bg-card\\/70.p-3')).toBeTruthy()
   })
 
   it('renders assistant messages using markdown formatting', () => {
@@ -66,7 +68,7 @@ describe('MessageBubble', () => {
   })
 
   it('renders collapsed summary variant for analyzing mode', () => {
-    render(
+    const { container } = render(
       <MessageBubble
         message={{
           id: 'user-2',
@@ -80,6 +82,8 @@ describe('MessageBubble', () => {
 
     expect(screen.getByText('I would like to build the following product...')).toBeTruthy()
     expect(screen.queryByText('Long content that should not be shown when collapsed.')).toBeNull()
+    expect(container.querySelectorAll('article')).toHaveLength(2)
+    expect(container.querySelector('article.rounded-xl.border.border-border\\/70.bg-card\\/70.p-3')).toBeTruthy()
   })
 
   it('falls back to full message content when collapsed summary is blank', () => {
