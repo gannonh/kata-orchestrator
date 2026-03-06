@@ -1154,7 +1154,7 @@ describe('createStateStore', () => {
     expect(Object.keys(state.agentRoster)).toEqual(['valid'])
   })
 
-  test('loads valid specDocuments and drops malformed entries', () => {
+  test('loads valid file-derived spec projections and drops malformed entries', () => {
     fs.writeFileSync(
       filePath,
       JSON.stringify({
@@ -1163,29 +1163,21 @@ describe('createStateStore', () => {
         runs: {},
         agentRoster: {},
         specDocuments: {
-          's1:sess1': {
-            markdown: '# Spec',
+          'space-1:session-1': {
+            sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+            raw: '---\nstatus: drafting\nupdatedAt: 2026-03-06T19:33:00.000Z\nsourceRunId: run-1\n---\n\n## Goal\nShip it',
+            markdown: '## Goal\nShip it',
             updatedAt: '2026-03-03T00:00:00.000Z',
-            appliedRunId: 'run-1',
-            appliedAt: '2026-03-03T00:01:00.000Z'
+            frontmatter: {
+              status: 'drafting',
+              updatedAt: '2026-03-06T19:33:00.000Z',
+              sourceRunId: 'run-1'
+            },
+            diagnostics: [],
+            appliedRunId: 'stale-run-id'
           },
-          bad_markdown: {
-            markdown: 123,
-            updatedAt: '2026-03-03T00:00:00.000Z'
-          },
-          bad_updatedAt: {
-            markdown: '# Broken',
-            updatedAt: 123
-          },
-          bad_appliedAt: {
-            markdown: '# Broken',
-            updatedAt: '2026-03-03T00:00:00.000Z',
-            appliedAt: 123
-          },
-          bad_appliedRunId: {
-            markdown: '# Broken',
-            updatedAt: '2026-03-03T00:00:00.000Z',
-            appliedRunId: 123
+          bad: {
+            markdown: '# bad'
           },
           bad_non_object: 42
         },
@@ -1196,13 +1188,19 @@ describe('createStateStore', () => {
 
     const state = createStateStore(filePath).load()
 
-    expect(state.specDocuments).toEqual({
-      's1:sess1': {
-        markdown: '# Spec',
-        updatedAt: '2026-03-03T00:00:00.000Z',
-        appliedRunId: 'run-1',
-        appliedAt: '2026-03-03T00:01:00.000Z'
-      }
+    expect(Object.keys(state.specDocuments)).toEqual(['space-1:session-1'])
+    expect(state.specDocuments['space-1:session-1']).toEqual({
+      sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+      raw: '---\nstatus: drafting\nupdatedAt: 2026-03-06T19:33:00.000Z\nsourceRunId: run-1\n---\n\n## Goal\nShip it',
+      markdown: '## Goal\nShip it',
+      updatedAt: '2026-03-03T00:00:00.000Z',
+      frontmatter: {
+        status: 'drafting',
+        updatedAt: '2026-03-06T19:33:00.000Z',
+        sourceRunId: 'run-1'
+      },
+      diagnostics: [],
+      appliedRunId: 'run-1'
     })
   })
 
@@ -1216,20 +1214,48 @@ describe('createStateStore', () => {
         agentRoster: {},
         specDocuments: {
           '__proto__': {
+            sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+            raw: '---\nstatus: drafting\nupdatedAt: 2026-03-03T00:00:00.000Z\n---\n\n# Evil',
             markdown: '# Evil',
-            updatedAt: '2026-03-03T00:00:00.000Z'
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            frontmatter: {
+              status: 'drafting',
+              updatedAt: '2026-03-03T00:00:00.000Z'
+            },
+            diagnostics: []
           },
           constructor: {
+            sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+            raw: '---\nstatus: drafting\nupdatedAt: 2026-03-03T00:00:00.000Z\n---\n\n# Evil',
             markdown: '# Evil',
-            updatedAt: '2026-03-03T00:00:00.000Z'
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            frontmatter: {
+              status: 'drafting',
+              updatedAt: '2026-03-03T00:00:00.000Z'
+            },
+            diagnostics: []
           },
           prototype: {
+            sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+            raw: '---\nstatus: drafting\nupdatedAt: 2026-03-03T00:00:00.000Z\n---\n\n# Evil',
             markdown: '# Evil',
-            updatedAt: '2026-03-03T00:00:00.000Z'
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            frontmatter: {
+              status: 'drafting',
+              updatedAt: '2026-03-03T00:00:00.000Z'
+            },
+            diagnostics: []
           },
           'safe-key': {
+            sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+            raw: '---\nstatus: drafting\nupdatedAt: 2026-03-03T00:00:00.000Z\n---\n\n# Safe',
             markdown: '# Safe',
-            updatedAt: '2026-03-03T00:00:00.000Z'
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            frontmatter: {
+              status: 'drafting',
+              updatedAt: '2026-03-03T00:00:00.000Z'
+            },
+            diagnostics: []
           }
         },
         activeSpaceId: null,

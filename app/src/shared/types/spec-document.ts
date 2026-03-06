@@ -19,14 +19,15 @@ export type SpecArtifactDiagnostic = {
 }
 
 export type PersistedSpecDocument = {
+  sourcePath: string
+  raw: string
   markdown: string
+  frontmatter: SpecArtifactFrontmatter
+  diagnostics: SpecArtifactDiagnostic[]
   updatedAt: string
+  lastGoodMarkdown?: string
+  lastGoodFrontmatter?: SpecArtifactFrontmatter
   appliedRunId?: string
-  appliedAt?: string
-  sourcePath?: string
-  raw?: string
-  frontmatter?: SpecArtifactFrontmatter
-  diagnostics?: SpecArtifactDiagnostic[]
 }
 
 export function isPersistedSpecDocument(value: unknown): value is PersistedSpecDocument {
@@ -37,14 +38,16 @@ export function isPersistedSpecDocument(value: unknown): value is PersistedSpecD
   const candidate = value as Record<string, unknown>
 
   return (
+    typeof candidate.sourcePath === 'string' &&
+    typeof candidate.raw === 'string' &&
     typeof candidate.markdown === 'string' &&
+    isSpecArtifactFrontmatter(candidate.frontmatter) &&
+    isSpecArtifactDiagnosticList(candidate.diagnostics) &&
     typeof candidate.updatedAt === 'string' &&
     (candidate.appliedRunId === undefined || typeof candidate.appliedRunId === 'string') &&
-    (candidate.appliedAt === undefined || typeof candidate.appliedAt === 'string') &&
-    (candidate.sourcePath === undefined || typeof candidate.sourcePath === 'string') &&
-    (candidate.raw === undefined || typeof candidate.raw === 'string') &&
-    (candidate.frontmatter === undefined || isSpecArtifactFrontmatter(candidate.frontmatter)) &&
-    (candidate.diagnostics === undefined || isSpecArtifactDiagnosticList(candidate.diagnostics))
+    (candidate.lastGoodMarkdown === undefined || typeof candidate.lastGoodMarkdown === 'string') &&
+    (candidate.lastGoodFrontmatter === undefined ||
+      isSpecArtifactFrontmatter(candidate.lastGoodFrontmatter))
   )
 }
 

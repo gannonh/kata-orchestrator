@@ -350,7 +350,10 @@ function normalizeSpecDocuments(value: unknown): AppState['specDocuments'] {
       continue
     }
     if (isPersistedSpecDocument(record)) {
-      normalized[key] = record
+      normalized[key] = {
+        ...record,
+        appliedRunId: record.frontmatter.sourceRunId
+      }
     } else {
       console.warn('[StateStore] Dropping invalid spec document entry:', key)
     }
