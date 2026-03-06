@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useIpcSessionConversation } from '../../hooks/useIpcSessionConversation'
 import type { LatestRunDraft } from '../../types/spec-document'
@@ -30,11 +30,20 @@ export function ChatPanel({
   onRegisterScrollToMessage
 }: ChatPanelProps) {
   const { state, submitPrompt, retry } = useIpcSessionConversation(sessionId, spaceId ?? null)
+  const [dismissedMessageIds, setDismissedMessageIds] = useState<Set<string>>(() => new Set())
   const primitiveRunState = toPrimitiveRunState(state.runState)
   const coordinatorStatusBadgeState = toCoordinatorStatusBadgeState({
     conversationRunState: state.runState
   })
-  const conversationEntries = useMemo(() => buildConversationEntries(state.messages), [state.messages])
+  const visibleMessages = useMemo(
+    () => state.messages.filter((message) => !dismissedMessageIds.has(message.id)),
+    [dismissedMessageIds, state.messages]
+  )
+  const conversationEntries = useMemo(() => buildConversationEntries(visibleMessages), [visibleMessages])
+
+  useEffect(() => {
+    setDismissedMessageIds(new Set())
+  }, [sessionId])
 
   useEffect(() => {
     onLatestDraftChange?.(state.latestDraft)
@@ -51,20 +60,20 @@ export function ChatPanel({
   const decisionCardMap = useMemo(
     () => {
       const map = new Map<string, { card: InlineDecisionCard | undefined; resolved: boolean }>()
-      for (const message of state.messages) {
+      for (const message of visibleMessages) {
         const card = extractInlineDecisionCard(message)
-        const resolved = card ? isDecisionResolved(state.messages, card) : false
+        const resolved = card ? isDecisionResolved(visibleMessages, card) : false
         map.set(message.id, { card, resolved })
       }
       return map
     },
-    [state.messages]
+    [visibleMessages]
   )
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <MessageList onRegisterScrollToMessage={onRegisterScrollToMessage}>
-        {state.messages.map((message) => {
+        {visibleMessages.map((message) => {
           const { card: decisionCard, resolved } = decisionCardMap.get(message.id) ?? { card: undefined, resolved: false }
           const decisionState: DecisionState = resolved
             ? 'resolved'
@@ -91,6 +100,13 @@ export function ChatPanel({
                   if (selectedAction) {
                     submitPrompt(selectedAction.followUpPrompt)
                   }
+                }}
+                onDismiss={(messageId) => {
+                  setDismissedMessageIds((current) => {
+                    const next = new Set(current)
+                    next.add(messageId)
+                    return next
+                  })
                 }}
               />
             </div>

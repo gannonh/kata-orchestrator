@@ -13,6 +13,7 @@ type MessageBubbleProps = {
   decisionCard?: InlineDecisionCard
   decisionState?: DecisionState
   onDecisionAction?: (actionId: InlineDecisionActionId) => void
+  onDismiss?: (messageId: string) => void
 }
 
 function getPastedContentFooter(content: string): string | undefined {
@@ -31,7 +32,8 @@ export function MessageBubble({
   summary,
   decisionCard,
   decisionState = 'available',
-  onDecisionAction
+  onDecisionAction,
+  onDismiss
 }: MessageBubbleProps) {
   const primitiveMessage = toPrimitiveMessage(message)
   const messageWithSummary = summary
@@ -65,10 +67,10 @@ export function MessageBubble({
         variant={variant}
         timestampLabel={timestampLabel}
         footer={footerLabel ? <span>{footerLabel}</span> : undefined}
-        onDismiss={footerLabel ? () => undefined : undefined}
+        onDismiss={footerLabel ? () => onDismiss?.(primitiveMessage.id) : undefined}
       />
       {shouldRenderDecisionCard && decisionCard ? (
-        <div className="max-w-[85%] space-y-2 px-1">
+        <div className="w-full space-y-2 px-1">
           <p className="text-xs text-muted-foreground">{decisionCard.promptLabel}</p>
           <MessageActionRow
             actions={decisionCard.actions}

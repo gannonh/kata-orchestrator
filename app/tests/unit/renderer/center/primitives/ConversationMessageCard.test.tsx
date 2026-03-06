@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../../src/renderer/components/center/primitives/ConversationMessage', () => ({
   ConversationMessage: ({
@@ -21,6 +21,10 @@ vi.mock('../../../../../src/renderer/components/center/primitives/ConversationMe
 import { ConversationMessageCard } from '../../../../../src/renderer/components/center/primitives/ConversationMessageCard'
 
 describe('ConversationMessageCard', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
   it('renders timestamp, body, and footer content', () => {
     render(
       <ConversationMessageCard
@@ -33,6 +37,32 @@ describe('ConversationMessageCard', () => {
     expect(screen.getByText('Just now')).toBeTruthy()
     expect(screen.getByText('Ship coordinator UI')).toBeTruthy()
     expect(screen.getByText('Pasted 205 lines')).toBeTruthy()
+  })
+
+  it('renders user messages inside the visible outer card container', () => {
+    render(
+      <ConversationMessageCard
+        message={{ id: 'u1', role: 'user', content: 'Ship coordinator UI' }}
+      />
+    )
+
+    const article = screen.getByText('Ship coordinator UI').closest('article') as HTMLElement
+    expect(article.className).toContain('rounded-xl')
+    expect(article.className).toContain('border')
+    expect(article.className).toContain('bg-card/70')
+  })
+
+  it('renders agent messages without a visible outer card container', () => {
+    render(
+      <ConversationMessageCard
+        message={{ id: 'a1', role: 'agent', content: 'Ship coordinator UI' }}
+      />
+    )
+
+    const article = screen.getByText('Ship coordinator UI').closest('article') as HTMLElement
+    expect(article.className).not.toContain('rounded-xl')
+    expect(article.className).toContain('border-0')
+    expect(article.className).not.toContain('bg-card/70')
   })
 
   it('renders dismiss button when onDismiss is supplied', () => {

@@ -18,17 +18,14 @@ export function ConversationMessage({
   const content = isCollapsed ? message.summary ?? '' : message.content
 
   return (
-    <div className={cn('flex flex-col gap-2', isUser ? 'items-end' : 'items-start')}>
+    <div className="flex w-full flex-col items-start gap-2">
       <span className="text-xs uppercase tracking-wide text-muted-foreground">
         {isUser ? 'You' : agentLabel}
       </span>
       <div
         className={cn(
-          'max-w-[85%] rounded-lg px-4 py-3',
-          isUser
-            ? 'bg-primary/10 text-foreground'
-            : 'bg-muted/30 text-muted-foreground',
-          isCollapsed ? 'border border-dashed border-border/60' : ''
+          'w-full text-sm leading-6 text-foreground',
+          isCollapsed ? 'opacity-80' : ''
         )}
       >
         {isUser ? (

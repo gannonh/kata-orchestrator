@@ -122,6 +122,31 @@ describe('ChatPanel', () => {
     expect(screen.getByRole('status', { name: 'Stopped' })).toBeTruthy()
   })
 
+  it('removes dismissed pasted-context messages from the rendered conversation list', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        runState: 'idle',
+        messages: [
+          {
+            id: 'm1',
+            role: 'user',
+            content: 'Pasted 205 lines\n\nspec text',
+            createdAt: '2026-03-01T00:00:00Z'
+          }
+        ]
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss message' }))
+
+    expect(screen.queryByText('spec text')).toBeNull()
+    expect(document.querySelector('[data-message-id="m1"]')).toBeNull()
+  })
+
   it('passes sessionId to useIpcSessionConversation', () => {
     mockHook.mockReturnValue({
       state: idleState(),

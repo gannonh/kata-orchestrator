@@ -87,6 +87,8 @@ describe('MessageBubble', () => {
   })
 
   it('surfaces timestamp, pasted-content footer, and dismiss affordance for pasted user messages', () => {
+    const onDismiss = vi.fn()
+
     render(
       <MessageBubble
         message={{
@@ -95,12 +97,14 @@ describe('MessageBubble', () => {
           content: 'Pasted 205 lines\n\nspec text',
           createdAt: '2026-03-06T00:00:00.000Z'
         }}
+        onDismiss={onDismiss}
       />
     )
 
     expect(screen.getByText('Just now')).toBeTruthy()
     expect(screen.getByText('Pasted 205 lines')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss message' }))
+    expect(onDismiss).toHaveBeenCalledWith('user-paste')
   })
 
   it('falls back to full message content when collapsed summary is blank', () => {

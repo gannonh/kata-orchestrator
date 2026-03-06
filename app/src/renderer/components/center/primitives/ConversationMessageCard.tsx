@@ -22,10 +22,18 @@ export function ConversationMessageCard({
   metadata,
   footer
 }: ConversationMessageCardProps) {
+  const isUser = message.role === 'user'
+
   return (
-    <article className="rounded-xl border border-border/70 bg-card/70 p-3">
+    <article
+      className={
+        isUser
+          ? 'w-full rounded-xl border border-border/70 bg-card/70 px-4 py-3'
+          : 'w-full border-0 bg-transparent px-0 py-1'
+      }
+    >
       <div className="flex items-start justify-between gap-3">
-        <div className="grid gap-2">
+        <div className="grid min-w-0 flex-1 gap-2">
           {timestampLabel ? (
             <p className="text-xs text-muted-foreground">{timestampLabel}</p>
           ) : null}
@@ -44,6 +52,7 @@ export function ConversationMessageCard({
             type="button"
             aria-label="Dismiss message"
             onClick={onDismiss}
+            className="shrink-0 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             x
           </button>
