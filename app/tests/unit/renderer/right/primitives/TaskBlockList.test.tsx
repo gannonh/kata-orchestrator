@@ -4,6 +4,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { TaskBlockList } from '../../../../../src/renderer/components/right/primitives/TaskBlockList'
 
 describe('TaskBlockList', () => {
+  it('renders empty-state message when tasks array is empty', () => {
+    render(<TaskBlockList tasks={[]} />)
+
+    expect(screen.getByText('No tasks yet.')).toBeTruthy()
+    expect(screen.queryByRole('list')).toBeNull()
+  })
+
   it('renders structured tasks with status badges', () => {
     render(
       <TaskBlockList

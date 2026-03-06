@@ -45,6 +45,10 @@ const taskStatusConfig: Record<TaskBlockDisplayStatus, StatusConfig> = {
 }
 
 export function TaskBlockList({ tasks, onToggleTask, mode = 'interactive' }: TaskBlockListProps) {
+  if (tasks.length === 0) {
+    return <p className="text-sm text-muted-foreground">No tasks yet.</p>
+  }
+
   return (
     <ul className="grid gap-2">
       {tasks.map((task) => {

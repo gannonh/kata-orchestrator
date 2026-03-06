@@ -18,6 +18,8 @@ describe('VerificationTaskBlockSummary', () => {
     expect(screen.getByText('Wave 1 Verification')).toBeTruthy()
     expect(screen.getByText('Run tests')).toBeTruthy()
     expect(screen.getByText('Complete')).toBeTruthy()
-    expect(screen.queryByRole('checkbox', { name: 'Run tests' })).toBeTruthy()
+    const checkbox = screen.getByRole('checkbox', { name: 'Run tests' }) as HTMLInputElement
+    expect(checkbox).toBeTruthy()
+    expect(checkbox.disabled).toBe(true)
   })
 })
