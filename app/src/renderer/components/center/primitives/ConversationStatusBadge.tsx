@@ -1,5 +1,4 @@
-import { toCoordinatorStatusBadgeState } from './adapters'
-import type { CoordinatorStatusBadgeState, PrimitiveRunState } from './types'
+import type { CoordinatorStatusBadgeState } from './types'
 
 const STATUS_MAP = {
   ready: { label: 'Ready', dotClass: 'bg-muted-foreground' },
@@ -10,17 +9,11 @@ const STATUS_MAP = {
 } as const
 
 type ConversationStatusBadgeProps = {
-  state?: CoordinatorStatusBadgeState
-  runState?: PrimitiveRunState
+  state: CoordinatorStatusBadgeState
 }
 
-export function ConversationStatusBadge({
-  state,
-  runState
-}: ConversationStatusBadgeProps) {
-  const resolvedState =
-    state ?? toCoordinatorStatusBadgeState({ conversationRunState: runState })
-  const status = STATUS_MAP[resolvedState]
+export function ConversationStatusBadge({ state }: ConversationStatusBadgeProps) {
+  const status = STATUS_MAP[state]
 
   return (
     <div
