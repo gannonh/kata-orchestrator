@@ -5,16 +5,17 @@ import { ConversationMessage } from '../../../../../src/renderer/components/cent
 
 describe('ConversationMessage', () => {
   it('renders user role as plain text with You label', () => {
-    const { container } = render(
+    render(
       <ConversationMessage
         message={{ id: 'u1', role: 'user', content: 'Ship slice A' }}
       />
     )
 
     expect(screen.getByText('You')).toBeTruthy()
-    expect(screen.getByText('Ship slice A')).toBeTruthy()
-    expect(container.querySelectorAll('article')).toHaveLength(1)
-    expect(container.querySelector('article.rounded-xl.border.border-border\\/70.bg-card\\/70.p-3')).toBeNull()
+    const contentArticle = screen.getByText('Ship slice A').closest('article')
+
+    expect(contentArticle).toBeTruthy()
+    expect(contentArticle?.parentElement?.closest('article')).toBeNull()
   })
 
   it('renders agent role via markdown with Kata label', () => {
