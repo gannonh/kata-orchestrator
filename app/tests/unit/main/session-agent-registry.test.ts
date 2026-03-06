@@ -20,6 +20,65 @@ describe('createSessionAgentRegistry', () => {
     expect(Object.values(state.agentRoster).filter((agent) => agent.sessionId === 'session-1')).toHaveLength(2)
   })
 
+  it('list() returns only agents for the requested session', () => {
+    const state = createDefaultAppState()
+    const registry = createSessionAgentRegistry(
+      () => state,
+      (next) => Object.assign(state, next)
+    )
+
+    registry.upsert({
+      id: 'agent-s1',
+      sessionId: 'session-1',
+      name: 'S1',
+      role: 'Worker',
+      kind: 'specialist',
+      status: 'idle',
+      avatarColor: '#111111',
+      sortOrder: 0,
+      createdAt: '2026-03-05T00:00:00.000Z',
+      updatedAt: '2026-03-05T00:00:00.000Z'
+    })
+    registry.upsert({
+      id: 'agent-s2',
+      sessionId: 'session-2',
+      name: 'S2',
+      role: 'Worker',
+      kind: 'specialist',
+      status: 'idle',
+      avatarColor: '#222222',
+      sortOrder: 0,
+      createdAt: '2026-03-05T00:00:00.000Z',
+      updatedAt: '2026-03-05T00:00:00.000Z'
+    })
+
+    const s1Agents = registry.list('session-1')
+    expect(s1Agents).toHaveLength(1)
+    expect(s1Agents[0].id).toBe('agent-s1')
+
+    const s2Agents = registry.list('session-2')
+    expect(s2Agents).toHaveLength(1)
+    expect(s2Agents[0].id).toBe('agent-s2')
+  })
+
+  it('seeding one session does not affect another', () => {
+    const state = createDefaultAppState()
+    const registry = createSessionAgentRegistry(
+      () => state,
+      (next) => Object.assign(state, next)
+    )
+
+    registry.seedBaselineAgents('session-1', '2026-03-05T00:00:00.000Z')
+    registry.seedBaselineAgents('session-2', '2026-03-05T00:00:01.000Z')
+
+    const s1Agents = registry.list('session-1')
+    const s2Agents = registry.list('session-2')
+    expect(s1Agents).toHaveLength(2)
+    expect(s2Agents).toHaveLength(2)
+    expect(s1Agents.map((a) => a.id)).not.toEqual(s2Agents.map((a) => a.id))
+    expect(Object.keys(state.agentRoster)).toHaveLength(4)
+  })
+
   it('transitions queued -> delegating -> running -> completed', () => {
     const state = createDefaultAppState()
     const registry = createSessionAgentRegistry(

@@ -196,9 +196,14 @@ function normalizeAgentRoster(value: unknown): AppState['agentRoster'] {
     return {}
   }
 
-  const normalized: AppState['agentRoster'] = {}
+  const normalized = Object.create(null) as AppState['agentRoster']
 
   for (const [key, record] of Object.entries(value)) {
+    if (isUnsafeRecordKey(key)) {
+      console.warn('[StateStore] Dropping unsafe agent roster key:', key)
+      continue
+    }
+
     if (!isRecord(record) || record.id !== key) {
       console.warn('[StateStore] Dropping invalid agent roster entry:', key)
       continue
