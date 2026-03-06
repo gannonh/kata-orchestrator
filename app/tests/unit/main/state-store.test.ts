@@ -44,6 +44,7 @@ describe('createStateStore', () => {
       runs: {},
       agentRoster: {},
       specDocuments: {},
+      contextResources: {},
       activeSpaceId: 's1',
       activeSessionId: null
     }
@@ -302,9 +303,62 @@ describe('createStateStore', () => {
       runs: {},
       agentRoster: {},
       specDocuments: {},
+      contextResources: {},
       activeSpaceId: null,
       activeSessionId: null
     })
+  })
+
+  test('loads legacy state without contextResources', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {},
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.contextResources).toEqual({})
+  })
+
+  test('drops malformed contextResources and malformed run contextReferences', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {
+          'run-1': {
+            id: 'run-1',
+            sessionId: 'session-1',
+            prompt: 'Prompt',
+            status: 'completed',
+            model: 'm',
+            provider: 'p',
+            createdAt: '2026-03-06T00:00:00.000Z',
+            messages: [],
+            contextReferences: [{ id: 'bad', kind: 'unknown' }]
+          }
+        },
+        agentRoster: {},
+        contextResources: {
+          bad: { id: 'bad', sessionId: 123 }
+        },
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.contextResources).toEqual({})
+    expect(state.runs['run-1']?.contextReferences).toEqual([])
   })
 
   test('loads legacy state and defaults agentRoster to {} without wiping valid data', () => {
@@ -490,6 +544,7 @@ describe('createStateStore', () => {
       runs: {},
       agentRoster: {},
       specDocuments: {},
+      contextResources: {},
       activeSpaceId: null,
       activeSessionId: null
     })
@@ -1236,6 +1291,7 @@ describe('createStateStore', () => {
       runs: {},
       agentRoster: {},
       specDocuments: {},
+      contextResources: {},
       activeSpaceId: 's1',
       activeSessionId: 'sess1'
     }
