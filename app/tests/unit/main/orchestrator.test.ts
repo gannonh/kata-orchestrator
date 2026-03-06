@@ -52,6 +52,7 @@ describe('Orchestrator', () => {
     expect(run.status).toBe('queued')
     expect(run.sessionId).toBe('s-1')
     expect(run.prompt).toBe('Plan phase 2')
+    expect(run.contextReferences).toEqual([])
     expect(run.messages).toEqual([
       expect.objectContaining({ role: 'user', content: 'Plan phase 2' })
     ])
@@ -150,6 +151,35 @@ describe('Orchestrator', () => {
       content: '## Goal\nPersist draft'
     })
     expect(state.runs[run.id].draftAppliedAt).toBe('2026-03-01T00:02:00.000Z')
+  })
+
+  it('replaceRunContextReferences replaces run context references for an existing run', async () => {
+    const { createRun, replaceRunContextReferences } = await import('../../../src/main/orchestrator')
+
+    const run = createRun(store, {
+      sessionId: 's-1',
+      prompt: 'Prompt',
+      model: 'm',
+      provider: 'p'
+    })
+
+    replaceRunContextReferences(store, run.id, [
+      {
+        id: 'ctx-1',
+        kind: 'resource',
+        label: 'Spec',
+        resourceId: 'resource-spec',
+        sortOrder: 0,
+        capturedAt: '2026-03-06T00:00:01.000Z'
+      }
+    ])
+
+    expect(state.runs[run.id]?.contextReferences).toHaveLength(1)
+    expect(state.runs[run.id]?.contextReferences?.[0]).toMatchObject({
+      id: 'ctx-1',
+      kind: 'resource',
+      label: 'Spec'
+    })
   })
 
   it('updateRunStatus is a no-op for nonexistent runId', async () => {

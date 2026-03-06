@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type { StateStore } from './state-store'
-import type { RunRecord, RunStatus, PersistedMessage } from '../shared/types/run'
+import type {
+  PersistedMessage,
+  RunContextReferenceRecord,
+  RunRecord,
+  RunStatus
+} from '../shared/types/run'
 import type { LatestRunDraft } from '../shared/types/spec-document'
 
 const VALID_TRANSITIONS: Record<RunStatus, RunStatus[]> = {
@@ -31,6 +36,7 @@ export function createRun(store: StateStore, input: CreateRunInput): RunRecord {
     model: input.model,
     provider: input.provider,
     createdAt: now,
+    contextReferences: [],
     messages: [
       {
         id: `user-${randomUUID().slice(0, 8)}`,
@@ -129,6 +135,27 @@ export function setRunDraft(store: StateStore, runId: string, draft: LatestRunDr
     runs: {
       ...state.runs,
       [runId]: { ...run, draft }
+    }
+  })
+}
+
+export function replaceRunContextReferences(
+  store: StateStore,
+  runId: string,
+  references: RunContextReferenceRecord[]
+): void {
+  const state = store.load()
+  const run = state.runs[runId]
+  if (!run) {
+    console.error(`[Orchestrator] Cannot set context references for unknown run: ${runId}`)
+    return
+  }
+
+  store.save({
+    ...state,
+    runs: {
+      ...state.runs,
+      [runId]: { ...run, contextReferences: [...references] }
     }
   })
 }
