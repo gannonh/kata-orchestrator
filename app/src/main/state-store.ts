@@ -102,11 +102,8 @@ function isRunRecord(value: unknown): boolean {
 }
 
 function isSessionAgentRecord(value: unknown): value is SessionAgentRecord {
-  if (!isRecord(value)) {
-    return false
-  }
-
   return (
+    isRecord(value) &&
     typeof value.id === 'string' &&
     typeof value.sessionId === 'string' &&
     typeof value.name === 'string' &&
@@ -120,9 +117,28 @@ function isSessionAgentRecord(value: unknown): value is SessionAgentRecord {
     (value.currentTask === undefined || typeof value.currentTask === 'string') &&
     typeof value.sortOrder === 'number' &&
     Number.isFinite(value.sortOrder) &&
+    (value.activeRunId === undefined || typeof value.activeRunId === 'string') &&
+    (value.waveId === undefined || typeof value.waveId === 'string') &&
+    (value.groupLabel === undefined || typeof value.groupLabel === 'string') &&
+    (value.lastActivityAt === undefined || typeof value.lastActivityAt === 'string') &&
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string'
   )
+}
+
+function normalizeSessionAgentStatus(value: unknown): SessionAgentRecord['status'] | null {
+  if (value === 'complete') {
+    return 'completed'
+  }
+
+  if (
+    typeof value === 'string' &&
+    SESSION_AGENT_STATUSES.includes(value as SessionAgentRecord['status'])
+  ) {
+    return value as SessionAgentRecord['status']
+  }
+
+  return null
 }
 
 function isStringOrNull(value: unknown): value is string | null {
@@ -180,11 +196,32 @@ function normalizeAgentRoster(value: unknown): AppState['agentRoster'] {
     return {}
   }
 
-  const normalized: AppState['agentRoster'] = {}
+  const normalized = Object.create(null) as AppState['agentRoster']
 
   for (const [key, record] of Object.entries(value)) {
-    if (isSessionAgentRecord(record) && record.id === key) {
-      normalized[key] = record
+    if (isUnsafeRecordKey(key)) {
+      console.warn('[StateStore] Dropping unsafe agent roster key:', key)
+      continue
+    }
+
+    if (!isRecord(record) || record.id !== key) {
+      console.warn('[StateStore] Dropping invalid agent roster entry:', key)
+      continue
+    }
+
+    const status = normalizeSessionAgentStatus(record.status)
+    if (status === null) {
+      console.warn('[StateStore] Dropping invalid agent roster entry:', key)
+      continue
+    }
+
+    const candidate: unknown = {
+      ...record,
+      status
+    }
+
+    if (isSessionAgentRecord(candidate)) {
+      normalized[key] = candidate
     } else {
       console.warn('[StateStore] Dropping invalid agent roster entry:', key)
     }

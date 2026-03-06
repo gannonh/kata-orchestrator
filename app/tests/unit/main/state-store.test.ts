@@ -554,6 +554,173 @@ describe('createStateStore', () => {
     })
   })
 
+  test('normalizes legacy agent status complete to completed', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {
+          a1: {
+            id: 'a1',
+            sessionId: 's1',
+            name: 'Legacy Agent',
+            role: 'legacy',
+            kind: 'specialist',
+            status: 'complete',
+            avatarColor: '#123456',
+            sortOrder: 0,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          }
+        },
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.agentRoster.a1?.status).toBe('completed')
+  })
+
+  test('keeps extended agent metadata fields when valid', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {
+          a1: {
+            id: 'a1',
+            sessionId: 's1',
+            name: 'Wave Agent',
+            role: 'Handles wave work',
+            kind: 'specialist',
+            status: 'queued',
+            avatarColor: '#123456',
+            sortOrder: 1,
+            activeRunId: 'run-1',
+            waveId: 'wave-1',
+            groupLabel: 'Wave 1',
+            lastActivityAt: '2026-03-05T00:00:00.000Z',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          }
+        },
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.agentRoster.a1).toMatchObject({
+      activeRunId: 'run-1',
+      waveId: 'wave-1',
+      groupLabel: 'Wave 1',
+      lastActivityAt: '2026-03-05T00:00:00.000Z'
+    })
+  })
+
+  test('drops agent roster entries when extended metadata fields are invalid', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {
+          valid: {
+            id: 'valid',
+            sessionId: 's1',
+            name: 'Valid Agent',
+            role: 'Valid role',
+            kind: 'specialist',
+            status: 'queued',
+            avatarColor: '#123456',
+            sortOrder: 1,
+            activeRunId: 'run-1',
+            waveId: 'wave-1',
+            groupLabel: 'Wave 1',
+            lastActivityAt: '2026-03-05T00:00:00.000Z',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          },
+          invalid: {
+            id: 'invalid',
+            sessionId: 's1',
+            name: 'Invalid Agent',
+            role: 'Invalid role',
+            kind: 'specialist',
+            status: 'queued',
+            avatarColor: '#123456',
+            sortOrder: 2,
+            activeRunId: 42,
+            waveId: 'wave-2',
+            groupLabel: 'Wave 2',
+            lastActivityAt: '2026-03-05T00:00:00.000Z',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          }
+        },
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.agentRoster.valid).toBeDefined()
+    expect(state.agentRoster.invalid).toBeUndefined()
+  })
+
+  test('drops agent roster entries when status is unknown', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {
+          valid: {
+            id: 'valid',
+            sessionId: 's1',
+            name: 'Valid Agent',
+            role: 'Valid role',
+            kind: 'specialist',
+            status: 'running',
+            avatarColor: '#123456',
+            sortOrder: 1,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          },
+          invalid: {
+            id: 'invalid',
+            sessionId: 's1',
+            name: 'Invalid Agent',
+            role: 'Invalid role',
+            kind: 'specialist',
+            status: 'mystery',
+            avatarColor: '#123456',
+            sortOrder: 2,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          }
+        },
+        specDocuments: {},
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+    expect(state.agentRoster.valid).toBeDefined()
+    expect(state.agentRoster.invalid).toBeUndefined()
+  })
+
   test('drops non-object agent roster entries', () => {
     fs.writeFileSync(
       filePath,
@@ -653,6 +820,61 @@ describe('createStateStore', () => {
         updatedAt: '2026-01-01T00:01:00Z'
       }
     })
+  })
+
+  test('drops agent roster entries with unsafe prototype-pollution keys', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {
+          valid: {
+            id: 'valid',
+            sessionId: 'sess1',
+            name: 'Worker',
+            role: 'Does work',
+            kind: 'specialist',
+            status: 'idle',
+            avatarColor: '#112233',
+            sortOrder: 0,
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z'
+          },
+          __proto__: {
+            id: '__proto__',
+            sessionId: 'sess1',
+            name: 'Evil',
+            role: 'Pollution',
+            kind: 'specialist',
+            status: 'idle',
+            avatarColor: '#000000',
+            sortOrder: 1,
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z'
+          },
+          constructor: {
+            id: 'constructor',
+            sessionId: 'sess1',
+            name: 'Evil',
+            role: 'Pollution',
+            kind: 'specialist',
+            status: 'idle',
+            avatarColor: '#000000',
+            sortOrder: 2,
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z'
+          }
+        },
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const state = createStateStore(filePath).load()
+
+    expect(Object.keys(state.agentRoster)).toEqual(['valid'])
   })
 
   test('loads valid specDocuments and drops malformed entries', () => {
