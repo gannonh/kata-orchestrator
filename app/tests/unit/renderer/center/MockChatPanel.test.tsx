@@ -37,6 +37,19 @@ describe('MockChatPanel', () => {
     expect(screen.getByText('Ship slice A')).toBeTruthy()
   })
 
+  it('renders pasted-context affordances for user messages', () => {
+    render(<MockChatPanel />)
+
+    fireEvent.change(screen.getByLabelText('Message input'), {
+      target: { value: 'Pasted 205 lines\n\nspec text' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(screen.getByText('Just now')).toBeTruthy()
+    expect(screen.getByText('Pasted 205 lines')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Dismiss message' })).toBeNull()
+  })
+
   it('renders analyzing preview context chips during pending runs', () => {
     render(<MockChatPanel />)
 
@@ -48,6 +61,21 @@ describe('MockChatPanel', () => {
     expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
     expect(screen.getByText('# Kata Cloud (Kata V2)')).toBeTruthy()
     expect(screen.getByText('## Context...')).toBeTruthy()
+  })
+
+  it('renders collapsed analyzing summary and a thinking badge', () => {
+    render(<MockChatPanel forceAnalyzing />)
+
+    fireEvent.change(screen.getByLabelText('Message input'), {
+      target: {
+        value:
+          'I would like to build the following product for which I have created an overview document.'
+      }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
+    expect(screen.getByText('Pasted content text')).toBeTruthy()
   })
 
   it('renders the deterministic agent response after the pending run completes', () => {

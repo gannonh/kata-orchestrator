@@ -22,7 +22,7 @@ describe('RunStatusBadge', () => {
     expect(statusRegion.textContent).toContain(label)
   })
 
-  it('uses motion-safe pulse styling for the pending dot', () => {
+  it('uses motion-safe pulse styling for the thinking dot', () => {
     const { container } = render(<RunStatusBadge runState="pending" />)
 
     const dot = container.querySelector('[aria-hidden="true"]')
