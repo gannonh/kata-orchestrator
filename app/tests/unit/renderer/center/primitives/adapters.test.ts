@@ -53,20 +53,23 @@ describe('center primitives adapters', () => {
     }
   )
 
-  it('maps active roster lifecycle to running', () => {
-    const agent: SessionAgentRecord = {
-      id: 'agent-1',
-      sessionId: 'session-1',
-      name: 'Coordinator',
-      role: 'Coordinator',
-      kind: 'coordinator',
-      status: 'running',
-      avatarColor: '#60d394',
-      sortOrder: 0,
-      createdAt: '2026-03-06T00:00:00.000Z',
-      updatedAt: '2026-03-06T00:00:00.000Z'
-    }
+  it.each(['queued', 'delegating', 'running'] as const)(
+    'maps active coordinator status %s to running',
+    (status) => {
+      const agent: SessionAgentRecord = {
+        id: 'agent-1',
+        sessionId: 'session-1',
+        name: 'Coordinator',
+        role: 'Coordinator',
+        kind: 'coordinator',
+        status,
+        avatarColor: '#60d394',
+        sortOrder: 0,
+        createdAt: '2026-03-06T00:00:00.000Z',
+        updatedAt: '2026-03-06T00:00:00.000Z'
+      }
 
-    expect(toCoordinatorStatusBadgeState({ activeAgent: agent })).toBe('running')
-  })
+      expect(toCoordinatorStatusBadgeState({ activeAgent: agent })).toBe('running')
+    }
+  )
 })
