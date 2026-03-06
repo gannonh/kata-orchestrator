@@ -122,7 +122,7 @@ export function RightPanel({
       )
     }
 
-    if (latestDraft && !specDocument.document.appliedRunId) {
+    if (latestDraft && latestDraft.runId !== specDocument.document.appliedRunId) {
       return (
         <SpecTab
           project={project}

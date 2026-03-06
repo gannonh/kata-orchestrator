@@ -35,8 +35,30 @@ export function parseSpecMarkdown(markdown: string): ParsedSpecMarkdownDocument 
   const sectionLines = new Map<KnownSectionKey, IndexedLine[]>()
   const lines = markdown.split(/\r?\n/)
   let currentSection: KnownSectionKey | null = null
+  let sectionFenceMarker: string | null = null
 
   lines.forEach((line, lineIndex) => {
+    const trimmed = line.trim()
+
+    if (sectionFenceMarker) {
+      if (isMatchingFenceLine(trimmed, sectionFenceMarker)) {
+        sectionFenceMarker = null
+      }
+      if (currentSection) {
+        sectionLines.get(currentSection)!.push({ content: line, lineIndex })
+      }
+      return
+    }
+
+    const fenceMarker = getFenceMarker(trimmed)
+    if (fenceMarker) {
+      sectionFenceMarker = fenceMarker
+      if (currentSection) {
+        sectionLines.get(currentSection)!.push({ content: line, lineIndex })
+      }
+      return
+    }
+
     const headingMatch = line.match(/^##\s+(.+?)\s*$/)
 
     if (headingMatch) {
@@ -74,49 +96,68 @@ function normalizeHeading(value: string): string {
 }
 
 function normalizeTextBlock(lines: IndexedLine[]): string {
-  const values = lines.map((line) => line.content.trimEnd())
-
-  let start = 0
-  let end = values.length
-
-  while (start < end && values[start].trim() === '') {
-    start += 1
-  }
-
-  while (end > start && values[end - 1].trim() === '') {
-    end -= 1
-  }
-
-  return values.slice(start, end).join('\n')
+  return trimBlankEdges(lines.map((line) => line.content.trimEnd())).join('\n')
 }
 
 function normalizeListItems(lines: IndexedLine[]): string[] {
   const items: string[] = []
+  let currentItemLines: string[] = []
+  let openFenceMarker: string | null = null
 
   lines.forEach(({ content }) => {
-    const listItemMatch = content.match(/^(?:[-*+]\s+|\d+[.)]\s+)(.+?)\s*$/)
+    const trimmedEnd = content.trimEnd()
+    const trimmed = trimmedEnd.trim()
+
+    if (openFenceMarker) {
+      currentItemLines.push(trimmedEnd)
+      if (isMatchingFenceLine(trimmed, openFenceMarker)) {
+        openFenceMarker = null
+      }
+      return
+    }
+
+    const listItemMatch = trimmedEnd.match(/^(?:[-*+]\s+|\d+[.)]\s+)(.+?)\s*$/)
+
     if (listItemMatch) {
-      items.push(listItemMatch[1].trim())
+      pushNormalizedListItem(items, currentItemLines)
+      currentItemLines = [listItemMatch[1].trim()]
       return
     }
 
-    const nestedListMatch = content.match(/^\s+(?:[-*+]\s+|\d+[.)]\s+).+$/)
-    if (nestedListMatch) {
+    if (currentItemLines.length > 0) {
+      if (trimmed === '') {
+        currentItemLines.push('')
+        return
+      }
+
+      const fenceMarker = getFenceMarker(trimmed)
+      if (fenceMarker) {
+        currentItemLines.push(trimmedEnd)
+        openFenceMarker = fenceMarker
+        return
+      }
+
+      if (isNestedListItem(trimmedEnd)) {
+        return
+      }
+
+      if (isIndentedContinuation(trimmedEnd)) {
+        currentItemLines.push(trimmedEnd)
+        return
+      }
+
+      pushNormalizedListItem(items, currentItemLines)
+      currentItemLines = [trimmedEnd.trim()]
       return
     }
 
-    const continuationMatch = content.match(/^\s+(.+?)\s*$/)
-    if (continuationMatch && items.length > 0) {
-      const previousIndex = items.length - 1
-      items[previousIndex] = `${items[previousIndex]} ${continuationMatch[1].trim()}`
-      return
-    }
-
-    const trimmed = content.trim()
     if (trimmed) {
-      items.push(trimmed)
+      currentItemLines = [trimmed]
+      openFenceMarker = getFenceMarker(trimmed)
     }
   })
+
+  pushNormalizedListItem(items, currentItemLines)
 
   return items
 }
@@ -154,4 +195,89 @@ function statusForMarker(marker: string): ParsedSpecTaskStatus {
   }
 
   return 'not_started'
+}
+
+function trimBlankEdges(values: string[]): string[] {
+  let start = 0
+  let end = values.length
+
+  while (start < end && values[start].trim() === '') {
+    start += 1
+  }
+
+  while (end > start && values[end - 1].trim() === '') {
+    end -= 1
+  }
+
+  return values.slice(start, end)
+}
+
+function pushNormalizedListItem(items: string[], itemLines: string[]): void {
+  const normalized = normalizeListItem(itemLines)
+  if (normalized) {
+    items.push(normalized)
+  }
+}
+
+function normalizeListItem(lines: string[]): string {
+  const trimmedLines = trimBlankEdges(lines)
+
+  if (trimmedLines.length === 0) {
+    return ''
+  }
+
+  const [firstLine, ...continuationLines] = trimmedLines
+  const dedentedContinuationLines = dedentLines(continuationLines)
+
+  if (shouldCollapseContinuationLines(dedentedContinuationLines)) {
+    return [firstLine, ...dedentedContinuationLines.map((line) => line.trim())].join(' ')
+  }
+
+  return trimBlankEdges([firstLine, ...dedentedContinuationLines]).join('\n')
+}
+
+function dedentLines(lines: string[]): string[] {
+  const nonBlankLines = lines.filter((line) => line.trim() !== '')
+  if (nonBlankLines.length === 0) {
+    return lines
+  }
+
+  const sharedIndent = Math.min(
+    ...nonBlankLines.map((line) => {
+      const match = line.match(/^\s*/)
+      return match?.[0].length ?? 0
+    })
+  )
+
+  return lines.map((line) => line.slice(Math.min(sharedIndent, line.length)))
+}
+
+function getFenceMarker(line: string): string | null {
+  const match = line.match(/^(`{3,}|~{3,})/)
+  return match?.[1] ?? null
+}
+
+function isMatchingFenceLine(line: string, openFenceMarker: string): boolean {
+  const match = line.match(/^(`{3,}|~{3,})[ \t]*$/)
+  const marker = match?.[1]
+
+  return marker !== undefined && marker[0] === openFenceMarker[0] && marker.length >= openFenceMarker.length
+}
+
+function isNestedListItem(line: string): boolean {
+  return /^\s+(?:[-*+]\s+|\d+[.)]\s+)/.test(line)
+}
+
+function isIndentedContinuation(line: string): boolean {
+  return /^\s+/.test(line)
+}
+
+function shouldCollapseContinuationLines(lines: string[]): boolean {
+  return (
+    lines.length > 0 &&
+    lines.every((line) => {
+      const trimmed = line.trim()
+      return trimmed !== '' && !/^(?:```|~~~)/.test(trimmed)
+    })
+  )
 }

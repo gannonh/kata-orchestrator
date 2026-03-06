@@ -52,13 +52,15 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
 
       if (event.type === 'message_appended') {
         dispatch({ type: 'APPEND_MESSAGE', message: event.message })
-        setLatestDraft(
-          buildLatestDraft({
-            prompt: lastPromptRef.current ?? '',
-            runId: event.runId ?? `run-${event.message.id}`,
-            generatedAt: event.message.createdAt
-          })
-        )
+        if (event.message.role === 'agent') {
+          setLatestDraft(
+            buildLatestDraft({
+              content: event.message.content,
+              runId: event.runId ?? `run-${event.message.id}`,
+              generatedAt: event.message.createdAt
+            })
+          )
+        }
         dispatch({ type: 'RUN_COMPLETED' })
         return
       }
@@ -127,7 +129,7 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
               setLatestDraft(
                 run.draft ??
                   buildLatestDraft({
-                    prompt: run.prompt,
+                    content: msg.content,
                     runId: run.id,
                     generatedAt: msg.createdAt
                   })
@@ -290,45 +292,18 @@ function isReconciledInterruptedRunFallback(
   return status === 'failed' && errorMessage === INTERRUPTED_RUN_ERROR_MESSAGE
 }
 
-// TODO: replace with spec extraction pipeline output once connected.
-// Scaffolding: produces a fixed template from the latest prompt until the
-// spec generation pipeline is wired in.
 function buildLatestDraft({
-  prompt,
+  content,
   runId,
   generatedAt
 }: {
-  prompt: string
+  content: string
   runId: string
   generatedAt: string
 }): LatestRunDraft {
   return {
     runId,
     generatedAt,
-    content: [
-      '## Goal',
-      prompt,
-      '',
-      '## Acceptance Criteria',
-      '1. Produce a structured spec draft from the latest run',
-      '2. Keep the shell behavior deterministic for renderer tests',
-      '',
-      '## Non-goals',
-      '- Do not call external services from the right panel',
-      '',
-      '## Assumptions',
-      '- The latest prompt is the source of truth for the draft',
-      '',
-      '## Verification Plan',
-      '1. Run the renderer unit tests',
-      '',
-      '## Rollback Plan',
-      '1. Clear the generated draft state',
-      '',
-      '## Tasks',
-      '- [ ] Review the latest prompt',
-      '- [/] Apply the structured draft',
-      '- [x] Keep the runtime wiring stable'
-    ].join('\n')
+    content
   }
 }

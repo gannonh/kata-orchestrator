@@ -581,9 +581,7 @@ describe('HomeSpacesScreen', () => {
     const onOpenSpace = vi.fn()
     render(<HomeSpacesScreen onOpenSpace={onOpenSpace} initialSpaces={[]} />)
 
-    await waitFor(() => {
-      expect(spaceList).toHaveBeenCalledTimes(1)
-    })
+    await screen.findByText('IPC Loaded Space')
 
     fireEvent.click(screen.getByRole('button', { name: 'Open selected space' }))
     expect(onOpenSpace).toHaveBeenCalledWith('sp-active')

@@ -27,7 +27,17 @@ const MD_COMPONENTS: Components = {
       {children}
     </pre>
   ),
-  code: ({ className: codeClassName, children }) => <code className={codeClassName}>{children}</code>,
+  code: ({ className: codeClassName, children }) => (
+    <code
+      className={cn(
+        !codeClassName &&
+          'rounded-sm bg-muted px-1 py-0.5 font-mono text-[0.85em] text-foreground',
+        codeClassName
+      )}
+    >
+      {children}
+    </code>
+  ),
   p: ({ children }) => <p>{children}</p>
 }
 

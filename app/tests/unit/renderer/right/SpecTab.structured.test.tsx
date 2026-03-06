@@ -4,6 +4,63 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SpecTab } from '../../../../src/renderer/components/right/SpecTab'
 import { mockProject } from '../../../../src/renderer/mock/project'
 
+const structuredFixtureDocument = {
+  markdown: [
+    '## Goal',
+    'Publish a clear `spec` surface.',
+    '',
+    '## Acceptance Criteria',
+    '1. Render canonical sections.',
+    '',
+    '## Non-goals',
+    '- No persistence redesign.',
+    '',
+    '## Assumptions',
+    '- `main` is the contract.',
+    '',
+    '## Verification Plan',
+    '1. Run renderer tests.',
+    '',
+    '## Rollback Plan',
+    '1. Revert the renderer changes.',
+    '',
+    '## Tasks',
+    '- [ ] Freeze contract',
+    '- [/] Render markdown',
+    '- [x] Preserve ids'
+  ].join('\n'),
+  sections: {
+    goal: 'Publish a clear `spec` surface.',
+    acceptanceCriteria: ['Render canonical sections.'],
+    nonGoals: ['No persistence redesign.'],
+    assumptions: ['`main` is the contract.'],
+    verificationPlan: ['Run renderer tests.'],
+    rollbackPlan: ['Revert the renderer changes.']
+  },
+  tasks: [
+    {
+      id: 'task-freeze-contract',
+      title: 'Freeze contract',
+      status: 'not_started' as const,
+      markdownLineIndex: 19
+    },
+    {
+      id: 'task-render-markdown',
+      title: 'Render markdown',
+      status: 'in_progress' as const,
+      markdownLineIndex: 20
+    },
+    {
+      id: 'task-preserve-ids',
+      title: 'Preserve ids',
+      status: 'complete' as const,
+      markdownLineIndex: 21
+    }
+  ],
+  updatedAt: '2026-03-06T00:00:00.000Z',
+  appliedRunId: 'run-1'
+}
+
 afterEach(() => {
   cleanup()
 })
@@ -187,5 +244,25 @@ describe('SpecTab structured states', () => {
     )
 
     expect(screen.getByText('No goal yet.')).toBeTruthy()
+  })
+
+  it('renders a realistic structured-view fixture with markdown-rich canonical sections', () => {
+    render(
+      <SpecTab
+        project={mockProject}
+        specState={{
+          mode: 'structured_view',
+          document: structuredFixtureDocument,
+          onToggleTask: vi.fn(),
+          onEditMarkdown: vi.fn(),
+          commentStatusNote: 'Comments are deferred.'
+        }}
+      />
+    )
+
+    expect(screen.getByRole('heading', { name: 'Goal' })).toBeTruthy()
+    expect(screen.getByText('spec').tagName).toBe('CODE')
+    expect(screen.getByText('main').tagName).toBe('CODE')
+    expect(screen.getByRole('checkbox', { name: 'Render markdown' })).toBeTruthy()
   })
 })

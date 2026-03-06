@@ -4,6 +4,31 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SpecSections } from '../../../../src/renderer/components/right/SpecSections'
 import type { StructuredSpecDocument } from '../../../../src/renderer/types/spec-document'
 
+const structuredFixtureMarkdown = [
+  '## Goal',
+  'Publish a clear `spec` surface.',
+  '',
+  '## Acceptance Criteria',
+  '1. Render canonical sections.',
+  '',
+  '## Non-goals',
+  '- No persistence redesign.',
+  '',
+  '## Assumptions',
+  '- `main` is the contract.',
+  '',
+  '## Verification Plan',
+  '1. Run renderer tests.',
+  '',
+  '## Rollback Plan',
+  '1. Revert the renderer changes.',
+  '',
+  '## Tasks',
+  '- [ ] Freeze contract',
+  '- [/] Render markdown',
+  '- [x] Preserve ids'
+].join('\n')
+
 const baseDocument: StructuredSpecDocument = {
   markdown: '## Goal\nShip it.',
   sections: {
@@ -49,6 +74,53 @@ describe('SpecSections', () => {
     expect(screen.getByText('Test')).toBeTruthy()
     expect(screen.getByText('Auto-saved')).toBeTruthy()
     expect(screen.getByText('Draft applied')).toBeTruthy()
+  })
+
+  it('renders a realistic canonical fixture with markdown and mixed task states', () => {
+    render(
+      <SpecSections
+        document={{
+          markdown: structuredFixtureMarkdown,
+          sections: {
+            goal: 'Publish a clear `spec` surface.',
+            acceptanceCriteria: ['Render canonical sections.'],
+            nonGoals: ['No persistence redesign.'],
+            assumptions: ['`main` is the contract.'],
+            verificationPlan: ['Run renderer tests.'],
+            rollbackPlan: ['Revert the renderer changes.']
+          },
+          tasks: [
+            {
+              id: 'task-freeze-contract',
+              title: 'Freeze contract',
+              status: 'not_started',
+              markdownLineIndex: 19
+            },
+            {
+              id: 'task-render-markdown',
+              title: 'Render markdown',
+              status: 'in_progress',
+              markdownLineIndex: 20
+            },
+            {
+              id: 'task-preserve-ids',
+              title: 'Preserve ids',
+              status: 'complete',
+              markdownLineIndex: 21
+            }
+          ],
+          updatedAt: '2026-03-06T00:00:00.000Z'
+        }}
+        onToggleTask={vi.fn()}
+        onEditMarkdown={vi.fn()}
+        commentStatusNote="Comments are deferred."
+      />
+    )
+
+    expect(screen.getByRole('heading', { name: 'Goal' })).toBeTruthy()
+    expect(screen.getByText('spec').tagName).toBe('CODE')
+    expect(screen.getByText('main').tagName).toBe('CODE')
+    expect(screen.getByRole('checkbox', { name: 'Render markdown' })).toBeTruthy()
   })
 
   it('shows applied run id when present', () => {
