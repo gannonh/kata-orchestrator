@@ -186,7 +186,11 @@ describe('registerIpcHandlers', () => {
             if (left.sortOrder !== right.sortOrder) {
               return left.sortOrder - right.sortOrder
             }
-            return left.createdAt.localeCompare(right.createdAt)
+            const createdAtDiff = left.createdAt.localeCompare(right.createdAt)
+            if (createdAtDiff !== 0) {
+              return createdAtDiff
+            }
+            return left.id.localeCompare(right.id)
           })
       }),
       upsert: vi.fn(),
