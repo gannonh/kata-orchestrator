@@ -71,9 +71,7 @@ export function TaskBlockList({ tasks, onToggleTask, mode = 'interactive' }: Tas
                       aria-label={task.title}
                       disabled={mode === 'readonly'}
                       onCheckedChange={() => {
-                        if (mode === 'interactive') {
-                          onToggleTask?.(task.id)
-                        }
+                        onToggleTask?.(task.id)
                       }}
                     />
                     <span className="truncate">{task.title}</span>
