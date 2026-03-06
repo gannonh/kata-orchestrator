@@ -26,6 +26,18 @@ describe('ConversationMessage', () => {
     expect(screen.getByRole('heading', { name: 'Summary', level: 2 })).toBeTruthy()
   })
 
+  it('renders custom agentLabel when provided', () => {
+    render(
+      <ConversationMessage
+        message={{ id: 'a2', role: 'agent', content: 'Custom label test' }}
+        agentLabel="Assistant"
+      />
+    )
+
+    expect(screen.getByText('Assistant')).toBeTruthy()
+    expect(screen.getByText('Custom label test')).toBeTruthy()
+  })
+
   it('renders collapsed variant summary when provided', () => {
     render(
       <ConversationMessage

@@ -28,7 +28,7 @@ export function MessageBubble({
     ? { ...primitiveMessage, summary }
     : primitiveMessage
 
-  const shouldRenderDecisionCard = message.role === 'agent' && Boolean(decisionCard)
+  const shouldRenderDecisionCard = primitiveMessage.role === 'agent' && Boolean(decisionCard)
   const displayMessage = shouldRenderDecisionCard
     ? {
         ...messageWithSummary,

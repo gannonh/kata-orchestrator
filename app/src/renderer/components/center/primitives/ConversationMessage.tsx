@@ -5,11 +5,13 @@ import type { PrimitiveMessage, PrimitiveMessageVariant } from './types'
 type ConversationMessageProps = {
   message: PrimitiveMessage
   variant?: PrimitiveMessageVariant
+  agentLabel?: string
 }
 
 export function ConversationMessage({
   message,
-  variant = 'default'
+  variant = 'default',
+  agentLabel = 'Kata'
 }: ConversationMessageProps) {
   const isUser = message.role === 'user'
   const isCollapsed = variant === 'collapsed' && Boolean(message.summary?.trim())
@@ -18,7 +20,7 @@ export function ConversationMessage({
   return (
     <article className={cn('flex flex-col gap-2', isUser ? 'items-end' : 'items-start')}>
       <span className="text-xs uppercase tracking-wide text-muted-foreground">
-        {isUser ? 'You' : 'Kata'}
+        {isUser ? 'You' : agentLabel}
       </span>
       <div
         className={cn(

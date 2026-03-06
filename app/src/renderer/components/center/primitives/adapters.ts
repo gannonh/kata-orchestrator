@@ -18,6 +18,9 @@ export function toPrimitiveMessage(
   }
 }
 
+// Identity adapter — intentional contract seam between domain ConversationRunState
+// and primitive PrimitiveRunState. Keeps consumers decoupled from the domain type
+// and provides a single place to add mapping logic if the types ever diverge.
 export function toPrimitiveRunState(
   runState: ConversationRunState
 ): PrimitiveRunState {

@@ -121,13 +121,32 @@ describe('MessageBubble', () => {
     expect(onDecisionAction).toHaveBeenCalledWith('approve_tech_stack_plan')
   })
 
-  it('does not render decision actions for non-agent messages even when decision card is provided', () => {
+  it('renders decision actions for assistant ChatMessage after role normalization', () => {
+    const onDecisionAction = vi.fn()
+
     render(
       <MessageBubble
         message={{
           id: 'assistant-2',
           role: 'assistant',
-          content: 'Non-agent message content'
+          content: 'Assistant decision message'
+        }}
+        decisionCard={decisionCard}
+        decisionState="available"
+        onDecisionAction={onDecisionAction}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Approve the plan...' })).toBeTruthy()
+  })
+
+  it('does not render decision actions for user messages even when decision card is provided', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 'user-10',
+          role: 'user',
+          content: 'User message content'
         }}
         decisionCard={decisionCard}
         decisionState="available"
