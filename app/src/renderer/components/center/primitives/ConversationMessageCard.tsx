@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 
 import { ConversationMessage } from './ConversationMessage'
+import type { MarkdownRenderMode } from '../../shared/normalize-markdown-for-render'
 import type { PrimitiveMessage, PrimitiveMessageVariant } from './types'
 
 type ConversationMessageCardProps = {
@@ -9,6 +10,7 @@ type ConversationMessageCardProps = {
   variant?: PrimitiveMessageVariant
   timestampLabel?: string
   agentLabel?: string
+  renderMode?: MarkdownRenderMode
   onDismiss?: () => void
   metadata?: ReactNode
   footer?: ReactNode
@@ -19,6 +21,7 @@ export function ConversationMessageCard({
   variant = 'default',
   timestampLabel,
   agentLabel,
+  renderMode = 'settled',
   onDismiss,
   metadata,
   footer
@@ -42,6 +45,7 @@ export function ConversationMessageCard({
             message={message}
             variant={variant}
             agentLabel={agentLabel}
+            renderMode={renderMode}
           />
           {metadata ? (
             <div className="text-xs text-muted-foreground">{metadata}</div>

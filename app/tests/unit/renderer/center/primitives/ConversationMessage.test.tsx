@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { ConversationMessage } from '../../../../../src/renderer/components/center/primitives/ConversationMessage'
+import * as MarkdownRendererModule from '../../../../../src/renderer/components/shared/MarkdownRenderer'
 
 describe('ConversationMessage', () => {
   it('renders user role as plain text with left-aligned full-width layout', () => {
@@ -62,5 +63,32 @@ describe('ConversationMessage', () => {
 
     expect(screen.getByText('Short summary')).toBeTruthy()
     expect(screen.queryByText('Long content')).toBeNull()
+  })
+
+  it('passes streaming render mode to assistant markdown content', () => {
+    const markdownRendererSpy = vi
+      .spyOn(MarkdownRendererModule, 'MarkdownRenderer')
+      .mockImplementation(({ content, renderMode }) => (
+        <div data-testid="markdown-renderer" data-render-mode={renderMode}>
+          {content}
+        </div>
+      ))
+
+    render(
+      <ConversationMessage
+        message={{
+          id: 'agent-stream',
+          role: 'agent',
+          content: ['```ts', 'const ready = true'].join('\n')
+        }}
+        renderMode="streaming"
+      />
+    )
+
+    expect(
+      screen.getByTestId('markdown-renderer').getAttribute('data-render-mode')
+    ).toBe('streaming')
+
+    markdownRendererSpy.mockRestore()
   })
 })
