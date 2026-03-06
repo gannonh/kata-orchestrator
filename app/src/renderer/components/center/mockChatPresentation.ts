@@ -1,13 +1,15 @@
 import { type ChatMessage, type ToolCallRecord } from '../../types/chat'
+import type { ConversationMessage } from '../../types/session-conversation'
+import { toPrimitiveMessage, toPrimitiveRunState } from './primitives/adapters'
+import type { PrimitiveMessage, PrimitiveRunState } from './primitives/types'
 
 export type MockChatViewState = 'initial' | 'pastedContext' | 'contextReading' | 'analyzing'
-export type StatusBadgeVariant = 'thinking' | 'stopped'
 
 export type MockChatPresentationBlock =
   | {
       id: string
       type: 'message'
-      message: ChatMessage
+      message: PrimitiveMessage
     }
   | {
       id: string
@@ -27,7 +29,7 @@ export type MockChatPresentationBlock =
   | {
       id: string
       type: 'statusBadge'
-      variant: StatusBadgeVariant
+      variant: PrimitiveRunState
     }
 
 export type MockChatPresentation = {
@@ -36,7 +38,7 @@ export type MockChatPresentation = {
 }
 
 type DeriveMockChatPresentationInput = {
-  messages: ChatMessage[]
+  messages: Array<ChatMessage | ConversationMessage>
   isStreaming: boolean
   forceAnalyzing?: boolean
 }
@@ -53,14 +55,12 @@ function summarizeContent(content: string): string {
   return `${compact.slice(0, 85).trimEnd()}...`
 }
 
-function inferViewState({ messages, isStreaming, forceAnalyzing = false }: DeriveMockChatPresentationInput): MockChatViewState {
+function inferViewState(reversedUserMessages: Array<ChatMessage | ConversationMessage>, isStreaming: boolean, forceAnalyzing: boolean): MockChatViewState {
   if (forceAnalyzing) {
     return 'analyzing'
   }
 
-  const userMessages = [...messages].reverse().filter((message) => message.role === 'user')
-
-  for (const message of userMessages) {
+  for (const message of reversedUserMessages) {
     const userContent = message.content
 
     if (/pasted\s+\d+\s+lines/i.test(userContent)) {
@@ -80,18 +80,21 @@ function inferViewState({ messages, isStreaming, forceAnalyzing = false }: Deriv
 }
 
 export function deriveMockChatPresentation(input: DeriveMockChatPresentationInput): MockChatPresentation {
-  const viewState = inferViewState(input)
-  const statusVariant: StatusBadgeVariant = input.isStreaming ? 'thinking' : 'stopped'
-  const latestUser = [...input.messages].reverse().find((message) => message.role === 'user')
-  const latestAnalyzingUser = [...input.messages]
-    .reverse()
-    .find((message) => message.role === 'user' && ANALYZING_TRIGGER.test(message.content))
+  const reversed = [...input.messages].reverse()
+  const reversedUsers = reversed.filter((message) => message.role === 'user')
+  const viewState = inferViewState(reversedUsers, input.isStreaming, input.forceAnalyzing ?? false)
+  const statusVariant = toPrimitiveRunState(input.isStreaming ? 'pending' : 'idle')
+  const latestUser = reversedUsers[0]
+  const latestAnalyzingUser = reversedUsers
+    .find((message) => ANALYZING_TRIGGER.test(message.content))
   const analyzingTarget =
     viewState === 'analyzing' ? (input.forceAnalyzing ? latestUser : latestAnalyzingUser ?? latestUser) : undefined
 
   const blocks: MockChatPresentationBlock[] = []
 
   for (const message of input.messages) {
+    const primitiveMessage = toPrimitiveMessage(message)
+
     if (viewState === 'analyzing' && analyzingTarget && message.id === analyzingTarget.id) {
       blocks.push({
         id: `summary-${message.id}`,
@@ -104,15 +107,17 @@ export function deriveMockChatPresentation(input: DeriveMockChatPresentationInpu
     blocks.push({
       id: `message-${message.id}`,
       type: 'message',
-      message
+      message: primitiveMessage
     })
 
-    for (const toolCall of message.toolCalls ?? []) {
-      blocks.push({
-        id: `tool-${toolCall.id}`,
-        type: 'toolCall',
-        toolCall
-      })
+    if ('toolCalls' in message) {
+      for (const toolCall of message.toolCalls ?? []) {
+        blocks.push({
+          id: `tool-${toolCall.id}`,
+          type: 'toolCall',
+          toolCall
+        })
+      }
     }
   }
 

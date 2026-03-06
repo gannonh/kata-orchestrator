@@ -1,11 +1,10 @@
-import { Button } from '../ui/button'
-import { type ActionVariant } from './message-decision-parser'
+import {
+  ConversationMessageActions,
+  type ConversationMessageAction
+} from './primitives/ConversationMessageActions'
 
-export type MessageAction<TActionId extends string = string> = {
-  id: TActionId
-  label: string
-  variant: ActionVariant
-}
+export type MessageAction<TActionId extends string = string> =
+  ConversationMessageAction<TActionId>
 
 type MessageActionRowProps<TActionId extends string = string> = {
   actions: Array<MessageAction<TActionId>>
@@ -19,21 +18,10 @@ export function MessageActionRow<TActionId extends string = string>({
   onAction
 }: MessageActionRowProps<TActionId>) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {actions.map((action) => (
-        <Button
-          key={action.id}
-          type="button"
-          size="sm"
-          variant={action.variant}
-          disabled={disabled}
-          onClick={() => {
-            onAction(action.id)
-          }}
-        >
-          {action.label}
-        </Button>
-      ))}
-    </div>
+    <ConversationMessageActions
+      actions={actions}
+      disabled={disabled}
+      onAction={onAction}
+    />
   )
 }

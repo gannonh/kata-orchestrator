@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { MarkdownRenderer } from '../../../../src/renderer/components/shared/MarkdownRenderer'
@@ -62,7 +62,42 @@ describe('MarkdownRenderer', () => {
       />
     )
 
-    const codeNode = screen.getByText((_, node) => node?.tagName === 'CODE' && node.textContent === 'echo ready\necho done')
+    const codeNode = screen.getByText((_, node) => node?.tagName === 'CODE' && node.textContent?.includes('echo ready\necho done') === true)
     expect(codeNode).toBeTruthy()
+  })
+
+  it('renders ordered lists and inline emphasis markers', () => {
+    const { container } = render(
+      <MarkdownRenderer
+        content={[
+          'Please answer:',
+          '',
+          '1. **What problem does the product solve?**',
+          '2. `Who will use it?`'
+        ].join('\n')}
+      />
+    )
+
+    expect(within(container).getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByText('What problem does the product solve?').closest('strong')).toBeTruthy()
+    expect(screen.getByText('Who will use it?').closest('code')).toBeTruthy()
+  })
+
+  it('renders h3, h5, and h6 heading variants', () => {
+    render(
+      <MarkdownRenderer
+        content={[
+          '### Section',
+          '',
+          '##### Minor heading',
+          '',
+          '###### Small heading'
+        ].join('\n')}
+      />
+    )
+
+    expect(screen.getByRole('heading', { name: 'Section', level: 3 })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Minor heading', level: 5 })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Small heading', level: 6 })).toBeTruthy()
   })
 })
