@@ -4,7 +4,11 @@ export { ConversationMessageCard } from './ConversationMessageCard'
 export { ConversationMessageActions } from './ConversationMessageActions'
 export { ConversationStatusBadge } from './ConversationStatusBadge'
 export { ConversationStream } from './ConversationStream'
-export { toPrimitiveMessage, toPrimitiveRunState } from './adapters'
+export {
+  toCoordinatorStatusBadgeState,
+  toPrimitiveMessage,
+  toPrimitiveRunState
+} from './adapters'
 export type { ConversationBlock } from './ConversationBlocks'
 export type { ConversationMessageAction } from './ConversationMessageActions'
 export type { ScrollToMessage } from './ConversationStream'

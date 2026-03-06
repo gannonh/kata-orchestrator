@@ -76,6 +76,27 @@ describe('ChatPanel', () => {
     expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
   })
 
+  it('keeps the visible message list and status badge after primitive wrapper changes', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        runState: 'pending',
+        messages: [
+          { id: 'm1', role: 'user', content: 'Plan the work', createdAt: '2026-03-01T00:00:00Z' },
+          { id: 'm2', role: 'agent', content: 'Draft ready.', createdAt: '2026-03-01T00:00:01Z' }
+        ]
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    expect(screen.getByTestId('message-list')).toBeTruthy()
+    expect(screen.getByText('Plan the work')).toBeTruthy()
+    expect(screen.getByText('Draft ready.')).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
+  })
+
   it('passes sessionId to useIpcSessionConversation', () => {
     mockHook.mockReturnValue({
       state: idleState(),
