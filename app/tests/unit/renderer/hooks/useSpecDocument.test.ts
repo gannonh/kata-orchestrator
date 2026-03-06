@@ -83,6 +83,38 @@ describe('useSpecDocument', () => {
     })
   })
 
+  it('restores multiline markdown sections and task ids after specGet reload', async () => {
+    mockSpecGet.mockResolvedValueOnce({
+      markdown: [
+        '## Goal',
+        'Ship `stable ids`.',
+        '',
+        '```ts',
+        'const stable = true',
+        '```',
+        '',
+        '## Tasks',
+        '- [ ] Freeze contract'
+      ].join('\n'),
+      updatedAt: '2026-03-06T00:00:00.000Z',
+      appliedRunId: 'run-123'
+    })
+
+    const useSpecDocument = await loadHook()
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    await waitFor(() => {
+      expect(result.current.document.sections.goal).toContain('```ts')
+      expect(result.current.document.sections.goal).toContain('`stable ids`')
+      expect(result.current.document.tasks[0]).toMatchObject({
+        id: 'task-freeze-contract',
+        status: 'not_started'
+      })
+    })
+  })
+
   it('parses markdown and persists through specSave', async () => {
     const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
@@ -187,6 +219,64 @@ describe('useSpecDocument', () => {
       sessionId: 'session-1',
       markdown: ['## Goal', 'Apply the incoming draft.', '', '## Tasks', '- [x] Review the draft'].join('\n'),
       appliedRunId: 'run-456'
+    })
+  })
+
+  it('round-trips multiline markdown and task ids after toggle and reload', async () => {
+    const useSpecDocument = await loadHook()
+    const initialRender = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+    const markdown = [
+      '## Goal',
+      'Ship `stable ids`.',
+      '',
+      '```ts',
+      'const stable = true',
+      '```',
+      '',
+      '## Tasks',
+      '- [ ] Freeze contract'
+    ].join('\n')
+
+    act(() => {
+      initialRender.result.current.setMarkdown(markdown)
+    })
+
+    act(() => {
+      initialRender.result.current.toggleTask('task-freeze-contract')
+    })
+
+    const savedMarkdown = mockSpecSave.mock.calls.at(-1)?.[0]?.markdown
+    expect(savedMarkdown).toBe(
+      [
+        '## Goal',
+        'Ship `stable ids`.',
+        '',
+        '```ts',
+        'const stable = true',
+        '```',
+        '',
+        '## Tasks',
+        '- [/] Freeze contract'
+      ].join('\n')
+    )
+
+    mockSpecGet.mockResolvedValueOnce({
+      markdown: savedMarkdown,
+      updatedAt: '2026-03-06T00:05:00.000Z'
+    })
+
+    const reloaded = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    await waitFor(() => {
+      expect(reloaded.result.current.document.sections.goal).toContain('```ts')
+      expect(reloaded.result.current.document.tasks[0]).toMatchObject({
+        id: 'task-freeze-contract',
+        status: 'in_progress'
+      })
     })
   })
 
