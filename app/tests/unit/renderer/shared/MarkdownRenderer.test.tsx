@@ -100,4 +100,57 @@ describe('MarkdownRenderer', () => {
     expect(screen.getByRole('heading', { name: 'Minor heading', level: 5 })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Small heading', level: 6 })).toBeTruthy()
   })
+
+  it('renders blockquotes with readable structure', () => {
+    render(
+      <MarkdownRenderer
+        content={['> Review the current spec draft.', '>', '> Keep the layout stable.'].join(
+          '\n'
+        )}
+      />
+    )
+
+    const quote = screen
+      .getByText('Review the current spec draft.')
+      .closest('blockquote')
+
+    expect(quote).toBeTruthy()
+    expect(quote?.className).toContain('border-l')
+  })
+
+  it('renders GFM checklist items as disabled checkboxes', () => {
+    render(
+      <MarkdownRenderer
+        content={[
+          '- [x] Capture screenshot evidence',
+          '- [ ] Verify streaming readability'
+        ].join('\n')}
+      />
+    )
+
+    const checkboxes = screen.getAllByRole('checkbox') as HTMLInputElement[]
+
+    expect(checkboxes).toHaveLength(2)
+    expect(checkboxes[0]?.checked).toBe(true)
+    expect(checkboxes[1]?.checked).toBe(false)
+    expect(checkboxes[0]?.disabled).toBe(true)
+    expect(checkboxes[1]?.disabled).toBe(true)
+  })
+
+  it('normalizes unterminated fences when renderMode is streaming', () => {
+    const { container } = render(
+      <MarkdownRenderer
+        renderMode="streaming"
+        content={['```ts', 'const ready = true'].join('\n')}
+      />
+    )
+
+    expect(
+      within(container).getByText(
+        (_, node) =>
+          node?.tagName === 'CODE' &&
+          node.textContent?.includes('const ready = true') === true
+      )
+    ).toBeTruthy()
+  })
 })
