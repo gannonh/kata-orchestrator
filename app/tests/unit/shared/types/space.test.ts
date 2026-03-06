@@ -7,6 +7,7 @@ import {
   ORCHESTRATION_MODES,
   WORKSPACE_MODES,
   PROVISIONING_METHODS,
+  SESSION_CONTEXT_RESOURCE_KINDS,
   SESSION_AGENT_STATUSES,
   SESSION_AGENT_KINDS,
   createDefaultAppState
@@ -18,6 +19,7 @@ import type {
   SpaceRecord,
   SessionRecord,
   SessionAgentRecord,
+  SessionContextResourceRecord,
   CreateSpaceInput,
   CreateSessionInput,
   AppState,
@@ -68,6 +70,12 @@ describe('SESSION_AGENT_KINDS', () => {
   })
 })
 
+describe('SESSION_CONTEXT_RESOURCE_KINDS', () => {
+  it('contains spec, note, workspace-file, and manual', () => {
+    expect(SESSION_CONTEXT_RESOURCE_KINDS).toEqual(['spec', 'note', 'workspace-file', 'manual'])
+  })
+})
+
 describe('createDefaultAppState', () => {
   it('returns empty state with null selections and empty records', () => {
     const state = createDefaultAppState()
@@ -77,6 +85,7 @@ describe('createDefaultAppState', () => {
     expect(state.runs).toEqual({})
     expect(state.agentRoster).toEqual({})
     expect(state.specDocuments).toEqual({})
+    expect(state.contextResources).toEqual({})
     expect(state.activeSpaceId).toBeNull()
     expect(state.activeSessionId).toBeNull()
   })
@@ -90,6 +99,7 @@ describe('createDefaultAppState', () => {
     expect(a.runs).not.toBe(b.runs)
     expect(a.agentRoster).not.toBe(b.agentRoster)
     expect(a.specDocuments).not.toBe(b.specDocuments)
+    expect(a.contextResources).not.toBe(b.contextResources)
   })
 })
 
@@ -294,12 +304,25 @@ describe('AppState type', () => {
       updatedAt: '2026-01-01T00:00:00Z'
     }
 
+    const contextResource: SessionContextResourceRecord = {
+      id: 'resource-1',
+      sessionId: 'session-1',
+      kind: 'spec',
+      label: 'Coordinator spec',
+      sourcePath: '/tmp/spec.md',
+      description: 'Pinned coordinator context',
+      sortOrder: 0,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z'
+    }
+
     const state: AppState = {
       spaces: { 'space-1': space },
       sessions: { 'session-1': session },
       runs: {},
       agentRoster: { 'agent-1': agent },
       specDocuments: {},
+      contextResources: { 'resource-1': contextResource },
       activeSpaceId: 'space-1',
       activeSessionId: 'session-1'
     }
@@ -309,6 +332,7 @@ describe('AppState type', () => {
     expect(Object.keys(state.runs)).toHaveLength(0)
     expect(Object.keys(state.agentRoster)).toHaveLength(1)
     expect(Object.keys(state.specDocuments)).toHaveLength(0)
+    expect(Object.keys(state.contextResources)).toHaveLength(1)
     expect(state.activeSpaceId).toBe('space-1')
     expect(state.activeSessionId).toBe('session-1')
   })
