@@ -3,7 +3,18 @@ import type {
   ConversationMessage,
   ConversationRunState
 } from '../../../types/session-conversation'
-import type { PrimitiveMessage, PrimitiveRunState } from './types'
+import type { SessionAgentRecord } from '../../../../shared/types/space'
+import type {
+  CoordinatorStatusBadgeState,
+  PrimitiveMessage,
+  PrimitiveRunState
+} from './types'
+
+const ACTIVE_COORDINATOR_STATUSES = new Set<SessionAgentRecord['status']>([
+  'queued',
+  'delegating',
+  'running'
+])
 
 export function toPrimitiveMessage(
   message: ConversationMessage | ChatMessage
@@ -25,4 +36,28 @@ export function toPrimitiveRunState(
   runState: ConversationRunState
 ): PrimitiveRunState {
   return runState
+}
+
+export function toCoordinatorStatusBadgeState(input: {
+  conversationRunState?: ConversationRunState
+  activeAgent?: SessionAgentRecord
+}): CoordinatorStatusBadgeState {
+  if (
+    input.activeAgent &&
+    ACTIVE_COORDINATOR_STATUSES.has(input.activeAgent.status)
+  ) {
+    return 'running'
+  }
+
+  switch (input.conversationRunState) {
+    case 'pending':
+      return 'thinking'
+    case 'idle':
+      return 'stopped'
+    case 'error':
+      return 'error'
+    case 'empty':
+    default:
+      return 'ready'
+  }
 }

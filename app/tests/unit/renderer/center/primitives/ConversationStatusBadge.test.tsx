@@ -5,12 +5,13 @@ import { ConversationStatusBadge } from '../../../../../src/renderer/components/
 
 describe('ConversationStatusBadge', () => {
   it.each([
-    ['empty', 'Ready'],
-    ['pending', 'Thinking'],
-    ['idle', 'Stopped'],
+    ['ready', 'Ready'],
+    ['thinking', 'Thinking'],
+    ['running', 'Running'],
+    ['stopped', 'Stopped'],
     ['error', 'Error']
-  ] as const)('renders %s -> %s', (runState, label) => {
-    render(<ConversationStatusBadge runState={runState} />)
+  ] as const)('renders %s -> %s', (state, label) => {
+    render(<ConversationStatusBadge state={state} />)
     expect(screen.getByRole('status', { name: label })).toBeTruthy()
   })
 })

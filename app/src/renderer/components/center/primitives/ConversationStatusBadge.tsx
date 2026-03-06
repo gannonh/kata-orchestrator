@@ -1,18 +1,26 @@
-import type { PrimitiveRunState } from './types'
+import { toCoordinatorStatusBadgeState } from './adapters'
+import type { CoordinatorStatusBadgeState, PrimitiveRunState } from './types'
 
 const STATUS_MAP = {
-  empty: { label: 'Ready', dotClass: 'bg-muted-foreground' },
-  pending: { label: 'Thinking', dotClass: 'bg-primary motion-safe:animate-pulse' },
-  idle: { label: 'Stopped', dotClass: 'bg-muted-foreground' },
+  ready: { label: 'Ready', dotClass: 'bg-muted-foreground' },
+  thinking: { label: 'Thinking', dotClass: 'bg-primary motion-safe:animate-pulse' },
+  running: { label: 'Running', dotClass: 'bg-primary' },
+  stopped: { label: 'Stopped', dotClass: 'bg-muted-foreground' },
   error: { label: 'Error', dotClass: 'bg-destructive' }
 } as const
 
 type ConversationStatusBadgeProps = {
-  runState: PrimitiveRunState
+  state?: CoordinatorStatusBadgeState
+  runState?: PrimitiveRunState
 }
 
-export function ConversationStatusBadge({ runState }: ConversationStatusBadgeProps) {
-  const status = STATUS_MAP[runState]
+export function ConversationStatusBadge({
+  state,
+  runState
+}: ConversationStatusBadgeProps) {
+  const resolvedState =
+    state ?? toCoordinatorStatusBadgeState({ conversationRunState: runState })
+  const status = STATUS_MAP[resolvedState]
 
   return (
     <div
