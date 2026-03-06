@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildSpecArtifactPath,
   buildDefaultSpecArtifact,
   parseSpecArtifactFile,
   serializeSpecArtifactFile
 } from '../../../src/main/spec-artifact-service'
 
 describe('spec-artifact-service', () => {
+  it('builds the canonical session-scoped spec artifact path', () => {
+    expect(buildSpecArtifactPath('/tmp/repo', 'session-123')).toBe(
+      '/tmp/repo/.kata/sessions/session-123/notes/spec.md'
+    )
+  })
+
   it('parses valid frontmatter and markdown body', () => {
     const parsed = parseSpecArtifactFile([
       '---',
@@ -32,6 +39,14 @@ describe('spec-artifact-service', () => {
     const parsed = parseSpecArtifactFile('---\nstatus: [bad\n---\n\n## Goal\nBroken')
 
     expect(parsed.diagnostics[0]?.code).toBe('invalid_frontmatter_yaml')
+  })
+
+  it('returns diagnostics for invalid frontmatter shape without throwing', () => {
+    const parsed = parseSpecArtifactFile(
+      '---\nstatus: drafting\nupdatedAt: 2026-03-06T19:33:00.000Z\nextra: nope\n---\n\n## Goal\nBroken'
+    )
+
+    expect(parsed.diagnostics[0]?.code).toBe('invalid_frontmatter_shape')
   })
 
   it('serializes frontmatter and markdown body', () => {
