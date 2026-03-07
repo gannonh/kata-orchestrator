@@ -698,4 +698,48 @@ describe('ChatPanel', () => {
 
     expect(onRegisterScrollToMessage).toHaveBeenCalledWith(expect.any(Function))
   })
+
+  it('catches and logs model change persistence failures without crashing', async () => {
+    const persistenceError = new Error('IPC write failed')
+    const setCurrentModel = vi.fn().mockRejectedValue(persistenceError)
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const currentModel = {
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-4-6-20250514',
+      name: 'Claude Sonnet 4.6',
+      authStatus: 'api_key'
+    }
+    const alternateModel = {
+      provider: 'openai',
+      modelId: 'gpt-5.3',
+      name: 'GPT 5.3',
+      authStatus: 'api_key'
+    }
+    mockModelHook.mockReturnValue({
+      models: [currentModel, alternateModel],
+      session: null,
+      currentModel,
+      isHydrated: true,
+      setCurrentModel
+    })
+    mockHook.mockReturnValue({
+      state: idleState({ runState: 'empty' }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId="sess-1" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Claude Sonnet 4.6' }))
+    fireEvent.click(screen.getByText('GPT 5.3'))
+
+    await vi.waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[ChatPanel] Failed to persist session model selection:',
+        persistenceError
+      )
+    })
+
+    consoleSpy.mockRestore()
+  })
 })

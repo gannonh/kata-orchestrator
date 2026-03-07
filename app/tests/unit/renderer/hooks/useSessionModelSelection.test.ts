@@ -282,4 +282,99 @@ describe('useSessionModelSelection', () => {
 
     consoleError.mockRestore()
   })
+
+  it('logs reconciliation write failure without wiping hydration state', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    ;(window as typeof window & { kata?: unknown }).kata = {
+      sessionGet: vi.fn().mockResolvedValue({
+        id: 'session-1',
+        spaceId: 'space-1',
+        label: 'Chat',
+        createdAt: '2026-03-06T00:00:00.000Z',
+        activeModelId: 'missing-model'
+      }),
+      modelList: vi.fn().mockResolvedValue([
+        {
+          provider: 'openai-codex',
+          modelId: 'gpt-5.3-codex',
+          name: 'GPT-5.3 Codex',
+          authStatus: 'oauth'
+        }
+      ]),
+      sessionSetActiveModel: vi.fn().mockRejectedValue(new Error('write failed'))
+    }
+
+    const { useSessionModelSelection } = await import(
+      '../../../../src/renderer/hooks/useSessionModelSelection'
+    )
+    const { result } = renderHook(() => useSessionModelSelection('session-1'))
+
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        '[useSessionModelSelection] Failed to persist reconciled model selection:',
+        expect.any(Error)
+      )
+    })
+
+    expect(result.current.isHydrated).toBe(true)
+    expect(result.current.currentModel?.modelId).toBe('gpt-5.3-codex')
+    expect(result.current.models).toHaveLength(1)
+
+    consoleError.mockRestore()
+  })
+
+  it('rolls back optimistic model switch when persistence fails', async () => {
+    const persistenceError = new Error('persistence failed')
+    const sessionSetActiveModel = vi.fn().mockRejectedValue(persistenceError)
+    ;(window as typeof window & { kata?: unknown }).kata = {
+      sessionGet: vi.fn().mockResolvedValue({
+        id: 'session-1',
+        spaceId: 'space-1',
+        label: 'Chat',
+        createdAt: '2026-03-06T00:00:00.000Z',
+        activeModelId: 'gpt-5.3-codex'
+      }),
+      modelList: vi.fn().mockResolvedValue([
+        {
+          provider: 'openai-codex',
+          modelId: 'gpt-5.3-codex',
+          name: 'GPT-5.3 Codex',
+          authStatus: 'oauth'
+        },
+        {
+          provider: 'openai',
+          modelId: 'gpt-4.1-2025-04-14',
+          name: 'GPT-4.1',
+          authStatus: 'oauth'
+        }
+      ]),
+      sessionSetActiveModel
+    }
+
+    const { useSessionModelSelection } = await import(
+      '../../../../src/renderer/hooks/useSessionModelSelection'
+    )
+    const { result } = renderHook(() => useSessionModelSelection('session-1'))
+
+    await waitFor(() => {
+      expect(result.current.isHydrated).toBe(true)
+    })
+
+    expect(result.current.currentModel?.modelId).toBe('gpt-5.3-codex')
+
+    await act(async () => {
+      await result.current.setCurrentModel({
+        provider: 'openai',
+        modelId: 'gpt-4.1-2025-04-14',
+        name: 'GPT-4.1',
+        authStatus: 'oauth'
+      }).catch(() => {})
+    })
+
+    expect(sessionSetActiveModel).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      activeModelId: 'gpt-4.1-2025-04-14'
+    })
+    expect(result.current.currentModel?.modelId).toBe('gpt-5.3-codex')
+  })
 })
