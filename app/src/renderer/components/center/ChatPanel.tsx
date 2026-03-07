@@ -151,7 +151,11 @@ export function ChatPanel({
             <ModelSelector
               currentModel={currentModel}
               models={models}
-              onModelChange={setCurrentModel}
+              onModelChange={(model) => {
+                void setCurrentModel(model).catch((error) => {
+                  console.error('[ChatPanel] Failed to persist session model selection:', error)
+                })
+              }}
               disabled={!sessionId}
             />
           ) : null

@@ -53,10 +53,17 @@ export function useSessionModelSelection(
           nextSession.activeModelId !== resolved.modelId &&
           typeof window.kata?.sessionSetActiveModel === 'function'
         ) {
-          await window.kata.sessionSetActiveModel({
-            sessionId: nextSession.id,
-            activeModelId: resolved.modelId
-          })
+          try {
+            await window.kata.sessionSetActiveModel({
+              sessionId: nextSession.id,
+              activeModelId: resolved.modelId
+            })
+          } catch (reconcileError) {
+            console.error(
+              '[useSessionModelSelection] Failed to persist reconciled model selection:',
+              reconcileError
+            )
+          }
         }
       })
       .catch((error: unknown) => {
@@ -77,13 +84,19 @@ export function useSessionModelSelection(
   }, [sessionId])
 
   const setCurrentModel = async (model: ModelInfo) => {
+    const previousModel = currentModel
     setCurrentModelState(model)
 
     if (sessionId && typeof window.kata?.sessionSetActiveModel === 'function') {
-      await window.kata.sessionSetActiveModel({
-        sessionId,
-        activeModelId: model.modelId
-      })
+      try {
+        await window.kata.sessionSetActiveModel({
+          sessionId,
+          activeModelId: model.modelId
+        })
+      } catch (error) {
+        setCurrentModelState(previousModel)
+        throw error
+      }
     }
   }
 
