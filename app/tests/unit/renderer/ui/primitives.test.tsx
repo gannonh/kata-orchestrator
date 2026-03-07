@@ -225,6 +225,16 @@ describe('shadcn primitives baseline', () => {
       fireEvent.focus(screen.getByRole('button', { name: 'Hover target' }))
       expect(await screen.findByRole('tooltip')).toBeTruthy()
 
+      const tooltipContent = screen
+        .getAllByText('Preset tooltip')
+        .map((element) => element.closest('[data-slot="tooltip-content"]'))
+        .find((element) => element !== null)
+      expect(tooltipContent).toBeTruthy()
+      expect(tooltipContent?.className.includes('data-[state=instant-open]:animate-in')).toBe(true)
+      expect(tooltipContent?.className.includes('data-[state=closed]:animate-out')).toBe(true)
+      expect(tooltipContent?.className.includes('data-open:animate-in')).toBe(false)
+      expect(tooltipContent?.className.includes('data-closed:animate-out')).toBe(false)
+
       fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }))
 
       expect(screen.getByRole('dialog')).toBeTruthy()
