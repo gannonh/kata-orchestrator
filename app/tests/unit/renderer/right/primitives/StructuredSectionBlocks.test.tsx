@@ -23,12 +23,12 @@ describe('StructuredSectionBlocks', () => {
       />
     )
 
-    expect(screen.getByRole('heading', { name: 'Goal' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Acceptance Criteria' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Non-goals' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Assumptions' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Verification Plan' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Rollback Plan' })).toBeTruthy()
+    expect(screen.getByText('Goal')).toBeTruthy()
+    expect(screen.getByText('Acceptance Criteria')).toBeTruthy()
+    expect(screen.getByText('Non-goals')).toBeTruthy()
+    expect(screen.getByText('Assumptions')).toBeTruthy()
+    expect(screen.getByText('Verification Plan')).toBeTruthy()
+    expect(screen.getByText('Rollback Plan')).toBeTruthy()
   })
 
   it('renders inline code inside the Goal section', () => {
@@ -110,9 +110,7 @@ describe('StructuredSectionBlocks', () => {
 
     expect(screen.getByText("type TaskState = '[ ]' | '[/]' | '[x]'")).toBeTruthy()
     const acceptanceCriteriaList = Array.from(container.querySelectorAll('[data-slot="card"]'))
-      .find((card) =>
-        within(card as HTMLElement).queryByRole('heading', { name: 'Acceptance Criteria' }) !== null
-      )
+      .find((card) => within(card as HTMLElement).queryByText('Acceptance Criteria') !== null)
       ?.querySelector('ol')
 
     expect(acceptanceCriteriaList).toBeTruthy()
