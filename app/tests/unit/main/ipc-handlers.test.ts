@@ -1231,14 +1231,49 @@ describe('registerIpcHandlers', () => {
     )
     expect(mockFsMkdir).toHaveBeenCalledWith('/tmp/r/.kata/sessions/session-1/notes', { recursive: true })
     expect(mockFsWriteFile).toHaveBeenCalledWith(
-      expect.stringMatching(/\/tmp\/r\/\.kata\/sessions\/session-1\/notes\/\.spec-\d+\.tmp$/),
+      expect.stringMatching(/\/tmp\/r\/\.kata\/sessions\/session-1\/notes\/\.spec-\d+-[\w-]+\.tmp$/),
       expect.stringContaining('## Goal'),
       'utf-8'
     )
     expect(mockFsRename).toHaveBeenCalledWith(
-      expect.stringMatching(/\/tmp\/r\/\.kata\/sessions\/session-1\/notes\/\.spec-\d+\.tmp$/),
+      expect.stringMatching(/\/tmp\/r\/\.kata\/sessions\/session-1\/notes\/\.spec-\d+-[\w-]+\.tmp$/),
       '/tmp/r/.kata/sessions/session-1/notes/spec.md'
     )
+  })
+
+  it('spec:get uses distinct temp paths for concurrent scaffold creation', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      spaces: {
+        'space-1': {
+          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
+          branch: 'main', orchestrationMode: 'team', createdAt: '2026-03-03T00:00:00.000Z', status: 'active'
+        }
+      },
+      sessions: {
+        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
+      }
+    })
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1772902691684)
+    registerIpcHandlers(store)
+
+    try {
+      const handler = getHandlersByChannel().get('spec:get')!
+      await Promise.all([
+        handler({}, { spaceId: 'space-1', sessionId: 'session-1' }),
+        handler({}, { spaceId: 'space-1', sessionId: 'session-1' })
+      ])
+
+      const tempPaths = mockFsWriteFile.mock.calls
+        .map((call) => call[0])
+        .filter((value): value is string => typeof value === 'string')
+        .filter((value) => value.includes('/tmp/r/.kata/sessions/session-1/notes/.spec-'))
+
+      expect(tempPaths).toHaveLength(2)
+      expect(new Set(tempPaths).size).toBe(2)
+    } finally {
+      nowSpy.mockRestore()
+    }
   })
 
   it('spec:get throws for unknown spaceId', async () => {
@@ -1644,6 +1679,16 @@ describe('registerIpcHandlers', () => {
       expect(result).toEqual(['main', 'develop', 'feature/test'])
     })
 
+    it('filters detached-HEAD pseudo branch labels from git output', async () => {
+      mockExecFile.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: (err: Error | null, result: { stdout: string }) => void) => {
+        cb(null, { stdout: '(HEAD detached at a1d60b7)\nmain\nfeature/test\n' })
+      })
+      registerIpcHandlers(createMockStore())
+      const handler = getHandlersByChannel().get('git:listBranches')!
+      const result = await handler(null, '/Users/me/dev/repo')
+      expect(result).toEqual(['main', 'feature/test'])
+    })
+
     it('returns error object when git fails', async () => {
       mockExecFile.mockImplementation((_cmd: string, _args: string[], _opts: unknown, cb: (err: Error | null) => void) => {
         cb(new Error('git failed'))
@@ -1914,17 +1959,17 @@ describe('registerIpcHandlers', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
 
       expect(mockFsWriteFile).toHaveBeenCalledWith(
-        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+\.tmp$/),
+        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+-[\w-]+\.tmp$/),
         expect.stringContaining(generatedSpec),
         'utf-8'
       )
       expect(mockFsWriteFile).toHaveBeenCalledWith(
-        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+\.tmp$/),
+        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+-[\w-]+\.tmp$/),
         expect.stringContaining('sourceRunId: run-spec-1'),
         'utf-8'
       )
       expect(mockFsRename).toHaveBeenCalledWith(
-        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+\.tmp$/),
+        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+-[\w-]+\.tmp$/),
         '/tmp/repo1/.kata/sessions/sess-1/notes/spec.md'
       )
       expect(store.save).toHaveBeenCalledWith(
