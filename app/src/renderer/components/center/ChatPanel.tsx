@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { useIpcSessionConversation } from '../../hooks/useIpcSessionConversation'
+import { useSessionModelSelection } from '../../hooks/useSessionModelSelection'
 import type { LatestRunDraft } from '../../types/spec-document'
 import type { ConversationEntry } from '../left/conversation-entry-index'
 import { buildConversationEntries } from '../left/conversation-entry-index'
 import { ChatInput } from './ChatInput'
 import { MessageBubble } from './MessageBubble'
+import { ModelSelector } from './ModelSelector'
 import { type DecisionState, extractInlineDecisionCard, type InlineDecisionCard, isDecisionResolved } from './message-decision-parser'
 import { type ScrollToMessage, MessageList } from './MessageList'
 import { toCoordinatorStatusBadgeState, toPrimitiveRunState } from './primitives/adapters'
@@ -30,8 +32,10 @@ export function ChatPanel({
   onRegisterScrollToMessage
 }: ChatPanelProps) {
   const { state, submitPrompt, retry } = useIpcSessionConversation(sessionId, spaceId ?? null)
+  const { currentModel, models, setCurrentModel, isHydrated } = useSessionModelSelection(sessionId)
   const [dismissedMessageIds, setDismissedMessageIds] = useState<Set<string>>(() => new Set())
   const primitiveRunState = toPrimitiveRunState(state.runState)
+  const isModelSelectionReady = !sessionId || (isHydrated && currentModel !== null)
   const coordinatorStatusBadgeState = toCoordinatorStatusBadgeState({
     conversationRunState: state.runState,
     activityPhase: state.activityPhase
@@ -91,7 +95,7 @@ export function ChatPanel({
           const { card: decisionCard, resolved } = decisionCardMap.get(message.id)!
           const decisionState: DecisionState = resolved
             ? 'resolved'
-            : primitiveRunState === 'pending'
+            : primitiveRunState === 'pending' || !isModelSelectionReady
               ? 'pending'
               : 'available'
 
@@ -109,9 +113,14 @@ export function ChatPanel({
                 decisionCard={decisionCard}
                 decisionState={decisionState}
                 onDecisionAction={(actionId) => {
-                  submitPrompt(
-                    decisionCard!.actions.find((action) => action.id === actionId)!.followUpPrompt
-                  )
+                  const selectedAction =
+                    decisionState === 'available'
+                      ? decisionCard?.actions.find((action) => action.id === actionId)
+                      : undefined
+
+                  if (selectedAction) {
+                    submitPrompt(selectedAction.followUpPrompt, currentModel ?? undefined)
+                  }
                 }}
                 onDismiss={(messageId) => {
                   setDismissedMessageIds((current) => {
@@ -129,10 +138,28 @@ export function ChatPanel({
         <ConversationStatusBadge state={coordinatorStatusBadgeState} />
       </div>
       <ChatInput
-        onSend={submitPrompt}
-        onRetry={retry}
+        onSend={(prompt) => {
+          submitPrompt(prompt, currentModel ?? undefined)
+        }}
+        onRetry={() => {
+          retry(currentModel ?? undefined)
+        }}
         runState={state.runState}
-        disabled={!sessionId}
+        disabled={!sessionId || !isModelSelectionReady}
+        modelSlot={
+          currentModel && isModelSelectionReady ? (
+            <ModelSelector
+              currentModel={currentModel}
+              models={models}
+              onModelChange={(model) => {
+                void setCurrentModel(model).catch((error) => {
+                  console.error('[ChatPanel] Failed to persist session model selection:', error)
+                })
+              }}
+              disabled={!sessionId}
+            />
+          ) : null
+        }
       />
     </div>
   )

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SessionConversationState } from '../../../../src/renderer/types/session-conversation'
 import { ChatPanel } from '../../../../src/renderer/components/center/ChatPanel'
@@ -12,10 +12,12 @@ const mockHook = vi.fn<
   [string | null, (string | null)?],
   {
     state: SessionConversationState
-    submitPrompt: (prompt: string) => void
-    retry: () => void
+    submitPrompt: (...args: any[]) => void
+    retry: (...args: any[]) => void
   }
 >()
+
+const mockModelHook = vi.fn()
 
 vi.mock('../../../../src/renderer/hooks/useIpcSessionConversation', () => ({
   useIpcSessionConversation: (...args: [string | null, (string | null)?]) => mockHook(...args),
@@ -41,6 +43,10 @@ vi.mock('../../../../src/renderer/components/center/MessageBubble', async (impor
   }
 })
 
+vi.mock('../../../../src/renderer/hooks/useSessionModelSelection', () => ({
+  useSessionModelSelection: (...args: unknown[]) => mockModelHook(...args)
+}))
+
 const decisionProposal = [
   '## Why',
   '- Electron + TypeScript keeps desktop iteration stable',
@@ -64,6 +70,16 @@ function idleState(
 }
 
 describe('ChatPanel', () => {
+  beforeEach(() => {
+    mockModelHook.mockReturnValue({
+      models: [],
+
+      currentModel: null,
+      isHydrated: true,
+      setCurrentModel: vi.fn()
+    })
+  })
+
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
@@ -364,6 +380,19 @@ describe('ChatPanel', () => {
 
   it('submitting a message calls submitPrompt from the hook', () => {
     const submitPrompt = vi.fn()
+    const currentModel = {
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-4-6-20250514',
+      name: 'Claude Sonnet 4.6',
+      authStatus: 'api_key'
+    }
+    mockModelHook.mockReturnValue({
+      models: [currentModel],
+
+      currentModel,
+      isHydrated: true,
+      setCurrentModel: vi.fn()
+    })
     mockHook.mockReturnValue({
       state: idleState({ runState: 'empty' }),
       submitPrompt,
@@ -377,7 +406,7 @@ describe('ChatPanel', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
-    expect(submitPrompt).toHaveBeenCalledWith('Build feature X')
+    expect(submitPrompt).toHaveBeenCalledWith('Build feature X', currentModel)
   })
 
   it('disables the chat composer when no sessionId is available yet', () => {
@@ -397,8 +426,45 @@ describe('ChatPanel', () => {
     expect(sendButton.disabled).toBe(true)
   })
 
+  it('disables the chat composer while model selection is still hydrating', () => {
+    const submitPrompt = vi.fn()
+    mockModelHook.mockReturnValue({
+      models: [],
+
+      currentModel: null,
+      isHydrated: false,
+      setCurrentModel: vi.fn()
+    })
+    mockHook.mockReturnValue({
+      state: idleState({ runState: 'empty' }),
+      submitPrompt,
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId="sess-1" />)
+
+    const input = screen.getByLabelText('Message input') as HTMLTextAreaElement
+    const sendButton = screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement
+
+    expect(input.disabled).toBe(true)
+    expect(sendButton.disabled).toBe(true)
+  })
+
   it('error state shows retry button that calls retry from the hook', () => {
     const retry = vi.fn()
+    const currentModel = {
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-4-6-20250514',
+      name: 'Claude Sonnet 4.6',
+      authStatus: 'api_key'
+    }
+    mockModelHook.mockReturnValue({
+      models: [currentModel],
+
+      currentModel,
+      isHydrated: true,
+      setCurrentModel: vi.fn()
+    })
     mockHook.mockReturnValue({
       state: idleState({ runState: 'error', errorMessage: 'Something broke' }),
       submitPrompt: vi.fn(),
@@ -410,7 +476,7 @@ describe('ChatPanel', () => {
     expect(screen.getByText('Error')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
 
-    expect(retry).toHaveBeenCalled()
+    expect(retry).toHaveBeenCalledWith(currentModel)
   })
 
   it('does not render hardcoded model badge', () => {
@@ -423,6 +489,37 @@ describe('ChatPanel', () => {
     render(<ChatPanel sessionId={null} />)
 
     expect(screen.queryByText('GPT-5.3 Codex')).toBeNull()
+  })
+
+  it('renders the selector model label from the session model hook', () => {
+    mockModelHook.mockReturnValue({
+      models: [
+        {
+          provider: 'anthropic',
+          modelId: 'claude-sonnet-4-6-20250514',
+          name: 'Claude Sonnet 4.6',
+          authStatus: 'api_key'
+        }
+      ],
+
+      currentModel: {
+        provider: 'anthropic',
+        modelId: 'claude-sonnet-4-6-20250514',
+        name: 'Claude Sonnet 4.6',
+        authStatus: 'api_key'
+      },
+      isHydrated: true,
+      setCurrentModel: vi.fn()
+    })
+    mockHook.mockReturnValue({
+      state: idleState({ runState: 'empty' }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId="session-1" />)
+
+    expect(screen.getByText('Claude Sonnet 4.6')).toBeTruthy()
   })
 
   it('renders inline decision actions for an eligible agent message', () => {
@@ -445,6 +542,19 @@ describe('ChatPanel', () => {
 
   it('clicking a decision action submits the canonical follow-up prompt', () => {
     const submitPrompt = vi.fn()
+    const currentModel = {
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-4-6-20250514',
+      name: 'Claude Sonnet 4.6',
+      authStatus: 'api_key'
+    }
+    mockModelHook.mockReturnValue({
+      models: [currentModel],
+
+      currentModel,
+      isHydrated: true,
+      setCurrentModel: vi.fn()
+    })
     mockHook.mockReturnValue({
       state: idleState({
         messages: [
@@ -459,7 +569,10 @@ describe('ChatPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Approve the plan...' }))
 
-    expect(submitPrompt).toHaveBeenCalledWith('Approve the plan and continue with this tech stack.')
+    expect(submitPrompt).toHaveBeenCalledWith(
+      'Approve the plan and continue with this tech stack.',
+      currentModel
+    )
   })
 
   it('disables inline decision actions while runState is pending', () => {
@@ -476,6 +589,33 @@ describe('ChatPanel', () => {
     })
 
     render(<ChatPanel sessionId={null} />)
+
+    const approveButton = screen.getByRole('button', { name: 'Approve the plan...' }) as HTMLButtonElement
+    expect(approveButton.disabled).toBe(true)
+    fireEvent.click(approveButton)
+    expect(submitPrompt).not.toHaveBeenCalled()
+  })
+
+  it('disables inline decision actions while model selection is still hydrating', () => {
+    const submitPrompt = vi.fn()
+    mockModelHook.mockReturnValue({
+      models: [],
+
+      currentModel: null,
+      isHydrated: false,
+      setCurrentModel: vi.fn()
+    })
+    mockHook.mockReturnValue({
+      state: idleState({
+        messages: [
+          { id: 'm1', role: 'agent', content: decisionProposal, createdAt: '2026-03-01T00:00:01Z' }
+        ]
+      }),
+      submitPrompt,
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId="sess-1" />)
 
     const approveButton = screen.getByRole('button', { name: 'Approve the plan...' }) as HTMLButtonElement
     expect(approveButton.disabled).toBe(true)
@@ -557,5 +697,49 @@ describe('ChatPanel', () => {
     )
 
     expect(onRegisterScrollToMessage).toHaveBeenCalledWith(expect.any(Function))
+  })
+
+  it('catches and logs model change persistence failures without crashing', async () => {
+    const persistenceError = new Error('IPC write failed')
+    const setCurrentModel = vi.fn().mockRejectedValue(persistenceError)
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const currentModel = {
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-4-6-20250514',
+      name: 'Claude Sonnet 4.6',
+      authStatus: 'api_key'
+    }
+    const alternateModel = {
+      provider: 'openai',
+      modelId: 'gpt-5.3',
+      name: 'GPT 5.3',
+      authStatus: 'api_key'
+    }
+    mockModelHook.mockReturnValue({
+      models: [currentModel, alternateModel],
+      session: null,
+      currentModel,
+      isHydrated: true,
+      setCurrentModel
+    })
+    mockHook.mockReturnValue({
+      state: idleState({ runState: 'empty' }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId="sess-1" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Claude Sonnet 4.6' }))
+    fireEvent.click(screen.getByText('GPT 5.3'))
+
+    await vi.waitFor(() => {
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[ChatPanel] Failed to persist session model selection:',
+        persistenceError
+      )
+    })
+
+    consoleSpy.mockRestore()
   })
 })

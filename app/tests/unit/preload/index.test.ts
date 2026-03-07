@@ -187,6 +187,37 @@ describe('preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith('session:listBySpace', { spaceId: 'space-1' })
   })
 
+  it('exposes sessionGet and sessionSetActiveModel bridge methods', async () => {
+    await import('../../../src/preload/index')
+
+    const [, api] = exposeInMainWorld.mock.calls[0] as [
+      string,
+      {
+        sessionGet: (sessionId: string) => Promise<unknown>
+        sessionSetActiveModel: (input: { sessionId: string; activeModelId: string }) => Promise<unknown>
+      }
+    ]
+
+    invoke.mockResolvedValueOnce({ id: 'session-1', activeModelId: 'gpt-5.3-codex' })
+    await expect(api.sessionGet('session-1')).resolves.toMatchObject({ id: 'session-1' })
+    expect(invoke).toHaveBeenCalledWith('session:get', { sessionId: 'session-1' })
+
+    invoke.mockResolvedValueOnce({
+      id: 'session-1',
+      activeModelId: 'claude-sonnet-4-6-20250514'
+    })
+    await expect(
+      api.sessionSetActiveModel({
+        sessionId: 'session-1',
+        activeModelId: 'claude-sonnet-4-6-20250514'
+      })
+    ).resolves.toMatchObject({ activeModelId: 'claude-sonnet-4-6-20250514' })
+    expect(invoke).toHaveBeenCalledWith('session:setActiveModel', {
+      sessionId: 'session-1',
+      activeModelId: 'claude-sonnet-4-6-20250514'
+    })
+  })
+
   it('returns false when external open invoke throws', async () => {
     invoke.mockRejectedValue(new Error('ipc unavailable'))
 

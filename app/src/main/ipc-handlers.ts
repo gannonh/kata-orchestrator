@@ -72,7 +72,9 @@ const SESSION_CREATE_CHANNEL = 'session:create'
 const SESSION_AGENT_ROSTER_LIST_CHANNEL = 'session-agent-roster:list'
 const SESSION_CONTEXT_RESOURCES_LIST_CHANNEL = 'session-context-resources:list'
 const SESSION_LIST_BY_SPACE_CHANNEL = 'session:listBySpace'
+const SESSION_GET_CHANNEL = 'session:get'
 const SESSION_SET_ACTIVE_CHANNEL = 'session:setActive'
+const SESSION_SET_ACTIVE_MODEL_CHANNEL = 'session:setActiveModel'
 const SPEC_GET_CHANNEL = 'spec:get'
 const SPEC_SAVE_CHANNEL = 'spec:save'
 const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
@@ -88,7 +90,7 @@ const AUTH_LOGIN_CHANNEL = 'auth:login'
 const AUTH_LOGOUT_CHANNEL = 'auth:logout'
 const MODEL_LIST_CHANNEL = 'model:list'
 
-const SUPPORTED_MODELS = [
+export const SUPPORTED_MODELS = [
   { provider: 'openai-codex', modelId: 'gpt-5.3-codex', name: 'GPT-5.3 Codex' },
   { provider: 'anthropic', modelId: 'claude-sonnet-4-6-20250514', name: 'Claude Sonnet 4.6' },
   { provider: 'anthropic', modelId: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
@@ -314,6 +316,14 @@ function parseSessionListBySpaceInput(input: unknown): { spaceId: string } {
   return { spaceId: input.spaceId }
 }
 
+function parseSessionGetInput(input: unknown): { sessionId: string } {
+  if (!isObjectRecord(input) || typeof input.sessionId !== 'string') {
+    throw new Error('session:get input must be an object with string sessionId')
+  }
+
+  return { sessionId: input.sessionId }
+}
+
 function parseSpaceSetActiveInput(input: unknown): { spaceId: string } {
   if (!isObjectRecord(input) || typeof input.spaceId !== 'string') {
     throw new Error('space:setActive input must be an object with string spaceId')
@@ -328,6 +338,24 @@ function parseSessionSetActiveInput(input: unknown): { sessionId: string } {
   }
 
   return { sessionId: input.sessionId }
+}
+
+function parseSessionSetActiveModelInput(input: unknown): {
+  sessionId: string
+  activeModelId: string
+} {
+  if (
+    !isObjectRecord(input) ||
+    typeof input.sessionId !== 'string' ||
+    typeof input.activeModelId !== 'string'
+  ) {
+    throw new Error('session:setActiveModel input must include string sessionId and activeModelId')
+  }
+
+  return {
+    sessionId: input.sessionId,
+    activeModelId: input.activeModelId
+  }
 }
 
 function parseSpecGetInput(input: unknown): { spaceId: string; sessionId: string } {
@@ -603,7 +631,9 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
   ipcMain.removeHandler(SESSION_AGENT_ROSTER_LIST_CHANNEL)
   ipcMain.removeHandler(SESSION_CONTEXT_RESOURCES_LIST_CHANNEL)
   ipcMain.removeHandler(SESSION_LIST_BY_SPACE_CHANNEL)
+  ipcMain.removeHandler(SESSION_GET_CHANNEL)
   ipcMain.removeHandler(SESSION_SET_ACTIVE_CHANNEL)
+  ipcMain.removeHandler(SESSION_SET_ACTIVE_MODEL_CHANNEL)
   ipcMain.removeHandler(SPEC_GET_CHANNEL)
   ipcMain.removeHandler(SPEC_SAVE_CHANNEL)
 
@@ -821,6 +851,11 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
   })
 
+  ipcMain.handle(SESSION_GET_CHANNEL, async (_event, input: unknown) => {
+    const { sessionId } = parseSessionGetInput(input)
+    return stateStore.load().sessions[sessionId] ?? null
+  })
+
   ipcMain.handle(SESSION_SET_ACTIVE_CHANNEL, async (_event, input: unknown) => {
     const { sessionId } = parseSessionSetActiveInput(input)
     const state = stateStore.load()
@@ -839,6 +874,30 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       activeSpaceId: session.spaceId,
       activeSessionId: sessionId
     }
+  })
+
+  ipcMain.handle(SESSION_SET_ACTIVE_MODEL_CHANNEL, async (_event, input: unknown) => {
+    const { sessionId, activeModelId } = parseSessionSetActiveModelInput(input)
+    const state = stateStore.load()
+    const session = state.sessions[sessionId]
+    if (!session) {
+      throw new Error(`Cannot set active model for unknown session: ${sessionId}`)
+    }
+
+    const updatedSession: SessionRecord = {
+      ...session,
+      activeModelId
+    }
+
+    stateStore.save({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        [sessionId]: updatedSession
+      }
+    })
+
+    return updatedSession
   })
 
   ipcMain.handle(SPEC_GET_CHANNEL, async (_event, input: unknown) => {
@@ -1244,12 +1303,11 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       return SUPPORTED_MODELS.map((m) => ({ ...m, authStatus: 'none' as const }))
     }
 
-    const results = await Promise.all(
-      SUPPORTED_MODELS.map(async (m) => ({
-        ...m,
-        authStatus: await credResolver.getAuthStatus(m.provider)
-      }))
+    const uniqueProviders = [...new Set(SUPPORTED_MODELS.map((m) => m.provider))]
+    const statusEntries = await Promise.all(
+      uniqueProviders.map(async (p) => [p, await credResolver.getAuthStatus(p)] as const)
     )
-    return results
+    const statusByProvider = Object.fromEntries(statusEntries)
+    return SUPPORTED_MODELS.map((m) => ({ ...m, authStatus: statusByProvider[m.provider] }))
   })
 }

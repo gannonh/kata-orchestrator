@@ -4,14 +4,14 @@ import {
   createInitialSessionConversationState,
   sessionConversationReducer
 } from '../components/center/sessionConversationState'
+import type { ModelInfo } from '../components/center/ModelSelector'
+import { FALLBACK_MODEL } from '../components/center/model-selection'
 import type { SessionRuntimeEvent } from '../types/session-runtime-adapter'
 import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../shared/types/run'
 import { isPersistedSpecDocument } from '../../shared/types/spec-document'
 import { toStableTaskId } from '@shared/task-id'
 import { buildTaskCounts, type TaskActivitySnapshot, type TaskTrackingItem } from '@shared/types/task-tracking'
 
-const DEFAULT_RUN_MODEL = 'gpt-5.3-codex'
-const DEFAULT_RUN_PROVIDER = 'openai-codex'
 const SPEC_AUTHORING_COMPLETION_MESSAGE = "I've created an initial draft of the project spec."
 
 function toConversationActivityPhase(content: string): 'thinking' | 'drafting' | undefined {
@@ -25,6 +25,14 @@ function toConversationActivityPhase(content: string): 'thinking' | 'drafting' |
   }
 
   return undefined
+}
+
+
+function toRunSelection(model?: ModelInfo): { model: string; provider: string } {
+  return {
+    model: model?.modelId ?? FALLBACK_MODEL.modelId,
+    provider: model?.provider ?? FALLBACK_MODEL.provider
+  }
 }
 
 export function useIpcSessionConversation(sessionId: string | null, spaceId: string | null = null) {
@@ -161,10 +169,11 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
   }, [sessionId, spaceId])
 
   const submitPrompt = useCallback(
-    (prompt: string) => {
+    (prompt: string, selectedModel?: ModelInfo) => {
       const kata = window.kata
       if (!kata?.runSubmit || !sessionId) return
 
+      const selection = toRunSelection(selectedModel)
       lastPromptRef.current = prompt
       dispatch({ type: 'SUBMIT_PROMPT', prompt })
 
@@ -172,8 +181,8 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
         .runSubmit({
           sessionId,
           prompt,
-          model: DEFAULT_RUN_MODEL,
-          provider: DEFAULT_RUN_PROVIDER
+          model: selection.model,
+          provider: selection.provider
         })
         .catch((error: Error) => {
           dispatch({ type: 'RUN_FAILED', error: error.message })
@@ -182,21 +191,22 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
     [sessionId]
   )
 
-  const retry = useCallback(() => {
+  const retry = useCallback((selectedModel?: ModelInfo) => {
     if (state.runState !== 'error' || !lastPromptRef.current) return
 
     const kata = window.kata
     if (!kata?.runSubmit || !sessionId) return
 
     const prompt = lastPromptRef.current
+    const selection = toRunSelection(selectedModel)
     dispatch({ type: 'RETRY_FROM_ERROR' })
 
     kata
       .runSubmit({
         sessionId,
         prompt,
-        model: DEFAULT_RUN_MODEL,
-        provider: DEFAULT_RUN_PROVIDER
+        model: selection.model,
+        provider: selection.provider
       })
       .catch((error: Error) => {
         dispatch({ type: 'RUN_FAILED', error: error.message })

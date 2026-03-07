@@ -104,6 +104,29 @@ describe('useIpcSessionConversation', () => {
     })
   })
 
+  it('submitPrompt uses the provided model and provider', async () => {
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    act(() => {
+      result.current.submitPrompt('Plan phase 2', {
+        provider: 'anthropic',
+        modelId: 'claude-sonnet-4-6-20250514',
+        name: 'Claude Sonnet 4.6',
+        authStatus: 'api_key'
+      })
+    })
+
+    expect(mockRunSubmit).toHaveBeenCalledWith({
+      sessionId: 's-1',
+      prompt: 'Plan phase 2',
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic'
+    })
+  })
+
   it('clears draft state when the active session changes', async () => {
     const { useIpcSessionConversation } = await import(
       '../../../../src/renderer/hooks/useIpcSessionConversation'
@@ -578,6 +601,46 @@ describe('useIpcSessionConversation', () => {
 
     expect(result.current.state.runState).toBe('pending')
     expect(mockRunSubmit).toHaveBeenCalledTimes(2)
+  })
+
+  it('retry uses the currently selected model and provider', async () => {
+    const { useIpcSessionConversation } = await import(
+      '../../../../src/renderer/hooks/useIpcSessionConversation'
+    )
+    const { result } = renderHook(() => useIpcSessionConversation('s-1'))
+
+    act(() => {
+      result.current.submitPrompt('Plan phase 2', {
+        provider: 'openai-codex',
+        modelId: 'gpt-5.3-codex',
+        name: 'GPT-5.3 Codex',
+        authStatus: 'oauth'
+      })
+    })
+
+    act(() => {
+      onRunEventCallback?.({
+        type: 'run_state_changed',
+        runState: 'error',
+        errorMessage: 'No credentials'
+      })
+    })
+
+    act(() => {
+      result.current.retry({
+        provider: 'anthropic',
+        modelId: 'claude-sonnet-4-6-20250514',
+        name: 'Claude Sonnet 4.6',
+        authStatus: 'api_key'
+      })
+    })
+
+    expect(mockRunSubmit).toHaveBeenLastCalledWith({
+      sessionId: 's-1',
+      prompt: 'Plan phase 2',
+      model: 'claude-sonnet-4-6-20250514',
+      provider: 'anthropic'
+    })
   })
 
   it('unsubscribes from run events on unmount', async () => {
