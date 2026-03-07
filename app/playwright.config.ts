@@ -7,7 +7,7 @@ export default defineConfig({
   outputDir: './output/playwright/test-results',
   timeout: 45_000,
   maxFailures: 1,
-  fullyParallel: true,
+  fullyParallel: false,
   workers: process.env.CI ? 4 : undefined,
   retries: 0,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'never' }]],
