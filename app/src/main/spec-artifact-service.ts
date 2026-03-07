@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -144,7 +145,7 @@ export async function loadSpecArtifactDocument(input: {
     raw = buildDefaultSpecArtifact(input.fallbackUpdatedAt)
     const dir = path.dirname(input.sourcePath)
     await fs.promises.mkdir(dir, { recursive: true })
-    const tmpPath = path.join(dir, `.spec-${Date.now()}.tmp`)
+    const tmpPath = buildSpecTempPath(dir)
     await fs.promises.writeFile(tmpPath, raw, 'utf-8')
     await fs.promises.rename(tmpPath, input.sourcePath)
   }
@@ -170,7 +171,7 @@ export async function saveSpecArtifactDocument(input: {
 
   const dir = path.dirname(input.sourcePath)
   await fs.promises.mkdir(dir, { recursive: true })
-  const tmpPath = path.join(dir, `.spec-${Date.now()}.tmp`)
+  const tmpPath = buildSpecTempPath(dir)
   await fs.promises.writeFile(tmpPath, raw, 'utf-8')
   await fs.promises.rename(tmpPath, input.sourcePath)
 
@@ -180,6 +181,10 @@ export async function saveSpecArtifactDocument(input: {
     fallbackUpdatedAt: input.frontmatter.updatedAt,
     previous: input.previous
   })
+}
+
+function buildSpecTempPath(dir: string): string {
+  return path.join(dir, `.spec-${Date.now()}-${randomUUID()}.tmp`)
 }
 
 function splitFrontmatter(raw: string): { frontmatter: string; markdown: string } | null {

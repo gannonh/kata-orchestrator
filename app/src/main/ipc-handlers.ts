@@ -971,8 +971,16 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
       return { error: 'repoPath must be a string' }
     }
     try {
-      const { stdout } = await execFileAsync('git', ['branch', '--list', '--format=%(refname:short)'], { cwd: repoPath })
-      return stdout.trim().split('\n').filter(Boolean)
+      const { stdout } = await execFileAsync(
+        'git',
+        ['for-each-ref', '--format=%(refname:short)', 'refs/heads'],
+        { cwd: repoPath }
+      )
+      return stdout
+        .trim()
+        .split('\n')
+        .map((branch) => branch.trim())
+        .filter((branch) => branch.length > 0 && !branch.startsWith('('))
     } catch (err) {
       console.error('[IPC] git:listBranches failed:', err)
       const detail = err instanceof Error ? err.message : 'Unknown error'
