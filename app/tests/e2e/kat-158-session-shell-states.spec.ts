@@ -10,6 +10,12 @@ const pendingStatePath = path.join(evidenceDir, 'state-pending.png')
 const errorStatePath = path.join(evidenceDir, 'state-error.png')
 const idleStatePath = path.join(evidenceDir, 'state-idle.png')
 
+type ModelStatus = {
+  currentModelName: string | null
+  preferredModelName: string | null
+  hasCredentials: boolean
+}
+
 async function expectRunStatus(appWindow: Page, label: 'Ready' | 'Thinking' | 'Error' | 'Stopped', timeout: number): Promise<void> {
   await expect(appWindow.getByRole('status', { name: label })).toBeVisible({ timeout })
 }
@@ -33,12 +39,50 @@ async function waitForTerminalRunStatus(
   throw new Error(`Run did not reach terminal state (Stopped/Error) within ${timeoutMs}ms`)
 }
 
-async function hasRunCredentials(appWindow: Page): Promise<boolean> {
-  const authStatus = await appWindow.evaluate(async () => {
-    return (await window.kata?.authStatus?.('openai-codex')) ?? 'none'
-  })
+async function readModelStatus(appWindow: Page): Promise<ModelStatus> {
+  return appWindow.evaluate(async () => {
+    const bootstrap = await window.kata?.appBootstrap?.()
+    const sessionId = bootstrap?.activeSessionId ?? null
+    const [models, session] = await Promise.all([
+      window.kata?.modelList?.() ?? Promise.resolve([]),
+      sessionId ? window.kata?.sessionGet?.(sessionId) ?? Promise.resolve(null) : Promise.resolve(null)
+    ])
 
-  return authStatus === 'oauth' || authStatus === 'api_key'
+    const currentModel =
+      models.find((model) => model.modelId === session?.activeModelId) ?? null
+    const preferredModel =
+      models.find((model) => model.authStatus === 'oauth' || model.authStatus === 'api_key') ??
+      null
+
+    return {
+      currentModelName: currentModel?.name ?? null,
+      preferredModelName: preferredModel?.name ?? null,
+      hasCredentials: preferredModel !== null
+    }
+  })
+}
+
+async function ensureRunnableModelSelected(appWindow: Page): Promise<boolean> {
+  const modelStatus = await readModelStatus(appWindow)
+  if (
+    !modelStatus.hasCredentials ||
+    !modelStatus.preferredModelName ||
+    modelStatus.currentModelName === modelStatus.preferredModelName
+  ) {
+    return modelStatus.hasCredentials
+  }
+
+  await appWindow
+    .getByRole('button', { name: modelStatus.currentModelName ?? '' })
+    .click()
+  await appWindow
+    .getByRole('button', { name: modelStatus.preferredModelName, exact: true })
+    .click()
+  await expect(
+    appWindow.getByRole('button', { name: modelStatus.preferredModelName, exact: true })
+  ).toBeVisible({ timeout: 5_000 })
+
+  return true
 }
 
 test.describe('KAT-158 session shell run-state evidence @uat', () => {
@@ -47,7 +91,7 @@ test.describe('KAT-158 session shell run-state evidence @uat', () => {
   }) => {
     await ensureWorkspaceShell(appWindow)
     await fs.mkdir(evidenceDir, { recursive: true })
-    const runCredentialsAvailable = await hasRunCredentials(appWindow)
+    const runCredentialsAvailable = await ensureRunnableModelSelected(appWindow)
 
     const messageInput = appWindow.getByLabel('Message input')
     const sendButton = appWindow.getByRole('button', { name: 'Send' })
