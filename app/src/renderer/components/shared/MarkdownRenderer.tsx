@@ -30,10 +30,28 @@ const MD_COMPONENTS: Components = {
       {children}
     </blockquote>
   ),
-  ul: ({ children }) => <ul className="list-inside list-disc space-y-1">{children}</ul>,
+  ul: ({ children, className }) => (
+    <ul
+      className={cn(
+        'space-y-1',
+        className?.includes('contains-task-list') ? 'list-none pl-0' : 'list-inside list-disc',
+        className
+      )}
+    >
+      {children}
+    </ul>
+  ),
   ol: ({ children }) => <ol className="list-inside list-decimal space-y-1">{children}</ol>,
   li: ({ children, className }) => (
-    <li className={cn('leading-6 marker:text-muted-foreground', className)}>{children}</li>
+    <li
+      className={cn(
+        'leading-6',
+        className?.includes('task-list-item') ? 'list-none' : 'marker:text-muted-foreground',
+        className
+      )}
+    >
+      {children}
+    </li>
   ),
   input: ({ checked, className, node: _node, ...props }) => {
     /* v8 ignore start -- react-markdown only reaches this override for GFM task list checkboxes */
@@ -49,7 +67,6 @@ const MD_COMPONENTS: Components = {
         aria-label={checked ? 'Completed task' : 'Incomplete task'}
         className={cn('mr-2 translate-y-[1px]', className)}
         disabled
-        readOnly
       />
     )
   },

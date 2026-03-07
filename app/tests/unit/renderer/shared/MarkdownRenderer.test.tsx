@@ -118,8 +118,8 @@ describe('MarkdownRenderer', () => {
     expect(quote?.className).toContain('border-l')
   })
 
-  it('renders GFM checklist items as disabled checkboxes', () => {
-    render(
+  it('renders GFM checklist items as disabled checkboxes without disc markers', () => {
+    const { container } = render(
       <MarkdownRenderer
         content={[
           '- [x] Capture screenshot evidence',
@@ -135,6 +135,16 @@ describe('MarkdownRenderer', () => {
     expect(checkboxes[1]?.checked).toBe(false)
     expect(checkboxes[0]?.disabled).toBe(true)
     expect(checkboxes[1]?.disabled).toBe(true)
+
+    const taskList = container.querySelector('ul.contains-task-list')
+    expect(taskList).toBeTruthy()
+    expect(taskList?.className).toContain('list-none')
+    expect(taskList?.className).not.toContain('list-disc')
+
+    const taskItems = container.querySelectorAll('li.task-list-item')
+    expect(taskItems).toHaveLength(2)
+    expect(taskItems[0]?.className).toContain('list-none')
+    expect(taskItems[0]?.className).not.toContain('marker:text-muted-foreground')
   })
 
   it('normalizes unterminated fences when renderMode is streaming', () => {
