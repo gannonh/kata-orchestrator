@@ -17,6 +17,7 @@ const {
   mockFsMkdir,
   mockFsReadFile,
   mockFsWriteFile,
+  mockFsRename,
   mockExecFile,
   mockCreateSessionAgentRegistry,
   mockRegistrySeedBaselineAgents,
@@ -31,6 +32,7 @@ const {
   mockFsMkdir: vi.fn(),
   mockFsReadFile: vi.fn(),
   mockFsWriteFile: vi.fn(),
+  mockFsRename: vi.fn(),
   mockExecFile: vi.fn(),
   mockCreateSessionAgentRegistry: vi.fn(),
   mockRegistrySeedBaselineAgents: vi.fn(),
@@ -61,7 +63,8 @@ vi.mock('node:fs', async () => {
         access: mockFsAccess,
         mkdir: mockFsMkdir,
         readFile: mockFsReadFile,
-        writeFile: mockFsWriteFile
+        writeFile: mockFsWriteFile,
+        rename: mockFsRename
       }
     },
     promises: {
@@ -146,6 +149,7 @@ describe('registerIpcHandlers', () => {
     mockProvisionManagedWorkspace.mockReset()
     mockFsMkdir.mockResolvedValue(undefined)
     mockFsWriteFile.mockResolvedValue(undefined)
+    mockFsRename.mockResolvedValue(undefined)
     mockFsReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
     mockCreateSessionAgentRegistry.mockImplementation((getState: () => AppState, setState: (next: AppState) => void) => ({
       seedBaselineAgents: mockRegistrySeedBaselineAgents.mockImplementation(
@@ -1129,9 +1133,13 @@ describe('registerIpcHandlers', () => {
     )
     expect(mockFsMkdir).toHaveBeenCalledWith('/tmp/r/.kata/sessions/session-1/notes', { recursive: true })
     expect(mockFsWriteFile).toHaveBeenCalledWith(
-      '/tmp/r/.kata/sessions/session-1/notes/spec.md',
+      expect.stringMatching(/\/tmp\/r\/\.kata\/sessions\/session-1\/notes\/\.spec-\d+\.tmp$/),
       expect.stringContaining('## Goal'),
       'utf-8'
+    )
+    expect(mockFsRename).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tmp\/r\/\.kata\/sessions\/session-1\/notes\/\.spec-\d+\.tmp$/),
+      '/tmp/r/.kata/sessions/session-1/notes/spec.md'
     )
   })
 
@@ -1808,14 +1816,18 @@ describe('registerIpcHandlers', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
 
       expect(mockFsWriteFile).toHaveBeenCalledWith(
-        '/tmp/repo1/.kata/sessions/sess-1/notes/spec.md',
+        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+\.tmp$/),
         expect.stringContaining(generatedSpec),
         'utf-8'
       )
       expect(mockFsWriteFile).toHaveBeenCalledWith(
-        '/tmp/repo1/.kata/sessions/sess-1/notes/spec.md',
+        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+\.tmp$/),
         expect.stringContaining('sourceRunId: run-spec-1'),
         'utf-8'
+      )
+      expect(mockFsRename).toHaveBeenCalledWith(
+        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+\.tmp$/),
+        '/tmp/repo1/.kata/sessions/sess-1/notes/spec.md'
       )
       expect(store.save).toHaveBeenCalledWith(
         expect.objectContaining({

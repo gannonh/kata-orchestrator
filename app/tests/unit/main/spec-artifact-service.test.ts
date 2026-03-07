@@ -73,6 +73,19 @@ describe('spec-artifact-service', () => {
     )
   })
 
+  it('accepts a closing frontmatter delimiter at EOF with no trailing content', () => {
+    const parsed = parseSpecArtifactFile(
+      '---\nstatus: drafting\nupdatedAt: 2026-03-06T19:33:00.000Z\n---'
+    )
+
+    expect(parsed.frontmatter).toEqual({
+      status: 'drafting',
+      updatedAt: '2026-03-06T19:33:00.000Z'
+    })
+    expect(parsed.markdown).toBe('')
+    expect(parsed.diagnostics).toEqual([])
+  })
+
   it('builds a default scaffold with required sections', () => {
     const raw = buildDefaultSpecArtifact('2026-03-06T19:33:00.000Z')
 

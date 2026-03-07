@@ -83,11 +83,11 @@ export function RightPanel({
       )
     }
 
-    if (!specDocument.document.visibleMarkdown) {
+    if (!specDocument.document.visibleMarkdown && specDocument.generationPhase) {
       return (
         <SpecTab
           project={project}
-          specState={{ mode: 'generating', phase: specDocument.generationPhase ?? 'thinking' }}
+          specState={{ mode: 'generating', phase: specDocument.generationPhase }}
         />
       )
     }

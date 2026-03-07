@@ -142,8 +142,11 @@ export async function loadSpecArtifactDocument(input: {
     }
 
     raw = buildDefaultSpecArtifact(input.fallbackUpdatedAt)
-    await fs.promises.mkdir(path.dirname(input.sourcePath), { recursive: true })
-    await fs.promises.writeFile(input.sourcePath, raw, 'utf-8')
+    const dir = path.dirname(input.sourcePath)
+    await fs.promises.mkdir(dir, { recursive: true })
+    const tmpPath = path.join(dir, `.spec-${Date.now()}.tmp`)
+    await fs.promises.writeFile(tmpPath, raw, 'utf-8')
+    await fs.promises.rename(tmpPath, input.sourcePath)
   }
 
   return buildPersistedSpecDocument({
@@ -165,8 +168,11 @@ export async function saveSpecArtifactDocument(input: {
     markdown: input.markdown
   })
 
-  await fs.promises.mkdir(path.dirname(input.sourcePath), { recursive: true })
-  await fs.promises.writeFile(input.sourcePath, raw, 'utf-8')
+  const dir = path.dirname(input.sourcePath)
+  await fs.promises.mkdir(dir, { recursive: true })
+  const tmpPath = path.join(dir, `.spec-${Date.now()}.tmp`)
+  await fs.promises.writeFile(tmpPath, raw, 'utf-8')
+  await fs.promises.rename(tmpPath, input.sourcePath)
 
   return buildPersistedSpecDocument({
     sourcePath: input.sourcePath,
@@ -183,10 +189,16 @@ function splitFrontmatter(raw: string): { frontmatter: string; markdown: string 
     return null
   }
 
-  const closingIndex = normalized.indexOf(`\n${FRONTMATTER_DELIMITER}\n`, FRONTMATTER_DELIMITER.length + 1)
+  let closingIndex = normalized.indexOf(`\n${FRONTMATTER_DELIMITER}\n`, FRONTMATTER_DELIMITER.length + 1)
 
   if (closingIndex === -1) {
-    return null
+    // Accept a closing delimiter at EOF with no trailing newline
+    const eofDelimiter = `\n${FRONTMATTER_DELIMITER}`
+    if (normalized.endsWith(eofDelimiter) && normalized.length > FRONTMATTER_DELIMITER.length + 1 + eofDelimiter.length) {
+      closingIndex = normalized.length - eofDelimiter.length
+    } else {
+      return null
+    }
   }
 
   return {
@@ -273,18 +285,10 @@ function parseFrontmatter(frontmatterBlock: string): {
     return { frontmatter: buildFallbackFrontmatter(), diagnostics }
   }
 
-  if (candidate.status !== 'drafting' && candidate.status !== 'ready') {
-    return { frontmatter: buildFallbackFrontmatter(), diagnostics }
-  }
-
-  if (typeof candidate.updatedAt !== 'string' || candidate.updatedAt.length === 0) {
-    return { frontmatter: buildFallbackFrontmatter(), diagnostics }
-  }
-
   return {
     frontmatter: {
-      status: candidate.status,
-      updatedAt: candidate.updatedAt,
+      status: candidate.status as SpecArtifactStatus,
+      updatedAt: candidate.updatedAt as string,
       sourceRunId: candidate.sourceRunId
     },
     diagnostics

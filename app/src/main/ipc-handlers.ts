@@ -131,9 +131,11 @@ function isExternalHttpUrl(url: unknown): url is string {
 
 function isSpecAuthoringPrompt(prompt: string): boolean {
   const normalized = prompt.trim().toLowerCase()
+  // Require the verb and noun to appear close together to avoid false positives
+  // like "write tests for the specification module"
   return (
-    /\b(spec|specification)\b/.test(normalized) &&
-    /\b(create|draft|write|generate|start|make|author)\b/.test(normalized)
+    /\b(create|draft|write|generate|start|make|author)\b.{0,20}\b(spec|specification)\b/.test(normalized) ||
+    /\b(spec|specification)\b.{0,20}\b(create|draft|write|generate|start|make|author)\b/.test(normalized)
   )
 }
 
@@ -497,9 +499,9 @@ async function persistRunSpecArtifact(input: {
   markdown: string
   updatedAt: string
 }): Promise<PersistedSpecDocument> {
-  const currentState = input.stateStore.load()
   const key = buildSpecDocumentKey(input.spaceId, input.sessionId)
-  const existing = currentState.specDocuments[key]
+  const preState = input.stateStore.load()
+  const existing = preState.specDocuments[key]
   const specDocument = await saveSpecArtifactDocument({
     sourcePath: buildSpecArtifactPath(input.spaceRootPath, input.sessionId),
     frontmatter: buildSpecArtifactFrontmatter(
@@ -514,10 +516,12 @@ async function persistRunSpecArtifact(input: {
     previous: existing
   })
 
+  // Reload state after awaited I/O to avoid clobbering concurrent mutations
+  const freshState = input.stateStore.load()
   input.stateStore.save({
-    ...currentState,
+    ...freshState,
     specDocuments: {
-      ...currentState.specDocuments,
+      ...freshState.specDocuments,
       [key]: specDocument
     }
   })
@@ -1132,6 +1136,14 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
               })
               .catch((error) => {
                 console.error('[IPC] Failed to persist spec artifact from run output:', error)
+                // Fall back to appending the raw agent message so the user still sees the spec
+                appendRunMessage(stateStore, run.id, {
+                  id: msg.id,
+                  role: msg.role as 'user' | 'agent',
+                  content: msg.content,
+                  createdAt: msg.createdAt
+                })
+                sendRuntimeEventToRenderer({ type: 'message_appended', message: msg })
               })
 
             return
