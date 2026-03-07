@@ -3,6 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 import { type ChatMessage } from '../../types/chat'
 import { type ConversationActivityPhase, type ConversationMessage, type ConversationRunState } from '../../types/session-conversation'
 import { cn } from '../../lib/cn'
+import type { MarkdownRenderMode } from '../shared/normalize-markdown-for-render'
 import { formatRelativeTime } from './format-relative-time'
 import { MessageActionRow } from './MessageActionRow'
 import { stripDecisionActionLines, type DecisionState, type InlineDecisionActionId, type InlineDecisionCard } from './message-decision-parser'
@@ -14,6 +15,7 @@ type BubbleMessage = ChatMessage | ConversationMessage
 type MessageBubbleProps = {
   message: BubbleMessage
   variant?: 'default' | 'collapsed'
+  renderMode?: MarkdownRenderMode
   summary?: string
   activityPhase?: ConversationActivityPhase
   conversationRunState?: ConversationRunState
@@ -39,6 +41,7 @@ function toAgentActivityPhase(content: string): 'thinking' | 'drafting' | null {
 export function MessageBubble({
   message,
   variant = 'default',
+  renderMode = 'settled',
   summary,
   activityPhase,
   conversationRunState,
@@ -161,6 +164,7 @@ export function MessageBubble({
       <ConversationMessageCard
         message={displayMessage}
         variant={variant}
+        renderMode={renderMode}
         timestampLabel={timestampLabel}
         footer={footerLabel ? <span>{footerLabel}</span> : undefined}
         onDismiss={footerLabel ? () => onDismiss?.(primitiveMessage.id) : undefined}

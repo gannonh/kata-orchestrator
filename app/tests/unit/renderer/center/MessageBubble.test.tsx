@@ -200,6 +200,25 @@ describe('MessageBubble', () => {
     expect(screen.getByText('Use full content when summary is blank.')).toBeTruthy()
   })
 
+  it('keeps user markdown markers as plain text', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 'user-markdown',
+          role: 'user',
+          content: '## Do not render this as a heading'
+        }}
+      />
+    )
+
+    expect(screen.getByText('## Do not render this as a heading')).toBeTruthy()
+    expect(
+      screen.queryByRole('heading', {
+        name: 'Do not render this as a heading'
+      })
+    ).toBeNull()
+  })
+
   it('renders decision action buttons when a decision card is provided', () => {
     const onDecisionAction = vi.fn()
 

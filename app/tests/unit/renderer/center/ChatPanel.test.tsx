@@ -4,6 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionConversationState } from '../../../../src/renderer/types/session-conversation'
 import { ChatPanel } from '../../../../src/renderer/components/center/ChatPanel'
 
+const { messageBubbleRenderSpy } = vi.hoisted(() => ({
+  messageBubbleRenderSpy: vi.fn()
+}))
+
 const mockHook = vi.fn<
   [string | null, (string | null)?],
   {
@@ -16,6 +20,26 @@ const mockHook = vi.fn<
 vi.mock('../../../../src/renderer/hooks/useIpcSessionConversation', () => ({
   useIpcSessionConversation: (...args: [string | null, (string | null)?]) => mockHook(...args),
 }))
+
+vi.mock('../../../../src/renderer/components/center/MessageBubble', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../src/renderer/components/center/MessageBubble')>()
+
+  return {
+    ...actual,
+    MessageBubble: (props: Parameters<typeof actual.MessageBubble>[0]) => {
+      messageBubbleRenderSpy(props)
+
+      return (
+        <div
+          data-message-bubble-id={props.message.id}
+          data-render-mode={props.renderMode ?? 'unset'}
+        >
+          <actual.MessageBubble {...props} />
+        </div>
+      )
+    }
+  }
+})
 
 const decisionProposal = [
   '## Why',
@@ -43,6 +67,7 @@ describe('ChatPanel', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    messageBubbleRenderSpy.mockClear()
   })
 
   it('renders message list, run status badge, and chat input', () => {
@@ -114,6 +139,65 @@ describe('ChatPanel', () => {
     render(<ChatPanel sessionId={null} />)
 
     expect(screen.getAllByRole('status', { name: 'Drafting' })).toHaveLength(2)
+  })
+
+  it('renders the latest pending assistant message in streaming mode', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        runState: 'pending',
+        messages: [
+          { id: 'm0', role: 'agent', content: 'Previous answer', createdAt: '2026-03-01T00:00:00Z' },
+          { id: 'm1', role: 'user', content: 'Show me progress', createdAt: '2026-03-01T00:00:01Z' },
+          { id: 'm2', role: 'agent', content: ['```ts', 'const ready = true'].join('\n'), createdAt: '2026-03-01T00:00:02Z' }
+        ]
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId="sess-1" />)
+
+    expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
+    expect(document.querySelector('[data-message-bubble-id="m0"]')?.getAttribute('data-render-mode')).toBe('settled')
+    expect(document.querySelector('[data-message-bubble-id="m1"]')?.getAttribute('data-render-mode')).toBe('settled')
+    expect(document.querySelector('[data-message-bubble-id="m2"]')?.getAttribute('data-render-mode')).toBe('streaming')
+    expect(
+      screen.getByText((_, node) => node?.tagName === 'CODE' && node.textContent?.includes('const ready = true') === true)
+    ).toBeTruthy()
+  })
+
+  it('stabilizes the same assistant message when the final append arrives', () => {
+    let currentState = idleState({
+      runState: 'pending',
+      messages: [
+        { id: 'm1', role: 'user', content: 'Show me progress', createdAt: '2026-03-01T00:00:00Z' },
+        { id: 'm2', role: 'agent', content: ['## Summary', '', '```ts', 'const ready = true'].join('\n'), createdAt: '2026-03-01T00:00:01Z' }
+      ]
+    })
+
+    mockHook.mockImplementation(() => ({
+      state: currentState,
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    }))
+
+    const { rerender } = render(<ChatPanel sessionId="sess-1" />)
+    expect(document.querySelector('[data-message-id="m2"]')).toBeTruthy()
+
+    currentState = idleState({
+      runState: 'idle',
+      messages: [
+        { id: 'm1', role: 'user', content: 'Show me progress', createdAt: '2026-03-01T00:00:00Z' },
+        { id: 'm2', role: 'agent', content: ['## Summary', '', '```ts', 'const ready = true', '```'].join('\n'), createdAt: '2026-03-01T00:00:01Z' }
+      ]
+    })
+
+    rerender(<ChatPanel sessionId="sess-1" />)
+
+    expect(screen.getByRole('status', { name: 'Stopped' })).toBeTruthy()
+    expect(document.querySelector('[data-message-id="m2"]')).toBeTruthy()
+    expect(document.querySelector('[data-message-bubble-id="m2"]')?.getAttribute('data-render-mode')).toBe('settled')
+    expect(screen.getByRole('heading', { name: 'Summary', level: 2 })).toBeTruthy()
   })
 
   it('renders pasted-context affordances through the real center panel path', () => {

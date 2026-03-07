@@ -1,12 +1,18 @@
+import { memo } from 'react'
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { cn } from '../../lib/cn'
+import {
+  normalizeMarkdownForRender,
+  type MarkdownRenderMode
+} from './normalize-markdown-for-render'
 
 type MarkdownRendererProps = {
   content: string
   className?: string
+  renderMode?: MarkdownRenderMode
 }
 
 const HEADING_BASE = 'font-semibold tracking-tight text-foreground'
@@ -20,8 +26,51 @@ const MD_COMPONENTS: Components = {
   h4: ({ children }) => <h4 className={`text-lg ${HEADING_BASE}`}>{children}</h4>,
   h5: ({ children }) => <h5 className={`text-lg ${HEADING_BASE}`}>{children}</h5>,
   h6: ({ children }) => <h6 className={`text-lg ${HEADING_BASE}`}>{children}</h6>,
-  ul: ({ children }) => <ul className="list-inside list-disc space-y-1">{children}</ul>,
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-2 border-border/80 pl-4 text-foreground/90">
+      {children}
+    </blockquote>
+  ),
+  ul: ({ children, className }) => (
+    <ul
+      className={cn(
+        'space-y-1',
+        className?.includes('contains-task-list') ? 'list-none pl-0' : 'list-inside list-disc',
+        className
+      )}
+    >
+      {children}
+    </ul>
+  ),
   ol: ({ children }) => <ol className="list-inside list-decimal space-y-1">{children}</ol>,
+  li: ({ children, className }) => (
+    <li
+      className={cn(
+        'leading-6',
+        className?.includes('task-list-item') ? 'list-none' : 'marker:text-muted-foreground',
+        className
+      )}
+    >
+      {children}
+    </li>
+  ),
+  input: ({ checked, className, node: _node, ...props }) => {
+    /* v8 ignore start -- react-markdown only reaches this override for GFM task list checkboxes */
+    if (props.type !== 'checkbox') {
+      return <input {...props} checked={checked} className={className} readOnly />
+    }
+    /* v8 ignore stop */
+
+    return (
+      <input
+        {...props}
+        checked={checked}
+        aria-label={checked ? 'Completed task' : 'Incomplete task'}
+        className={cn('mr-2 translate-y-[1px]', className)}
+        disabled
+      />
+    )
+  },
   pre: ({ children }) => (
     <pre className="overflow-x-auto rounded-md border bg-card p-3 font-mono text-xs text-foreground">
       {children}
@@ -41,12 +90,18 @@ const MD_COMPONENTS: Components = {
   p: ({ children }) => <p>{children}</p>
 }
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+export const MarkdownRenderer = memo(function MarkdownRenderer({
+  content,
+  className,
+  renderMode = 'settled'
+}: MarkdownRendererProps) {
+  const normalizedContent = normalizeMarkdownForRender(content, renderMode)
+
   return (
     <div className={cn('space-y-3 text-sm text-muted-foreground', className)}>
       <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-        {content}
+        {normalizedContent}
       </ReactMarkdown>
     </div>
   )
-}
+})

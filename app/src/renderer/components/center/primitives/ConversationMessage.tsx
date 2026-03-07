@@ -1,17 +1,20 @@
 import { cn } from '../../../lib/cn'
 import { MarkdownRenderer } from '../../shared/MarkdownRenderer'
+import type { MarkdownRenderMode } from '../../shared/normalize-markdown-for-render'
 import type { PrimitiveMessage, PrimitiveMessageVariant } from './types'
 
 type ConversationMessageProps = {
   message: PrimitiveMessage
   variant?: PrimitiveMessageVariant
   agentLabel?: string
+  renderMode?: MarkdownRenderMode
 }
 
 export function ConversationMessage({
   message,
   variant = 'default',
-  agentLabel = 'Kata'
+  agentLabel = 'Kata',
+  renderMode = 'settled'
 }: ConversationMessageProps) {
   const isUser = message.role === 'user'
   const isCollapsed = variant === 'collapsed' && Boolean(message.summary?.trim())
@@ -31,7 +34,7 @@ export function ConversationMessage({
         {isUser ? (
           <p className="m-0 whitespace-pre-wrap text-sm leading-6">{content}</p>
         ) : (
-          <MarkdownRenderer content={content} />
+          <MarkdownRenderer content={content} renderMode={renderMode} />
         )}
       </div>
     </div>

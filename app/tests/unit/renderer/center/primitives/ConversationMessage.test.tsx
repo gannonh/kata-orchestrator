@@ -1,9 +1,29 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { markdownRendererSpy } = vi.hoisted(() => ({
+  markdownRendererSpy: vi.fn()
+}))
+
+vi.mock('../../../../../src/renderer/components/shared/MarkdownRenderer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../../src/renderer/components/shared/MarkdownRenderer')>()
+  return {
+    ...actual,
+    MarkdownRenderer: (props: Parameters<typeof actual.MarkdownRenderer>[0]) => {
+      markdownRendererSpy(props)
+      return <actual.MarkdownRenderer {...props} />
+    }
+  }
+})
 
 import { ConversationMessage } from '../../../../../src/renderer/components/center/primitives/ConversationMessage'
 
 describe('ConversationMessage', () => {
+  afterEach(() => {
+    cleanup()
+    markdownRendererSpy.mockClear()
+  })
+
   it('renders user role as plain text with left-aligned full-width layout', () => {
     render(
       <ConversationMessage
@@ -62,5 +82,22 @@ describe('ConversationMessage', () => {
 
     expect(screen.getByText('Short summary')).toBeTruthy()
     expect(screen.queryByText('Long content')).toBeNull()
+  })
+
+  it('passes streaming render mode to assistant markdown content', () => {
+    render(
+      <ConversationMessage
+        message={{
+          id: 'agent-stream',
+          role: 'agent',
+          content: ['```ts', 'const ready = true'].join('\n')
+        }}
+        renderMode="streaming"
+      />
+    )
+
+    expect(markdownRendererSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ renderMode: 'streaming' })
+    )
   })
 })

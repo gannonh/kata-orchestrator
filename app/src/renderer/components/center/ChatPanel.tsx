@@ -40,6 +40,19 @@ export function ChatPanel({
     () => state.messages.filter((message) => !dismissedMessageIds.has(message.id)),
     [dismissedMessageIds, state.messages]
   )
+  const streamingMessageId = useMemo(() => {
+    if (state.runState !== 'pending') {
+      return null
+    }
+
+    for (let i = visibleMessages.length - 1; i >= 0; i -= 1) {
+      if (visibleMessages[i]?.role === 'agent') {
+        return visibleMessages[i].id
+      }
+    }
+
+    return null
+  }, [state.runState, visibleMessages])
   const conversationEntries = useMemo(() => buildConversationEntries(visibleMessages), [visibleMessages])
 
   useEffect(() => {
@@ -92,6 +105,7 @@ export function ChatPanel({
                 message={message}
                 activityPhase={state.activityPhase}
                 conversationRunState={state.runState}
+                renderMode={message.role === 'agent' && message.id === streamingMessageId ? 'streaming' : 'settled'}
                 decisionCard={decisionCard}
                 decisionState={decisionState}
                 onDecisionAction={(actionId) => {
