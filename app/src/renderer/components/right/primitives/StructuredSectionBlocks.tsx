@@ -22,7 +22,9 @@ function SectionList({ title, items, ordered = false }: SectionListProps) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm uppercase tracking-wide">{title}</CardTitle>
+        <CardTitle asChild className="text-sm uppercase tracking-wide">
+          <h3>{title}</h3>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         {items.length > 0 ? (
@@ -54,7 +56,9 @@ export function StructuredSectionBlocks({ sections, renderTasks }: StructuredSec
     <>
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm uppercase tracking-wide">Goal</CardTitle>
+          <CardTitle asChild className="text-sm uppercase tracking-wide">
+            <h3>Goal</h3>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {sections.goal ? (
@@ -94,7 +98,9 @@ export function StructuredSectionBlocks({ sections, renderTasks }: StructuredSec
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm uppercase tracking-wide">Tasks</CardTitle>
+          <CardTitle asChild className="text-sm uppercase tracking-wide">
+            <h3>Tasks</h3>
+          </CardTitle>
         </CardHeader>
         <CardContent>{renderTasks()}</CardContent>
       </Card>

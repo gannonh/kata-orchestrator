@@ -57,6 +57,20 @@ describe('shadcn primitives baseline', () => {
     expect(screen.getByRole('button', { name: 'Run' })).toBeTruthy()
   })
 
+  it('supports rendering card titles as semantic headings', () => {
+    render(
+      <Card>
+        <CardHeader>
+          <CardTitle asChild>
+            <h3>Shell Baseline</h3>
+          </CardTitle>
+        </CardHeader>
+      </Card>
+    )
+
+    expect(screen.getByRole('heading', { level: 3, name: 'Shell Baseline' })).toBeTruthy()
+  })
+
   it('supports tab switching with radix tab semantics', () => {
     render(
       <Tabs defaultValue="agents">
