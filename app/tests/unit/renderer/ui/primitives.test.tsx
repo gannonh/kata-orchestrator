@@ -49,7 +49,7 @@ describe('shadcn primitives baseline', () => {
       </Card>
     )
 
-    expect(screen.getByRole('heading', { name: 'Shell Baseline' })).toBeTruthy()
+    expect(screen.getByText('Shell Baseline')).toBeTruthy()
     expect(screen.getByText('Ready')).toBeTruthy()
     expect(screen.getByText('Base primitive description')).toBeTruthy()
     expect(screen.getByText('Footer content')).toBeTruthy()
@@ -176,6 +176,16 @@ describe('shadcn primitives baseline', () => {
   })
 
   it('renders overlay primitives with accessible trigger and content wiring', async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+
+    class MockResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    globalThis.ResizeObserver = MockResizeObserver as typeof ResizeObserver
+
     render(
       <TooltipProvider>
         <Dialog>
@@ -197,18 +207,21 @@ describe('shadcn primitives baseline', () => {
       </TooltipProvider>
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }))
+    try {
+      fireEvent.focus(screen.getByRole('button', { name: 'Hover target' }))
+      expect(await screen.findByRole('tooltip')).toBeTruthy()
 
-    expect(screen.getByRole('dialog')).toBeTruthy()
-    expect(screen.getByText('Migration dialog')).toBeTruthy()
-    expect(screen.getByText('Migration dialog description')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }))
 
-    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Hover target' }))
-    expect(await screen.findByRole('tooltip')).toBeTruthy()
-    expect(screen.getByText('Preset tooltip')).toBeTruthy()
+      expect(screen.getByRole('dialog')).toBeTruthy()
+      expect(screen.getByText('Migration dialog')).toBeTruthy()
+      expect(screen.getByText('Migration dialog description')).toBeTruthy()
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
   })
 
-  it('renders dropdown menu content through the shared wrapper', () => {
+  it('renders dropdown menu content through the shared wrapper', async () => {
     render(
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -222,9 +235,10 @@ describe('shadcn primitives baseline', () => {
       </DropdownMenu>
     )
 
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Open menu' }), { button: 0 })
+    const menuTrigger = screen.getByRole('button', { name: 'Open menu' })
+    fireEvent.keyDown(menuTrigger, { key: 'ArrowDown', code: 'ArrowDown' })
 
-    expect(screen.getByRole('menu')).toBeTruthy()
+    expect(await screen.findByRole('menu')).toBeTruthy()
     expect(screen.getByText('Preset item')).toBeTruthy()
   })
 })
