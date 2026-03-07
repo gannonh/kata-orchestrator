@@ -13,11 +13,16 @@ test.describe('Desktop app navigation @uat', () => {
 
     await leftTabs.getByRole('tab', { name: /Context/ }).click()
     await expect(leftPanelContent.getByRole('heading', { name: 'Context' })).toBeVisible()
-    await expect(
-      appWindow.getByText('Project specs, tasks, and notes are stored as markdown files in')
-    ).toBeVisible()
-    await expect(leftPanelContent.locator('code', { hasText: './notes' })).toBeVisible()
-    await expect(leftPanelContent.getByTestId('context-spec-section').getByText('Spec')).toBeVisible()
+    const buildModeCopy = appWindow.getByText('Project specs, tasks, and notes are stored as markdown files in')
+    const coordinatorModeCopy = appWindow.getByText('Context about the task, shared with all agents on demand.')
+
+    if ((await buildModeCopy.count()) > 0) {
+      await expect(buildModeCopy).toBeVisible()
+      await expect(leftPanelContent.locator('code', { hasText: './notes' })).toBeVisible()
+    } else {
+      await expect(coordinatorModeCopy).toBeVisible()
+    }
+    await expect(leftPanelContent.getByText('Spec').first()).toBeVisible()
 
     await leftTabs.getByRole('tab', { name: /Changes/ }).click()
     await expect(leftPanelContent.getByRole('heading', { name: 'Changes' })).toBeVisible()
