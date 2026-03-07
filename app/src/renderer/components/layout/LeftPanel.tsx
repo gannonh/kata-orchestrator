@@ -6,14 +6,18 @@ import logoLight from '../../assets/brand/icon-light.svg'
 import { mockFiles } from '../../mock/files'
 import { mockGit } from '../../mock/git'
 import { getMockProject } from '../../mock/project'
+import { useCoordinatorSidebarData } from '../../hooks/useCoordinatorSidebarData'
 import { useSessionAgentRoster } from '../../hooks/useSessionAgentRoster'
 import { AgentsTab } from '../left/AgentsTab'
+import { CoordinatorAgentsSection } from '../left/CoordinatorAgentsSection'
+import { CoordinatorContextSection } from '../left/CoordinatorContextSection'
 import { ConversationEntryIndexSection } from '../left/ConversationEntryIndexSection'
 import { ChangesTab, getChangesTabCount } from '../left/ChangesTab'
 import { ContextTab, getContextTabCount } from '../left/ContextTab'
 import { FilesTab } from '../left/FilesTab'
 import { LeftStatusSection } from '../left/LeftStatusSection'
 import type { ConversationEntry } from '../left/conversation-entry-index'
+import { resolveLeftPanelMode } from '../left/left-panel-mode'
 import { ErrorBoundary } from '../shared/ErrorBoundary'
 import { cn } from '../../lib/cn'
 import { Button } from '../ui/button'
@@ -87,9 +91,13 @@ export function LeftPanel({
   const [previewState, setPreviewState] = useState<PreviewState>(0)
   const project = useMemo(() => getMockProject(), [])
   const { agents, isLoading: isAgentsLoading, error: agentsError } = useSessionAgentRoster(activeSpaceId ?? null, activeSessionId ?? null)
+  const coordinatorSidebar = useCoordinatorSidebarData(activeSessionId ?? null)
+  const panelMode = resolveLeftPanelMode({ taskActivitySnapshot })
   const statusTasks = previewState === 0 ? project.tasks : previewTasks[previewState]
   const contextTabCount = getContextTabCount(previewState, project.tasks.length)
   const changesTabCount = getChangesTabCount(previewState, mockGit)
+  const agentsTabCount = panelMode === 'coordinator' ? coordinatorSidebar.agentItems.length : agents.length
+  const visibleContextTabCount = panelMode === 'coordinator' ? coordinatorSidebar.contextItems.length : contextTabCount
 
   const isSidebarCollapsed = collapsed ?? internalCollapsed
 
@@ -102,12 +110,12 @@ export function LeftPanel({
 
   const tabs = useMemo(
     () => [
-      { id: 'agents', label: 'Agents', icon: Users, count: agents.length },
-      { id: 'context', label: 'Context', icon: Layers3, count: contextTabCount },
+      { id: 'agents', label: 'Agents', icon: Users, count: agentsTabCount },
+      { id: 'context', label: 'Context', icon: Layers3, count: visibleContextTabCount },
       { id: 'changes', label: 'Changes', icon: GitBranch, count: changesTabCount },
       { id: 'files', label: 'Files', icon: Folder, count: mockFiles.length }
     ] satisfies Array<{ id: LeftPanelTab; label: string; icon: ComponentType<{ className?: string }>; count: number }>,
-    [agents.length, changesTabCount, contextTabCount]
+    [agentsTabCount, changesTabCount, visibleContextTabCount]
   )
 
   return (
@@ -229,39 +237,58 @@ export function LeftPanel({
               <PanelLeftClose className="h-4 w-4" />
             </Button>
           </header>
-          <ErrorBoundary fallback={<p className="px-4 py-3 text-sm text-muted-foreground">Unable to load status.</p>}>
-            <LeftStatusSection
-              title={project.sessionTitle}
-              subtitle={project.repositorySubtitle}
-              tasks={statusTasks}
-              taskActivitySnapshot={taskActivitySnapshot}
-              previewState={previewState}
-              onCyclePreviewState={() => setPreviewState((current) => nextPreviewState(current))}
-              onSelectPreviewState={(state) => setPreviewState(state)}
-            />
-          </ErrorBoundary>
+          {panelMode === 'build' ? (
+            <ErrorBoundary fallback={<p className="px-4 py-3 text-sm text-muted-foreground">Unable to load status.</p>}>
+              <LeftStatusSection
+                title={project.sessionTitle}
+                subtitle={project.repositorySubtitle}
+                tasks={statusTasks}
+                taskActivitySnapshot={taskActivitySnapshot}
+                previewState={previewState}
+                onCyclePreviewState={() => setPreviewState((current) => nextPreviewState(current))}
+                onSelectPreviewState={(state) => setPreviewState(state)}
+              />
+            </ErrorBoundary>
+          ) : null}
           <ScrollArea className="min-h-0 flex-1">
             <div className="py-4 pl-4 pr-2">
               {activeTab === 'agents' ? (
-                <>
-                  <AgentsTab
-                    agents={agents}
-                    isLoading={isAgentsLoading}
-                    error={agentsError}
+                panelMode === 'coordinator' ? (
+                  <CoordinatorAgentsSection
+                    agentItems={coordinatorSidebar.agentItems}
+                    promptPreview={coordinatorSidebar.promptPreview}
+                    isLoading={coordinatorSidebar.isLoading}
+                    error={coordinatorSidebar.error}
                   />
-                  {onJumpToMessage ? (
-                    <ConversationEntryIndexSection
-                      entries={conversationEntries}
-                      onJumpToMessage={onJumpToMessage}
+                ) : (
+                  <>
+                    <AgentsTab
+                      agents={agents}
+                      isLoading={isAgentsLoading}
+                      error={agentsError}
                     />
-                  ) : null}
-                </>
+                    {onJumpToMessage ? (
+                      <ConversationEntryIndexSection
+                        entries={conversationEntries}
+                        onJumpToMessage={onJumpToMessage}
+                      />
+                    ) : null}
+                  </>
+                )
               ) : null}
               {activeTab === 'context' ? (
-                <ContextTab
-                  project={project}
-                  previewState={previewState}
-                />
+                panelMode === 'coordinator' ? (
+                  <CoordinatorContextSection
+                    contextItems={coordinatorSidebar.contextItems}
+                    isLoading={coordinatorSidebar.isLoading}
+                    error={coordinatorSidebar.error}
+                  />
+                ) : (
+                  <ContextTab
+                    project={project}
+                    previewState={previewState}
+                  />
+                )
               ) : null}
               {activeTab === 'changes' ? (
                 <ChangesTab

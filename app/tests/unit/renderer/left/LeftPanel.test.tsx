@@ -13,15 +13,102 @@ const mockUseSessionAgentRoster = vi.fn<
     error: string | null
   }
 >()
+const mockUseCoordinatorSidebarData = vi.fn<
+  [string | null],
+  {
+    agentItems: Array<{
+      id: string
+      name: string
+      role: string
+      kind: 'coordinator' | 'specialist' | 'system'
+      status: 'idle' | 'queued' | 'delegating' | 'running' | 'blocked' | 'completed' | 'failed'
+      avatarColor: string
+      delegatedBy?: string
+      currentTask?: string
+      activeRunId?: string
+      waveId?: string
+      groupLabel?: string
+      lastActivityAt?: string
+      sortOrder: number
+      createdAt: string
+      updatedAt: string
+    }>
+    contextItems: Array<{
+      id: string
+      kind: 'spec' | 'note' | 'workspace-file' | 'manual'
+      label: string
+      sourcePath?: string
+      description?: string
+      sortOrder: number
+      createdAt: string
+      updatedAt: string
+    }>
+    promptPreview: string | null
+    isLoading: boolean
+    error: string | null
+  }
+>()
+const BUILD_TASK_ACTIVITY_SNAPSHOT = {
+  sessionId: 'session-1',
+  runId: 'run-build',
+  items: [],
+  counts: {
+    not_started: 0,
+    in_progress: 0,
+    blocked: 0,
+    complete: 0
+  }
+} as const
 
 vi.mock('../../../../src/renderer/hooks/useSessionAgentRoster', () => ({
   useSessionAgentRoster: (...args: [string | null, string | null]) => mockUseSessionAgentRoster(...args)
 }))
 
+vi.mock('../../../../src/renderer/hooks/useCoordinatorSidebarData', () => ({
+  useCoordinatorSidebarData: (sessionId: string | null) => mockUseCoordinatorSidebarData(sessionId)
+}))
+
+function renderBuildLeftPanel(props: Parameters<typeof LeftPanel>[0] = {}) {
+  return render(
+    <LeftPanel
+      {...props}
+      taskActivitySnapshot={props.taskActivitySnapshot ?? BUILD_TASK_ACTIVITY_SNAPSHOT}
+    />
+  )
+}
+
 describe('LeftPanel', () => {
   beforeEach(() => {
     mockUseSessionAgentRoster.mockReturnValue({
       agents: mockAgents,
+      isLoading: false,
+      error: null
+    })
+    mockUseCoordinatorSidebarData.mockReturnValue({
+      agentItems: [
+        {
+          id: 'agent-coordinator',
+          name: 'Coordinator',
+          role: 'Coordinates the session',
+          kind: 'coordinator',
+          status: 'idle',
+          avatarColor: '#0f766e',
+          sortOrder: 0,
+          createdAt: '2026-03-06T00:00:00.000Z',
+          updatedAt: '2026-03-06T00:01:00.000Z'
+        }
+      ],
+      contextItems: [
+        {
+          id: 'resource-spec',
+          kind: 'spec',
+          label: 'Spec',
+          sortOrder: 0,
+          createdAt: '2026-03-06T00:00:00.000Z',
+          updatedAt: '2026-03-06T00:00:00.000Z'
+        }
+      ],
+      promptPreview: 'I would like to build the following product...',
       isLoading: false,
       error: null
     })
@@ -33,18 +120,17 @@ describe('LeftPanel', () => {
     cleanup()
   })
 
-  it('shows the agents tab by default with agent summaries', () => {
-    render(<LeftPanel />)
+  it('hides the left status section and renders the coordinator agents surface in coordinator mode', () => {
+    render(<LeftPanel activeSpaceId="space-1" activeSessionId="session-1" taskActivitySnapshot={undefined} />)
 
     expect(screen.getByRole('tablist', { name: 'Left panel modules' })).toBeTruthy()
-    expect(screen.getByLabelText('Left panel status')).toBeTruthy()
-    expect(screen.getByText('Tasks ready to go.')).toBeTruthy()
+    expect(screen.queryByLabelText('Left panel status')).toBeNull()
     expect(screen.getByText('Agents write code, maintain notes, and coordinate tasks.')).toBeTruthy()
-    expect(screen.getByText('MVP Planning Coordinator')).toBeTruthy()
+    expect(screen.getByText('Coordinator')).toBeTruthy()
+    expect(screen.getByText('I would like to build the following product...')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Collapse sidebar navigation' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'Agents' })).toBeTruthy()
-    expect(screen.queryByText('Model: gpt-5')).toBeNull()
-    expect(screen.queryByText('Tokens: 5,356')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Create new agent' }).textContent).toBe('+ Create new agent')
   })
 
   it('uses session roster hook with activeSpaceId and derives the Agents tab count from loaded roster length', () => {
@@ -55,14 +141,14 @@ describe('LeftPanel', () => {
       error: null
     })
 
-    render(<LeftPanel activeSpaceId="space-42" />)
+    renderBuildLeftPanel({ activeSpaceId: 'space-42' })
 
     expect(mockUseSessionAgentRoster).toHaveBeenCalledWith('space-42', null)
     expect(screen.getByRole('tab', { name: 'Agents' }).getAttribute('title')).toBe(`Agents (${roster.length})`)
   })
 
   it('renders status section above tab content', () => {
-    render(<LeftPanel />)
+    renderBuildLeftPanel()
 
     const statusSection = screen.getByLabelText('Left panel status')
     const agentsHeading = screen.getByRole('heading', { name: 'Agents' })
@@ -74,14 +160,14 @@ describe('LeftPanel', () => {
 
   it('supports overflow state scenario with rollup chips', () => {
     window.localStorage.setItem(LEFT_STATUS_SCENARIO_KEY, 'overflow')
-    render(<LeftPanel />)
+    renderBuildLeftPanel()
 
     expect(screen.getAllByText('25 done')).toHaveLength(2)
     expect(screen.getByText('50 of 60 complete.')).toBeTruthy()
   })
 
   it('toggles to busy preview when clicking the status section', () => {
-    render(<LeftPanel />)
+    renderBuildLeftPanel()
 
     const cyclePreviewStateButton = screen.getByRole('button', { name: 'Cycle status preview state' })
     const statusSection = screen.getByLabelText('Left panel status')
@@ -100,7 +186,7 @@ describe('LeftPanel', () => {
   })
 
   it('supports direct preview selection using the 0-1-2-3 controls', () => {
-    render(<LeftPanel />)
+    renderBuildLeftPanel()
 
     fireEvent.click(screen.getByRole('button', { name: 'Show preview state 2' }))
 
@@ -110,7 +196,7 @@ describe('LeftPanel', () => {
   })
 
   it('keeps the context tab count aligned to the context tab content when preview is active', () => {
-    render(<LeftPanel />)
+    renderBuildLeftPanel()
 
     fireEvent.click(screen.getByRole('button', { name: 'Cycle status preview state' }))
     const contextTab = screen.getByRole('tab', { name: 'Context' })
@@ -119,7 +205,7 @@ describe('LeftPanel', () => {
   })
 
   it('switches to the context tab and renders the baseline context hierarchy', () => {
-    render(<LeftPanel />)
+    renderBuildLeftPanel()
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Context' }), { button: 0 })
 
@@ -136,7 +222,7 @@ describe('LeftPanel', () => {
   })
 
   it('feeds the preview cycle into the context tab states', () => {
-    render(<LeftPanel />)
+    renderBuildLeftPanel()
     fireEvent.click(screen.getByRole('button', { name: 'Cycle status preview state' }))
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Context' }), { button: 0 })
@@ -150,7 +236,7 @@ describe('LeftPanel', () => {
   })
 
   it('switches to changes and files tabs', () => {
-    render(<LeftPanel />)
+    renderBuildLeftPanel()
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Changes' }), { button: 0 })
     expect(screen.getByRole('heading', { name: 'Changes' })).toBeTruthy()
@@ -165,7 +251,7 @@ describe('LeftPanel', () => {
   })
 
   it('feeds the preview cycle into the changes tab click-through states', () => {
-    render(<LeftPanel />)
+    renderBuildLeftPanel()
 
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Changes' }), { button: 0 })
     expect(screen.getByText('No changes yet')).toBeTruthy()
@@ -288,20 +374,18 @@ describe('LeftPanel', () => {
 
   it('renders conversation entry index in agents tab and forwards jump events', () => {
     const onJumpToMessage = vi.fn()
-    render(
-      <LeftPanel
-        conversationEntries={[
-          {
-            id: 'entry-m-1',
-            messageId: 'm-1',
-            label: 'Spec Updated',
-            timestamp: '10:00 AM',
-            role: 'agent'
-          }
-        ]}
-        onJumpToMessage={onJumpToMessage}
-      />
-    )
+    renderBuildLeftPanel({
+      conversationEntries: [
+        {
+          id: 'entry-m-1',
+          messageId: 'm-1',
+          label: 'Spec Updated',
+          timestamp: '10:00 AM',
+          role: 'agent'
+        }
+      ],
+      onJumpToMessage
+    })
 
     expect(screen.getByRole('heading', { name: 'Conversation Entries' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Jump to message: Spec Updated at 10:00 AM' }))
@@ -341,19 +425,17 @@ describe('LeftPanel', () => {
   })
 
   it('does not render conversation entry index when jump callback is not provided', () => {
-    render(
-      <LeftPanel
-        conversationEntries={[
-          {
-            id: 'entry-m-1',
-            messageId: 'm-1',
-            label: 'Spec Updated',
-            timestamp: '10:00 AM',
-            role: 'agent'
-          }
-        ]}
-      />
-    )
+    renderBuildLeftPanel({
+      conversationEntries: [
+        {
+          id: 'entry-m-1',
+          messageId: 'm-1',
+          label: 'Spec Updated',
+          timestamp: '10:00 AM',
+          role: 'agent'
+        }
+      ]
+    })
 
     expect(screen.queryByRole('heading', { name: 'Conversation Entries' })).toBeNull()
   })

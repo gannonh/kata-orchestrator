@@ -7,13 +7,16 @@ import { PanelResizer } from './PanelResizer'
 import { RightPanel } from './RightPanel'
 import type { ScrollToMessage } from '../center/MessageList'
 import type { ConversationEntry } from '../left/conversation-entry-index'
+import { resolveLeftPanelMode } from '../left/left-panel-mode'
 import type { LatestRunDraft } from '../../types/spec-document'
 import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 const RESIZER_WIDTH = 10
-const LEFT_MIN = 320
+const LEFT_MIN_BUILD = 320
+const LEFT_MIN_COORDINATOR = 320
 const LEFT_COLLAPSED = 56
-const LEFT_DEFAULT = 390
+const LEFT_DEFAULT_BUILD = 390
+const LEFT_DEFAULT_COORDINATOR = 390
 const LEFT_MAX = 520
 const DOCUMENT_MIN = 300
 export const THEME_STORAGE_KEY = 'kata-theme'
@@ -30,8 +33,8 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
-function getMaxLeftWidth(availableWidth: number): number {
-  return Math.max(LEFT_MIN, Math.min(LEFT_MAX, availableWidth - RESIZER_WIDTH * 2 - DOCUMENT_MIN * 2))
+function getMaxLeftWidth(availableWidth: number, leftMin: number): number {
+  return Math.max(leftMin, Math.min(LEFT_MAX, availableWidth - RESIZER_WIDTH * 2 - DOCUMENT_MIN * 2))
 }
 
 function clampCenterRightOffset(offset: number, documentWidth: number): number {
@@ -90,7 +93,7 @@ export function observeShellWidth(
 
 export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShellProps = {}) {
   const shellRef = useRef<HTMLDivElement | null>(null)
-  const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT)
+  const [leftWidth, setLeftWidth] = useState(LEFT_DEFAULT_COORDINATOR)
   const [centerRightOffset, setCenterRightOffset] = useState(0)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [availableWidth, setAvailableWidth] = useState(1440)
@@ -115,6 +118,13 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
     const persistedTheme = globalThis.localStorage?.getItem(THEME_STORAGE_KEY)
     return persistedTheme === 'light' || persistedTheme === 'dark' ? persistedTheme : 'dark'
   })
+  const taskActivitySnapshot =
+    taskActivitySnapshotState.sessionId === activeSessionKey
+      ? taskActivitySnapshotState.snapshot
+      : undefined
+  const panelMode = resolveLeftPanelMode({ taskActivitySnapshot })
+  const leftMin = panelMode === 'coordinator' ? LEFT_MIN_COORDINATOR : LEFT_MIN_BUILD
+  const leftDefault = panelMode === 'coordinator' ? LEFT_DEFAULT_COORDINATOR : LEFT_DEFAULT_BUILD
 
   useEffect(() => {
     globalThis.localStorage?.setItem(THEME_STORAGE_KEY, theme)
@@ -127,11 +137,14 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
 
   useLayoutEffect(() => {
     setLeftWidth((current) => {
-      const maxLeft = getMaxLeftWidth(availableWidth)
-      const next = clamp(current, LEFT_MIN, maxLeft)
+      const maxLeft = getMaxLeftWidth(availableWidth, leftMin)
+      const next =
+        current === LEFT_DEFAULT_BUILD || current === LEFT_DEFAULT_COORDINATOR
+          ? clamp(leftDefault, leftMin, maxLeft)
+          : clamp(current, leftMin, maxLeft)
       return next === current ? current : next
     })
-  }, [availableWidth])
+  }, [availableWidth, leftDefault, leftMin])
 
   useLayoutEffect(() => {
     return observeShellWidth(shellRef.current, setAvailableWidth)
@@ -155,9 +168,9 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
 
   const handleLeftDelta = useCallback(
     (deltaX: number) => {
-      setLeftWidth((current) => clamp(current + deltaX, LEFT_MIN, getMaxLeftWidth(availableWidth)))
+      setLeftWidth((current) => clamp(current + deltaX, leftMin, getMaxLeftWidth(availableWidth, leftMin)))
     },
-    [availableWidth]
+    [availableWidth, leftMin]
   )
 
   const handleCenterRightDelta = useCallback(
@@ -179,10 +192,6 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
   const latestDraft =
     latestDraftState.sessionId === activeSessionKey
       ? latestDraftState.draft
-      : undefined
-  const taskActivitySnapshot =
-    taskActivitySnapshotState.sessionId === activeSessionKey
-      ? taskActivitySnapshotState.snapshot
       : undefined
   const handleLatestDraftChange = useCallback(
     (draft: LatestRunDraft | undefined) => {

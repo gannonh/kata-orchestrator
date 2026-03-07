@@ -9,6 +9,7 @@ type LeftSectionProps = {
   title: string
   description?: ReactNode
   addActionLabel: string
+  actionVariant?: 'icon' | 'inline'
   onAddAction?: () => void
   titleClassName?: string
   descriptionClassName?: string
@@ -23,6 +24,7 @@ export function LeftSection({
   title,
   description,
   addActionLabel,
+  actionVariant = 'icon',
   onAddAction,
   titleClassName,
   descriptionClassName,
@@ -34,17 +36,29 @@ export function LeftSection({
       <div className="flex items-center justify-between gap-2">
         <h2 className={cn(LEFT_PANEL_TYPOGRAPHY.sectionTitle, titleClassName)}>{title}</h2>
         {actions ?? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="-mr-2"
-            aria-label={addActionLabel}
-            onClick={onAddAction}
-            disabled={!onAddAction}
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+          actionVariant === 'inline' ? (
+            <button
+              type="button"
+              className={LEFT_PANEL_TYPOGRAPHY.sectionInlineAction}
+              aria-label={addActionLabel}
+              onClick={onAddAction}
+              disabled={!onAddAction}
+            >
+              + {addActionLabel}
+            </button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="-mr-2"
+              aria-label={addActionLabel}
+              onClick={onAddAction}
+              disabled={!onAddAction}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          )
         )}
       </div>
       {description ? (
