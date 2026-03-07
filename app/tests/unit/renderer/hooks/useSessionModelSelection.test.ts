@@ -196,7 +196,6 @@ describe('useSessionModelSelection', () => {
 
     expect(result.current.currentModel?.modelId).toBe('gpt-5.3-codex')
     expect(result.current.models).toEqual([])
-    expect(result.current.session).toBeNull()
     expect(consoleError).toHaveBeenCalledWith(
       '[useSessionModelSelection] Failed to load model selection:',
       expect.any(Error)

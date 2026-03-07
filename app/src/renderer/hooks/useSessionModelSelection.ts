@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react'
 
-import type { SessionRecord } from '../../shared/types/space'
 import type { ModelInfo } from '../components/center/ModelSelector'
 import { FALLBACK_MODEL, resolveSelectedModel } from '../components/center/model-selection'
 
 type SessionModelSelectionState = {
   models: ModelInfo[]
-  session: SessionRecord | null
   currentModel: ModelInfo | null
   isHydrated: boolean
   setCurrentModel: (model: ModelInfo) => Promise<void>
@@ -16,14 +14,12 @@ export function useSessionModelSelection(
   sessionId: string | null
 ): SessionModelSelectionState {
   const [models, setModels] = useState<ModelInfo[]>([])
-  const [session, setSession] = useState<SessionRecord | null>(null)
   const [currentModel, setCurrentModelState] = useState<ModelInfo | null>(null)
   const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
     if (!sessionId) {
       setModels([])
-      setSession(null)
       setCurrentModelState(null)
       setIsHydrated(true)
       return
@@ -41,7 +37,6 @@ export function useSessionModelSelection(
           return
         }
 
-        setSession(nextSession)
         setModels(nextModels)
 
         const resolved = resolveSelectedModel(nextModels, nextSession?.activeModelId)
@@ -50,6 +45,7 @@ export function useSessionModelSelection(
 
         if (
           nextSession?.id &&
+          nextSession.activeModelId !== undefined &&
           nextSession.activeModelId !== resolved.modelId &&
           typeof window.kata?.sessionSetActiveModel === 'function'
         ) {
@@ -73,7 +69,6 @@ export function useSessionModelSelection(
         }
 
         setModels([])
-        setSession(null)
         setCurrentModelState(FALLBACK_MODEL)
         setIsHydrated(true)
       })
@@ -102,7 +97,6 @@ export function useSessionModelSelection(
 
   return {
     models,
-    session,
     currentModel,
     isHydrated,
     setCurrentModel

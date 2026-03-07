@@ -27,6 +27,7 @@ function toConversationActivityPhase(content: string): 'thinking' | 'drafting' |
   return undefined
 }
 
+
 function toRunSelection(model?: ModelInfo): { model: string; provider: string } {
   return {
     model: model?.modelId ?? FALLBACK_MODEL.modelId,
