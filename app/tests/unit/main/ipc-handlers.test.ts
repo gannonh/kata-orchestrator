@@ -320,6 +320,15 @@ describe('registerIpcHandlers', () => {
     await expect(handler?.({}, { sessionId: 'missing-session' })).resolves.toBeNull()
   })
 
+  it('session:get rejects invalid input payloads', async () => {
+    registerIpcHandlers(createMockStore())
+    const handler = getHandlersByChannel().get('session:get')
+
+    await expect(handler?.({}, null)).rejects.toThrow(
+      'session:get input must be an object with string sessionId'
+    )
+  })
+
   it('session:setActiveModel persists activeModelId for an existing session', async () => {
     const state = {
       ...createDefaultAppState(),
@@ -352,6 +361,27 @@ describe('registerIpcHandlers', () => {
         }
       }
     })
+  })
+
+  it('session:setActiveModel rejects invalid input payloads', async () => {
+    registerIpcHandlers(createMockStore())
+    const handler = getHandlersByChannel().get('session:setActiveModel')
+
+    await expect(handler?.({}, { sessionId: 'session-1' })).rejects.toThrow(
+      'session:setActiveModel input must include string sessionId and activeModelId'
+    )
+  })
+
+  it('session:setActiveModel rejects unknown session ids', async () => {
+    registerIpcHandlers(createMockStore())
+    const handler = getHandlersByChannel().get('session:setActiveModel')
+
+    await expect(
+      handler?.({}, {
+        sessionId: 'missing-session',
+        activeModelId: 'gpt-4.1-2025-04-14'
+      })
+    ).rejects.toThrow('Cannot set active model for unknown session: missing-session')
   })
 
   it('space:create delegates managed provisioning and persists rootPath/branch/name', async () => {
