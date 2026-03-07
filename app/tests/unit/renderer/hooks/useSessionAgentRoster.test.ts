@@ -232,6 +232,15 @@ describe('useSessionAgentRoster', () => {
     expect(result.current.error).toBe('Failed to load session agent roster.')
   })
 
+  it('cleans up disposal flag when unmounted during missing-API branch', () => {
+    ;(window as any).kata = { sessionListBySpace: mockSessionListBySpace }
+
+    const { unmount } = renderHook(() => useSessionAgentRoster('space-1', null))
+    unmount()
+
+    expect(mockSessionListBySpace).not.toHaveBeenCalled()
+  })
+
   it('allows in-flight IPC to finish after unmount without crashing', async () => {
     let resolveSessions: ((value: SessionRecord[]) => void) | undefined
     mockSessionListBySpace.mockImplementation(

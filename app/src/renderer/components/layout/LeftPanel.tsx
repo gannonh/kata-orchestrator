@@ -90,9 +90,12 @@ export function LeftPanel({
   const [internalCollapsed, setInternalCollapsed] = useState(false)
   const [previewState, setPreviewState] = useState<PreviewState>(0)
   const project = useMemo(() => getMockProject(), [])
-  const { agents, isLoading: isAgentsLoading, error: agentsError } = useSessionAgentRoster(activeSpaceId ?? null, activeSessionId ?? null)
-  const coordinatorSidebar = useCoordinatorSidebarData(activeSessionId ?? null)
   const panelMode = resolveLeftPanelMode({ taskActivitySnapshot })
+  const { agents, isLoading: isAgentsLoading, error: agentsError } = useSessionAgentRoster(
+    panelMode === 'build' ? activeSpaceId ?? null : null,
+    panelMode === 'build' ? activeSessionId ?? null : null
+  )
+  const coordinatorSidebar = useCoordinatorSidebarData(panelMode === 'coordinator' ? activeSessionId ?? null : null)
   const statusTasks = previewState === 0 ? project.tasks : previewTasks[previewState]
   const contextTabCount = getContextTabCount(previewState, project.tasks.length)
   const changesTabCount = getChangesTabCount(previewState, mockGit)

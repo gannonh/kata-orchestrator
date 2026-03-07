@@ -19,7 +19,7 @@ const contextItems: CoordinatorContextListItem[] = [
     id: 'note-1',
     kind: 'note',
     label: 'Team Brainstorm',
-    sourcePath: undefined,
+    sourcePath: './notes',
     description: undefined,
     sortOrder: 1,
     createdAt: '2026-03-06T00:01:00.000Z',

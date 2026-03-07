@@ -28,9 +28,8 @@ export function CoordinatorContextSection({
         ) : null}
         {!isLoading && !error
           ? contextItems.map((item) => (
-              <button
+              <div
                 key={item.id}
-                type="button"
                 className={`flex w-full items-center gap-2 text-left ${LEFT_PANEL_TYPOGRAPHY.listItem}`}
               >
                 <span
@@ -38,7 +37,7 @@ export function CoordinatorContextSection({
                   className="h-1.5 w-1.5 rounded-full bg-muted-foreground/70"
                 />
                 <span>{item.label}</span>
-              </button>
+              </div>
             ))
           : null}
       </div>
