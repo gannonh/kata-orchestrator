@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { Badge } from '../../../../src/renderer/components/ui/badge'
 import { Button } from '../../../../src/renderer/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../../../src/renderer/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../../../src/renderer/components/ui/card'
 import { Checkbox } from '../../../../src/renderer/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../../src/renderer/components/ui/collapsible'
 import {
@@ -69,6 +69,22 @@ describe('shadcn primitives baseline', () => {
     )
 
     expect(screen.getByRole('heading', { level: 3, name: 'Shell Baseline' })).toBeTruthy()
+  })
+
+  it('exposes size and action hooks for the v4 card contract', () => {
+    const { container } = render(
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Shell Baseline</CardTitle>
+          <CardAction>
+            <Button type="button">Quick action</Button>
+          </CardAction>
+        </CardHeader>
+      </Card>
+    )
+
+    expect(container.querySelector('[data-slot="card"]')?.getAttribute('data-size')).toBe('sm')
+    expect(container.querySelector('[data-slot="card-action"]')).toBeTruthy()
   })
 
   it('supports tab switching with radix tab semantics', () => {
@@ -198,30 +214,30 @@ describe('shadcn primitives baseline', () => {
       disconnect() {}
     }
 
-    globalThis.ResizeObserver = MockResizeObserver as typeof ResizeObserver
-
-    render(
-      <TooltipProvider>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button type="button">Open dialog</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogTitle>Migration dialog</DialogTitle>
-            <DialogDescription>Migration dialog description</DialogDescription>
-          </DialogContent>
-        </Dialog>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button type="button">Hover target</Button>
-          </TooltipTrigger>
-          <TooltipContent>Preset tooltip</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    )
-
     try {
+      globalThis.ResizeObserver = MockResizeObserver as typeof ResizeObserver
+
+      render(
+        <TooltipProvider>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button type="button">Open dialog</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogTitle>Migration dialog</DialogTitle>
+              <DialogDescription>Migration dialog description</DialogDescription>
+            </DialogContent>
+          </Dialog>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button">Hover target</Button>
+            </TooltipTrigger>
+            <TooltipContent>Preset tooltip</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )
+
       fireEvent.focus(screen.getByRole('button', { name: 'Hover target' }))
       expect(await screen.findByRole('tooltip')).toBeTruthy()
 
