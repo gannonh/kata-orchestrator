@@ -6,11 +6,26 @@ import { Button } from '../../../../src/renderer/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../../../src/renderer/components/ui/card'
 import { Checkbox } from '../../../../src/renderer/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../../src/renderer/components/ui/collapsible'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger
+} from '../../../../src/renderer/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '../../../../src/renderer/components/ui/dropdown-menu'
 import { Input } from '../../../../src/renderer/components/ui/input'
 import { ScrollArea } from '../../../../src/renderer/components/ui/scroll-area'
 import { Separator } from '../../../../src/renderer/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../src/renderer/components/ui/tabs'
 import { Textarea } from '../../../../src/renderer/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../../src/renderer/components/ui/tooltip'
 
 describe('shadcn primitives baseline', () => {
   it('renders button, badge, input, and card primitives', () => {
@@ -158,5 +173,58 @@ describe('shadcn primitives baseline', () => {
     expect(screen.queryByText('Hidden details')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Toggle details' }))
     expect(screen.getByText('Hidden details')).toBeTruthy()
+  })
+
+  it('renders overlay primitives with accessible trigger and content wiring', async () => {
+    render(
+      <TooltipProvider>
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button type="button">Open dialog</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogTitle>Migration dialog</DialogTitle>
+            <DialogDescription>Migration dialog description</DialogDescription>
+          </DialogContent>
+        </Dialog>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button type="button">Hover target</Button>
+          </TooltipTrigger>
+          <TooltipContent>Preset tooltip</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }))
+
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.getByText('Migration dialog')).toBeTruthy()
+    expect(screen.getByText('Migration dialog description')).toBeTruthy()
+
+    fireEvent.mouseEnter(screen.getByRole('button', { name: 'Hover target' }))
+    expect(await screen.findByRole('tooltip')).toBeTruthy()
+    expect(screen.getByText('Preset tooltip')).toBeTruthy()
+  })
+
+  it('renders dropdown menu content through the shared wrapper', () => {
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button">Open menu</Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuGroup>
+            <DropdownMenuItem>Preset item</DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Open menu' }), { button: 0 })
+
+    expect(screen.getByRole('menu')).toBeTruthy()
+    expect(screen.getByText('Preset item')).toBeTruthy()
   })
 })
