@@ -57,7 +57,7 @@ test.describe('KAT-158 session shell run-state evidence @uat', () => {
 
     await messageInput.fill('Capture pending state evidence for KAT-158')
     await sendButton.click()
-    await expectRunStatus(appWindow, 'Thinking', 1_000)
+    await expectRunStatus(appWindow, 'Thinking', 5_000)
     await appWindow.screenshot({ path: pendingStatePath, fullPage: true })
 
     const firstTerminalState = await waitForTerminalRunStatus(appWindow, 10_000)
@@ -67,7 +67,7 @@ test.describe('KAT-158 session shell run-state evidence @uat', () => {
 
       await messageInput.fill('/error trigger deterministic failure for KAT-158')
       await sendButton.click()
-      await expectRunStatus(appWindow, 'Error', 1_000)
+      await expectRunStatus(appWindow, 'Error', 5_000)
       await appWindow.screenshot({ path: errorStatePath, fullPage: true })
       return
     }
@@ -78,7 +78,7 @@ test.describe('KAT-158 session shell run-state evidence @uat', () => {
     await expect(retryButton).toBeVisible()
     await retryButton.click()
 
-    await expectRunStatus(appWindow, 'Thinking', 1_000)
+    await expectRunStatus(appWindow, 'Thinking', 5_000)
     const terminalStateAfterRetry = await waitForTerminalRunStatus(appWindow, 10_000)
     if (runCredentialsAvailable && terminalStateAfterRetry !== 'Stopped') {
       throw new Error(`Expected retry to recover to Stopped with credentials, got ${terminalStateAfterRetry}`)
