@@ -20,6 +20,7 @@ test.describe('KAT-185: Agent roster sidebar integration @ci', () => {
     managedStateFilePath
   }) => {
     await ensureWorkspaceShell(appWindow)
+    await appWindow.getByRole('tab', { name: 'Agents' }).click()
 
     await expect(appWindow.getByRole('heading', { name: 'Agents' })).toBeVisible()
     await expect(appWindow.getByText('Kata Agents')).toBeVisible()
