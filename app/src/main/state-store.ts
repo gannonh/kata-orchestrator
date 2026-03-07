@@ -354,12 +354,53 @@ function normalizeSpecDocuments(value: unknown): AppState['specDocuments'] {
         ...record,
         appliedRunId: record.frontmatter.sourceRunId
       }
+    } else if (isLegacySpecDocumentRecord(record)) {
+      normalized[key] = migrateLegacySpecDocument(record)
     } else {
       console.warn('[StateStore] Dropping invalid spec document entry:', key)
     }
   }
 
   return normalized
+}
+
+function isLegacySpecDocumentRecord(value: unknown): value is {
+  markdown: string
+  updatedAt: string
+  appliedRunId?: string
+  appliedAt?: string
+} {
+  return (
+    isRecord(value) &&
+    typeof value.markdown === 'string' &&
+    typeof value.updatedAt === 'string' &&
+    (value.appliedRunId === undefined || typeof value.appliedRunId === 'string') &&
+    (value.appliedAt === undefined || typeof value.appliedAt === 'string')
+  )
+}
+
+function migrateLegacySpecDocument(record: {
+  markdown: string
+  updatedAt?: string
+  appliedRunId?: string
+  appliedAt?: string
+}): PersistedSpecDocument {
+  const updatedAt = record.updatedAt ?? record.appliedAt ?? ''
+  const sourceRunId = record.appliedRunId
+
+  return {
+    sourcePath: '',
+    raw: record.markdown,
+    markdown: record.markdown,
+    frontmatter: {
+      status: 'drafting',
+      updatedAt,
+      ...(sourceRunId !== undefined && { sourceRunId })
+    },
+    diagnostics: [],
+    updatedAt,
+    ...(sourceRunId !== undefined && { appliedRunId: sourceRunId })
+  }
 }
 
 function reconcileInterruptedRuns(runs: AppState['runs']): AppState['runs'] {

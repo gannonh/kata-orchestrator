@@ -24,6 +24,7 @@ export function sessionConversationReducer(
 
       return {
         runState: 'pending',
+        activityPhase: undefined,
         messages: [...state.messages, createMessage(state, 'user', event.prompt)]
       }
     case 'RUN_STREAM_UPDATED': {
@@ -84,6 +85,7 @@ export function sessionConversationReducer(
       return {
         ...state,
         runState: 'error',
+        activityPhase: undefined,
         errorMessage: event.error
       }
     case 'APPEND_MESSAGE': {
@@ -118,7 +120,22 @@ export function sessionConversationReducer(
       return {
         ...state,
         runState: 'pending',
+        activityPhase: undefined,
         errorMessage: undefined
+      }
+    case 'SET_ACTIVITY_PHASE':
+      return {
+        ...state,
+        activityPhase: event.phase
+      }
+    case 'CLEAR_ACTIVITY_PHASE':
+      if (!state.activityPhase) {
+        return state
+      }
+
+      return {
+        ...state,
+        activityPhase: undefined
       }
     case 'RUN_COMPLETED':
       if (state.runState !== 'pending') {

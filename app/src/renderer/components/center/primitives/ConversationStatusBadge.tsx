@@ -3,6 +3,7 @@ import type { CoordinatorStatusBadgeState } from './types'
 const STATUS_MAP = {
   ready: { label: 'Ready', dotClass: 'bg-muted-foreground' },
   thinking: { label: 'Thinking', dotClass: 'bg-primary motion-safe:animate-pulse' },
+  drafting: { label: 'Drafting', dotClass: 'bg-primary motion-safe:animate-pulse' },
   running: { label: 'Running', dotClass: 'bg-primary' },
   stopped: { label: 'Stopped', dotClass: 'bg-muted-foreground' },
   error: { label: 'Error', dotClass: 'bg-destructive' }

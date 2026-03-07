@@ -33,7 +33,8 @@ export function ChatPanel({
   const [dismissedMessageIds, setDismissedMessageIds] = useState<Set<string>>(() => new Set())
   const primitiveRunState = toPrimitiveRunState(state.runState)
   const coordinatorStatusBadgeState = toCoordinatorStatusBadgeState({
-    conversationRunState: state.runState
+    conversationRunState: state.runState,
+    activityPhase: state.activityPhase
   })
   const visibleMessages = useMemo(
     () => state.messages.filter((message) => !dismissedMessageIds.has(message.id)),
@@ -74,7 +75,7 @@ export function ChatPanel({
     <div className="flex h-full min-h-0 flex-col">
       <MessageList onRegisterScrollToMessage={onRegisterScrollToMessage}>
         {visibleMessages.map((message) => {
-          const { card: decisionCard, resolved } = decisionCardMap.get(message.id) ?? { card: undefined, resolved: false }
+          const { card: decisionCard, resolved } = decisionCardMap.get(message.id)!
           const decisionState: DecisionState = resolved
             ? 'resolved'
             : primitiveRunState === 'pending'
@@ -89,17 +90,14 @@ export function ChatPanel({
             >
               <MessageBubble
                 message={message}
+                activityPhase={state.activityPhase}
+                conversationRunState={state.runState}
                 decisionCard={decisionCard}
                 decisionState={decisionState}
                 onDecisionAction={(actionId) => {
-                  const selectedAction =
-                    decisionState === 'available'
-                      ? decisionCard?.actions.find((action) => action.id === actionId)
-                      : undefined
-
-                  if (selectedAction) {
-                    submitPrompt(selectedAction.followUpPrompt)
-                  }
+                  submitPrompt(
+                    decisionCard!.actions.find((action) => action.id === actionId)!.followUpPrompt
+                  )
                 }}
                 onDismiss={(messageId) => {
                   setDismissedMessageIds((current) => {

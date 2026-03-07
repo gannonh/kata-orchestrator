@@ -109,11 +109,13 @@ test.describe('KAT-256 spec artifact source of truth @uat', () => {
 
     const context = await resolveActiveSessionContext(appWindow)
     const initialDocument = await getSpecDocument(appWindow, context)
+    const rightPanel = appWindow.getByTestId('right-panel')
 
     expect(initialDocument.sourcePath).toContain('/.kata/sessions/')
     expect(initialDocument.sourcePath).toMatch(/\/notes\/spec\.md$/)
     expect(initialDocument.frontmatter.status).toBe('drafting')
     expect(initialDocument.markdown).toContain('## Goal')
+    await expect(rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })).toHaveCount(0)
 
     const createdRaw = await fs.readFile(initialDocument.sourcePath, 'utf8')
     expect(createdRaw).toContain('status: drafting')
@@ -139,12 +141,12 @@ test.describe('KAT-256 spec artifact source of truth @uat', () => {
     await fs.writeFile(initialDocument.sourcePath, externalEditRaw, 'utf8')
 
     await reloadRenderer(appWindow)
-    const rightPanel = appWindow.getByTestId('right-panel')
     await expect(rightPanel.getByText('Reflect external edit after reload.')).toBeVisible()
     await expect(
       rightPanel.getByText('Reload the renderer and show the edited content.')
     ).toBeVisible()
     await expect(rightPanel.getByText('Trace: run-kat-256-external')).toBeVisible()
+    await expect(rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })).toHaveCount(0)
 
     const reloadedDocument = await getSpecDocument(appWindow, context)
     expect(reloadedDocument.frontmatter.status).toBe('ready')
@@ -171,6 +173,7 @@ test.describe('KAT-256 spec artifact source of truth @uat', () => {
     await expect(rightPanel.getByText(/invalid_frontmatter_yaml/i)).toBeVisible()
     await expect(rightPanel.getByText(/notes\/spec\.md/i).first()).toBeVisible()
     await expect(rightPanel.getByText('Reflect external edit after reload.')).toBeVisible()
+    await expect(rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })).toHaveCount(0)
 
     const invalidDocument = await getSpecDocument(appWindow, context)
     expect(invalidDocument.diagnostics[0]?.code).toBe('invalid_frontmatter_yaml')

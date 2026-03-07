@@ -80,6 +80,7 @@ export function parseSpecMarkdown(markdown: string): ParsedSpecMarkdownDocument 
     sourcePath: '',
     raw: markdown,
     markdown,
+    visibleMarkdown: markdown,
     status: 'drafting',
     diagnostics: [],
     sections: {

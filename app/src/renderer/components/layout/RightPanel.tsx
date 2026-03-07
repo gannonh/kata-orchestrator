@@ -1,15 +1,11 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
 import { mockProject } from '../../mock/project'
 import { useSpecDocument } from '../../hooks/useSpecDocument'
 import type { ProjectSpec } from '../../types/project'
-import type { LatestRunDraft } from '../../types/spec-document'
-import type { SpecTaskItem } from '../../types/spec-document'
-import { buildTaskCounts, type TaskActivitySnapshot } from '@shared/types/task-tracking'
 import { cn } from '../../lib/cn'
 import { SpecTab } from '../right/SpecTab'
-import { cycleTaskStatus } from '../right/spec-task-markdown'
 import { DynamicPanelTabs } from '../shared/DynamicPanelTabs'
 import { NewNoteScaffold } from '../shared/NewNoteScaffold'
 import { Button } from '../ui/button'
@@ -22,21 +18,15 @@ type RightPanelProps = {
   project?: ProjectSpec
   spaceId?: string | null
   sessionId?: string | null
-  latestDraft?: LatestRunDraft
-  taskActivitySnapshot?: TaskActivitySnapshot
-  onTaskActivitySnapshotChange?: (snapshot: TaskActivitySnapshot | undefined) => void
 }
 
 const COMMENT_STATUS_NOTE =
-  'Comment threads are intentionally deferred in this release so the structured spec draft and checkbox task state remain the current source of truth.'
+  'Comment threads remain deferred in this release while the live markdown spec artifact becomes the source of truth.'
 
 export function RightPanel({
   project = mockProject,
   spaceId,
-  sessionId,
-  latestDraft,
-  taskActivitySnapshot,
-  onTaskActivitySnapshotChange
+  sessionId
 }: RightPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -47,35 +37,6 @@ export function RightPanel({
     sessionId: sessionId ?? 'inactive-session',
     enabled: hasStructuredSpec
   })
-
-  const handleToggleTask = useCallback(
-    (taskId: string) => {
-      const task = specDocument.document.tasks.find((candidate) => candidate.id === taskId)
-
-      if (task && sessionId) {
-        const updatedAt = new Date().toISOString()
-        const optimisticTasks = specDocument.document.tasks.map((candidate) =>
-          candidate.id === taskId
-            ? {
-                ...candidate,
-                status: cycleTaskStatus(candidate.status)
-              }
-            : candidate
-        )
-        onTaskActivitySnapshotChange?.(
-          buildTaskActivitySnapshot({
-            sessionId,
-            runId: specDocument.document.sourceRunId ?? specDocument.document.appliedRunId ?? `spec-${sessionId}`,
-            updatedAt,
-            tasks: optimisticTasks
-          })
-        )
-      }
-
-      specDocument.toggleTask(taskId)
-    },
-    [onTaskActivitySnapshotChange, sessionId, specDocument]
-  )
 
   useLayoutEffect(() => {
     setIsEditing(false)
@@ -122,28 +83,11 @@ export function RightPanel({
       )
     }
 
-    if (latestDraft && latestDraft.runId !== specDocument.document.sourceRunId) {
+    if (!specDocument.document.visibleMarkdown) {
       return (
         <SpecTab
           project={project}
-          specState={{
-            mode: 'draft_ready',
-            latestDraft,
-            onApplyDraft: () => {
-              specDocument.applyDraft(latestDraft)
-              setIsEditing(false)
-            },
-            commentStatusNote: COMMENT_STATUS_NOTE
-          }}
-        />
-      )
-    }
-
-    if (!specDocument.document.markdown) {
-      return (
-        <SpecTab
-          project={project}
-          specState={{ mode: 'generating' }}
+          specState={{ mode: 'generating', phase: specDocument.generationPhase ?? 'thinking' }}
         />
       )
     }
@@ -152,10 +96,8 @@ export function RightPanel({
       <SpecTab
         project={project}
         specState={{
-          mode: 'structured_view',
+          mode: 'viewing',
           document: specDocument.document,
-          taskActivitySnapshot,
-          onToggleTask: handleToggleTask,
           onEditMarkdown: () => {
             setDraftMarkdown(specDocument.document.markdown)
             setIsEditing(true)
@@ -169,10 +111,8 @@ export function RightPanel({
     draftMarkdown,
     hasStructuredSpec,
     isEditing,
-    latestDraft,
     project,
-    specDocument,
-    taskActivitySnapshot
+    specDocument
   ])
 
   return (
@@ -226,31 +166,4 @@ export function RightPanel({
       </div>
     </div>
   )
-}
-
-function buildTaskActivitySnapshot({
-  sessionId,
-  runId,
-  updatedAt,
-  tasks
-}: {
-  sessionId: string
-  runId: string
-  updatedAt: string
-  tasks: SpecTaskItem[]
-}): TaskActivitySnapshot {
-  const items: TaskActivitySnapshot['items'] = tasks.map((task) => ({
-    id: task.id,
-    title: task.title,
-    status: task.status,
-    activityLevel: 'none',
-    updatedAt
-  }))
-
-  return {
-    sessionId,
-    runId,
-    items,
-    counts: buildTaskCounts(items)
-  }
 }

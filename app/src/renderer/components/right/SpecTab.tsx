@@ -1,6 +1,5 @@
 import type { ProjectSpec } from '../../types/project'
-import type { LatestRunDraft, StructuredSpecDocument } from '../../types/spec-document'
-import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
+import type { StructuredSpecDocument } from '../../types/spec-document'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
 import { Textarea } from '../ui/textarea'
@@ -13,18 +12,11 @@ import { TaskList } from './TaskList'
 type StructuredSpecTabState =
   | {
       mode: 'generating'
+      phase?: 'thinking' | 'drafting'
     }
   | {
-      mode: 'draft_ready'
-      latestDraft: LatestRunDraft
-      onApplyDraft: () => void
-      commentStatusNote: string
-    }
-  | {
-      mode: 'structured_view'
+      mode: 'viewing'
       document: StructuredSpecDocument
-      taskActivitySnapshot?: TaskActivitySnapshot
-      onToggleTask: (taskId: string) => void
       onEditMarkdown: () => void
       commentStatusNote: string
     }
@@ -46,35 +38,7 @@ type SpecTabProps = {
 export function SpecTab({ project, specState }: SpecTabProps) {
   if (specState) {
     if (specState.mode === 'generating') {
-      return <SpecOnboardingState />
-    }
-
-    if (specState.mode === 'draft_ready') {
-      return (
-        <div className="grid gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm uppercase tracking-wide">Draft Ready</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Latest run {specState.latestDraft.runId} produced a structured spec draft that can be applied into this panel.
-              </p>
-              <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
-                Generated at {specState.latestDraft.generatedAt}
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                onClick={specState.onApplyDraft}
-              >
-                Apply Draft to Spec
-              </Button>
-            </CardContent>
-          </Card>
-          <p className="text-xs text-muted-foreground">{specState.commentStatusNote}</p>
-        </div>
-      )
+      return <SpecOnboardingState phase={specState.phase} />
     }
 
     if (specState.mode === 'editing') {
@@ -116,8 +80,6 @@ export function SpecTab({ project, specState }: SpecTabProps) {
     return (
       <SpecSections
         document={specState.document}
-        taskActivitySnapshot={specState.taskActivitySnapshot}
-        onToggleTask={specState.onToggleTask}
         onEditMarkdown={specState.onEditMarkdown}
         commentStatusNote={specState.commentStatusNote}
       />

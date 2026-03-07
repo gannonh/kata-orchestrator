@@ -7,7 +7,6 @@ import { PanelResizer } from './PanelResizer'
 import { RightPanel } from './RightPanel'
 import type { ScrollToMessage } from '../center/MessageList'
 import type { ConversationEntry } from '../left/conversation-entry-index'
-import type { LatestRunDraft } from '../../types/spec-document'
 import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 const RESIZER_WIDTH = 10
@@ -97,13 +96,6 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
   const [conversationEntries, setConversationEntries] = useState<ConversationEntry[]>([])
   const scrollToMessageRef = useRef<ScrollToMessage | null>(null)
   const activeSessionKey = activeSessionId ?? null
-  const [latestDraftState, setLatestDraftState] = useState<{
-    sessionId: string | null
-    draft: LatestRunDraft | undefined
-  }>({
-    sessionId: activeSessionKey,
-    draft: undefined
-  })
   const [taskActivitySnapshotState, setTaskActivitySnapshotState] = useState<{
     sessionId: string | null
     snapshot: TaskActivitySnapshot | undefined
@@ -176,29 +168,10 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
       `${effectiveLeftWidth}px ${leftResizerWidth}px ${documentSplit.center}px ${RESIZER_WIDTH}px ${documentSplit.right}px`,
     [effectiveLeftWidth, leftResizerWidth, documentSplit.center, documentSplit.right]
   )
-  const latestDraft =
-    latestDraftState.sessionId === activeSessionKey
-      ? latestDraftState.draft
-      : undefined
   const taskActivitySnapshot =
     taskActivitySnapshotState.sessionId === activeSessionKey
       ? taskActivitySnapshotState.snapshot
       : undefined
-  const handleLatestDraftChange = useCallback(
-    (draft: LatestRunDraft | undefined) => {
-      setLatestDraftState((current) => {
-        if (current.sessionId === activeSessionKey && current.draft === draft) {
-          return current
-        }
-
-        return {
-          sessionId: activeSessionKey,
-          draft
-        }
-      })
-    },
-    [activeSessionKey]
-  )
   const handleTaskActivitySnapshotChange = useCallback(
     (snapshot: TaskActivitySnapshot | undefined) => {
       const snapshotSessionId = snapshot?.sessionId ?? activeSessionKey
@@ -273,7 +246,6 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
           <ChatPanel
             sessionId={activeSessionId ?? null}
             spaceId={activeSpaceId ?? null}
-            onLatestDraftChange={handleLatestDraftChange}
             onTaskActivitySnapshotChange={handleTaskActivitySnapshotChange}
             onConversationEntriesChange={setConversationEntries}
             onRegisterScrollToMessage={handleRegisterScrollToMessage}
@@ -295,9 +267,6 @@ export function AppShell({ activeSpaceId, activeSessionId, onOpenHome }: AppShel
           <RightPanel
             spaceId={activeSpaceId ?? null}
             sessionId={activeSessionId ?? null}
-            latestDraft={latestDraft}
-            taskActivitySnapshot={taskActivitySnapshot}
-            onTaskActivitySnapshotChange={handleTaskActivitySnapshotChange}
           />
         </aside>
       </section>

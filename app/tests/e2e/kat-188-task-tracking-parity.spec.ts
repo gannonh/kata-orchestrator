@@ -18,7 +18,7 @@ const RUN_ID = 'run-kat-188-e2e'
 const HIGH_ACTIVITY_DETAIL = "I'm starting implementation for the space creation flow."
 const TASK_TITLES = [
   'Review the latest prompt',
-  'Apply the structured draft',
+  'Write the markdown artifact',
   'Keep the runtime wiring stable'
 ]
 
@@ -79,14 +79,14 @@ function buildStructuredDraftMarkdown(prompt: string): string {
     prompt,
     '',
     '## Acceptance Criteria',
-    '1. Produce a structured spec draft from the latest run',
+    '1. Produce a markdown spec artifact from the latest run',
     '2. Keep the shell behavior deterministic for renderer tests',
     '',
     '## Non-goals',
     '- Do not call external services from the right panel',
     '',
     '## Assumptions',
-    '- The latest prompt is the source of truth for the draft',
+    '- The latest prompt is the source of truth for the spec artifact',
     '',
     '## Verification Plan',
     '1. Run the renderer unit tests',
@@ -96,7 +96,7 @@ function buildStructuredDraftMarkdown(prompt: string): string {
     '',
     '## Tasks',
     '- [ ] Review the latest prompt',
-    '- [/] Apply the structured draft',
+    '- [/] Write the markdown artifact',
     '- [x] Keep the runtime wiring stable'
   ].join('\n')
 }
@@ -180,13 +180,11 @@ test.describe('KAT-188 task tracking parity evidence @uat', () => {
         }
       })
       if (!runtimeContext.spaceId || !runtimeContext.sessionId) {
-        throw new Error('Unable to resolve active context before applying KAT-188 structured draft.')
+        throw new Error('Unable to resolve active context before saving the KAT-188 spec artifact.')
       }
       sessionId = runtimeContext.sessionId
 
-      // Persist the structured draft so that after reload the spec panel
-      // renders in structured_view mode (requires non-empty markdown with
-      // an appliedRunId).
+      // Persist the markdown artifact so the spec panel picks it up after reload.
       const draftMarkdown = buildStructuredDraftMarkdown(
         'Build session task tracking parity baseline.'
       )
@@ -196,7 +194,7 @@ test.describe('KAT-188 task tracking parity evidence @uat', () => {
             spaceId: sid,
             sessionId: ssid,
             markdown: md,
-            appliedRunId: rid
+            sourceRunId: rid
           })
         },
         {
@@ -253,7 +251,7 @@ test.describe('KAT-188 task tracking parity evidence @uat', () => {
 
       await expect(taskTrackingSection).toBeVisible({ timeout: 10_000 })
       await expect(taskTrackingSection.getByText(/in progress/i)).toBeVisible()
-      await expect(rightPanel.getByRole('checkbox', { name: TASK_TITLES[1] })).toBeVisible()
+      await expect(rightPanel.getByText(TASK_TITLES[1])).toBeVisible()
 
       for (const title of TASK_TITLES) {
         await expect(taskTrackingSection.getByText(title)).toBeVisible()
@@ -289,8 +287,6 @@ test.describe('KAT-188 task tracking parity evidence @uat', () => {
 
       await expect(taskTrackingSection.getByText(HIGH_ACTIVITY_DETAIL)).toBeVisible({ timeout: 10_000 })
       await expect(taskTrackingSection.getByLabel('Active specialist')).toBeVisible()
-      await expect(rightPanel.getByText(HIGH_ACTIVITY_DETAIL)).toBeVisible()
-      await expect(rightPanel.getByLabel('Active specialist')).toBeVisible()
 
       if (shouldCaptureEvidence) {
         await taskTrackingSection.screenshot({ path: detailHighActivityPath })

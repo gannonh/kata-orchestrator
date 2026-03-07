@@ -1204,6 +1204,52 @@ describe('createStateStore', () => {
     })
   })
 
+  test('migrates legacy persisted spec document entries instead of dropping them', () => {
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({
+        spaces: {},
+        sessions: {},
+        runs: {},
+        agentRoster: {},
+        specDocuments: {
+          'space-legacy:session-legacy': {
+            markdown: '## Goal\nLegacy persisted spec',
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            appliedRunId: 'run-legacy',
+            appliedAt: '2026-03-03T00:00:00.000Z'
+          }
+        },
+        activeSpaceId: null,
+        activeSessionId: null
+      })
+    )
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const state = createStateStore(filePath).load()
+
+    expect(state.specDocuments['space-legacy:session-legacy']).toEqual({
+      sourcePath: '',
+      raw: '## Goal\nLegacy persisted spec',
+      markdown: '## Goal\nLegacy persisted spec',
+      updatedAt: '2026-03-03T00:00:00.000Z',
+      frontmatter: {
+        status: 'drafting',
+        updatedAt: '2026-03-03T00:00:00.000Z',
+        sourceRunId: 'run-legacy'
+      },
+      diagnostics: [],
+      appliedRunId: 'run-legacy'
+    })
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      '[StateStore] Dropping invalid spec document entry:',
+      'space-legacy:session-legacy'
+    )
+
+    warnSpy.mockRestore()
+  })
+
   test('drops prototype-polluting keys from specDocuments', () => {
     fs.writeFileSync(
       filePath,

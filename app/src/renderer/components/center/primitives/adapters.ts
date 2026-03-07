@@ -1,5 +1,6 @@
 import type { ChatMessage } from '../../../types/chat'
 import type {
+  ConversationActivityPhase,
   ConversationMessage,
   ConversationRunState
 } from '../../../types/session-conversation'
@@ -40,6 +41,7 @@ export function toPrimitiveRunState(
 
 export function toCoordinatorStatusBadgeState(input: {
   conversationRunState?: ConversationRunState
+  activityPhase?: ConversationActivityPhase
   activeAgent?: SessionAgentRecord
 }): CoordinatorStatusBadgeState {
   if (input.activeAgent?.status === 'failed') {
@@ -51,6 +53,14 @@ export function toCoordinatorStatusBadgeState(input: {
     ACTIVE_COORDINATOR_STATUSES.has(input.activeAgent.status)
   ) {
     return 'running'
+  }
+
+  if (input.activityPhase === 'thinking') {
+    return 'thinking'
+  }
+
+  if (input.activityPhase === 'drafting') {
+    return 'drafting'
   }
 
   switch (input.conversationRunState) {

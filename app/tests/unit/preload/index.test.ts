@@ -282,15 +282,6 @@ describe('preload bridge', () => {
           appliedRunId?: string
           appliedAt?: string
         }) => Promise<unknown>
-        specApplyDraft: (input: {
-          spaceId: string
-          sessionId: string
-          draft: {
-            runId: string
-            generatedAt: string
-            content: string
-          }
-        }) => Promise<unknown>
       }
     ]
 
@@ -379,43 +370,6 @@ describe('preload bridge', () => {
       appliedRunId: 'run-9'
     })
     expect(invoke).toHaveBeenCalledWith('spec:save', saveInput)
-
-    const applyDraftInput = {
-      spaceId: 'space-1',
-      sessionId: 'session-1',
-      draft: {
-        runId: 'run-10',
-        generatedAt: '2026-03-03T00:00:00.000Z',
-        content: '# Applied from draft'
-      }
-    }
-    invoke.mockResolvedValueOnce({
-      sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
-      raw: '---\nstatus: drafting\nupdatedAt: 2026-03-03T00:12:00.000Z\nsourceRunId: run-10\n---\n\n# Applied from draft',
-      markdown: '# Applied from draft',
-      frontmatter: {
-        status: 'drafting',
-        updatedAt: '2026-03-03T00:12:00.000Z',
-        sourceRunId: 'run-10'
-      },
-      diagnostics: [],
-      updatedAt: '2026-03-03T00:12:00.000Z',
-      appliedRunId: 'run-10'
-    })
-    await expect(api.specApplyDraft(applyDraftInput)).resolves.toEqual({
-      sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
-      raw: '---\nstatus: drafting\nupdatedAt: 2026-03-03T00:12:00.000Z\nsourceRunId: run-10\n---\n\n# Applied from draft',
-      markdown: '# Applied from draft',
-      frontmatter: {
-        status: 'drafting',
-        updatedAt: '2026-03-03T00:12:00.000Z',
-        sourceRunId: 'run-10'
-      },
-      diagnostics: [],
-      updatedAt: '2026-03-03T00:12:00.000Z',
-      appliedRunId: 'run-10'
-    })
-    expect(invoke).toHaveBeenCalledWith('spec:applyDraft', applyDraftInput)
   })
 
   it('onRunEvent handler forwards event data to callback', async () => {

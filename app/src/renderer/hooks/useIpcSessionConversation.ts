@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef } from 'react'
 
 import {
   createInitialSessionConversationState,
   sessionConversationReducer
 } from '../components/center/sessionConversationState'
-import type { LatestRunDraft } from '../types/spec-document'
 import type { SessionRuntimeEvent } from '../types/session-runtime-adapter'
 import { INTERRUPTED_RUN_ERROR_MESSAGE } from '../../shared/types/run'
 import { isPersistedSpecDocument } from '../../shared/types/spec-document'
@@ -13,6 +12,20 @@ import { buildTaskCounts, type TaskActivitySnapshot, type TaskTrackingItem } fro
 
 const DEFAULT_RUN_MODEL = 'gpt-5.3-codex'
 const DEFAULT_RUN_PROVIDER = 'openai-codex'
+const SPEC_AUTHORING_COMPLETION_MESSAGE = "I've created an initial draft of the project spec."
+
+function toConversationActivityPhase(content: string): 'thinking' | 'drafting' | undefined {
+  const normalized = content.trim().toLowerCase()
+  if (normalized === 'thinking') {
+    return 'thinking'
+  }
+
+  if (normalized === 'drafting') {
+    return 'drafting'
+  }
+
+  return undefined
+}
 
 export function useIpcSessionConversation(sessionId: string | null, spaceId: string | null = null) {
   const [state, dispatch] = useReducer(
@@ -20,7 +33,6 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
     undefined,
     createInitialSessionConversationState
   )
-  const [latestDraft, setLatestDraft] = useState<LatestRunDraft | undefined>(undefined)
   const lastPromptRef = useRef<string | null>(null)
   const sessionIdRef = useRef(sessionId)
   sessionIdRef.current = sessionId
@@ -29,7 +41,6 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
   useLayoutEffect(() => {
     lastPromptRef.current = null
     liveSnapshotReceivedRef.current = false
-    setLatestDraft(undefined)
     dispatch({ type: 'RESET_CONVERSATION' })
   }, [sessionId])
 
@@ -41,7 +52,6 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
     const unsubscribe = kata.onRunEvent((event: SessionRuntimeEvent) => {
       if (event.type === 'run_state_changed') {
         if (event.runState === 'error') {
-          setLatestDraft(undefined)
           dispatch({ type: 'RUN_FAILED', error: event.errorMessage })
         } else if (event.runState === 'idle') {
           dispatch({ type: 'RUN_COMPLETED' })
@@ -52,15 +62,18 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
 
       if (event.type === 'message_appended') {
         dispatch({ type: 'APPEND_MESSAGE', message: event.message })
-        if (event.message.role === 'agent') {
-          setLatestDraft(
-            buildLatestDraft({
-              content: event.message.content,
-              runId: event.runId ?? `run-${event.message.id}`,
-              generatedAt: event.message.createdAt
-            })
-          )
+        const phase = toConversationActivityPhase(event.message.content)
+        if (phase) {
+          dispatch({ type: 'SET_ACTIVITY_PHASE', phase })
+          return
         }
+
+        if (event.message.content.trim() === SPEC_AUTHORING_COMPLETION_MESSAGE) {
+          dispatch({ type: 'CLEAR_ACTIVITY_PHASE' })
+          dispatch({ type: 'RUN_COMPLETED' })
+          return
+        }
+
         dispatch({ type: 'RUN_COMPLETED' })
         return
       }
@@ -125,16 +138,6 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
                 createdAt: msg.createdAt
               }
             })
-            if (msg.role === 'agent') {
-              setLatestDraft(
-                run.draft ??
-                  buildLatestDraft({
-                    content: msg.content,
-                    runId: run.id,
-                    generatedAt: msg.createdAt
-                  })
-              )
-            }
           }
 
           if (isReconciledInterruptedRunFallback(run.status, run.errorMessage)) {
@@ -163,7 +166,6 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
       if (!kata?.runSubmit || !sessionId) return
 
       lastPromptRef.current = prompt
-      setLatestDraft(undefined)
       dispatch({ type: 'SUBMIT_PROMPT', prompt })
 
       kata
@@ -187,7 +189,6 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
     if (!kata?.runSubmit || !sessionId) return
 
     const prompt = lastPromptRef.current
-    setLatestDraft(undefined)
     dispatch({ type: 'RETRY_FROM_ERROR' })
 
     kata
@@ -203,7 +204,7 @@ export function useIpcSessionConversation(sessionId: string | null, spaceId: str
   }, [state.runState, sessionId])
 
   return {
-    state: latestDraft ? { ...state, latestDraft } : state,
+    state,
     submitPrompt,
     retry
   }
@@ -299,20 +300,4 @@ function isReconciledInterruptedRunFallback(
   errorMessage: string | undefined
 ): errorMessage is string {
   return status === 'failed' && errorMessage === INTERRUPTED_RUN_ERROR_MESSAGE
-}
-
-function buildLatestDraft({
-  content,
-  runId,
-  generatedAt
-}: {
-  content: string
-  runId: string
-  generatedAt: string
-}): LatestRunDraft {
-  return {
-    runId,
-    generatedAt,
-    content
-  }
 }

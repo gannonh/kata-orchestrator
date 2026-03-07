@@ -48,16 +48,32 @@ test.describe('KAT-160 spec panel parity evidence @uat', () => {
     await appWindow.screenshot({ path: generatingStatePath, fullPage: true })
     await expect(appWindow.getByRole('status', { name: 'Stopped' })).toBeVisible({ timeout: 90_000 })
 
-    const applyButton = rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })
-    await expect(applyButton).toBeVisible({ timeout: 90_000 })
-    await applyButton.click()
+    await expect(rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })).toHaveCount(0)
+    await appWindow.evaluate(
+      async (markdown: string) => {
+        const bootstrap = await window.kata?.appBootstrap?.()
+        const spaceId = bootstrap?.activeSpaceId
+        const sessionId = bootstrap?.activeSessionId
+        const specSave = window.kata?.specSave
+        if (!spaceId || !sessionId || typeof specSave !== 'function') {
+          throw new Error('Missing specSave prerequisites for KAT-160 parity capture.')
+        }
+
+        await specSave({
+          spaceId,
+          sessionId,
+          markdown
+        })
+      },
+      ['## Goal', prompt, '', '## Tasks', '- [ ] Capture parity evidence'].join('\n')
+    )
+    await appWindow.reload({ waitUntil: 'load' })
+    await appWindow.waitForSelector('#root > *', { state: 'attached' })
+    await ensureWorkspaceShell(appWindow)
+    await ensureSendButtonReady(appWindow)
+    await rightTabs.getByRole('tab', { name: 'Spec' }).click()
 
     await expect(rightPanel.getByRole('heading', { name: 'Goal', exact: true })).toBeVisible()
-    await expect(rightPanel.getByRole('heading', { name: 'Acceptance Criteria', exact: true })).toBeVisible()
-    await expect(rightPanel.getByRole('heading', { name: 'Non-goals', exact: true })).toBeVisible()
-    await expect(rightPanel.getByRole('heading', { name: 'Assumptions', exact: true })).toBeVisible()
-    await expect(rightPanel.getByRole('heading', { name: 'Verification Plan', exact: true })).toBeVisible()
-    await expect(rightPanel.getByRole('heading', { name: 'Rollback Plan', exact: true })).toBeVisible()
     await expect(rightPanel.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible()
     await expect(rightPanel.getByText(prompt)).toBeVisible()
 

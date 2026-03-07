@@ -16,8 +16,8 @@ const BASELINE_PROMPT = 'KAT-162 demo proof baseline prompt'
 const DRAFT_MARKDOWN = ['## Goal', 'KAT-162 demo proof goal.', '', '## Tasks', '- [ ] Capture evidence'].join('\n')
 const ARTIFACTS = [
   'test-results/kat-162/01-prompt-submitted.png',
-  'test-results/kat-162/02-run-completed-with-draft.png',
-  'test-results/kat-162/03-draft-applied-spec.png',
+  'test-results/kat-162/02-run-completed-with-persisted-spec.png',
+  'test-results/kat-162/03-persisted-spec-visible.png',
   'test-results/kat-162/04-post-relaunch-restored-session.png'
 ]
 
@@ -29,7 +29,6 @@ type PersistedState = {
       sessionId: string
       prompt: string
       messages: Array<{ role: 'user' | 'agent'; content: string }>
-      draftAppliedAt?: string
     }
   >
   specDocuments: Record<string, { markdown: string; updatedAt: string; appliedRunId?: string; appliedAt?: string }>
@@ -110,17 +109,52 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
     await broadcastRunEvent(electronApp, { type: 'run_state_changed', runState: 'idle' })
 
     const rightPanel = appWindow.getByTestId('right-panel')
-    await expect(rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })).toBeVisible({ timeout: 10_000 })
+    await expect(rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })).toHaveCount(0)
+    await appWindow.evaluate(
+      async ({
+        spaceId,
+        sessionId,
+        markdown,
+        appliedRunId
+      }: {
+        spaceId: string
+        sessionId: string
+        markdown: string
+        appliedRunId: string
+      }) => {
+        const specSave = window.kata?.specSave
+        if (typeof specSave !== 'function') {
+          throw new Error('specSave API unavailable while persisting KAT-162 proof state.')
+        }
+
+        await specSave({
+          spaceId,
+          sessionId,
+          markdown,
+          appliedRunId
+        })
+      },
+      {
+        spaceId: bootstrap.activeSpaceId,
+        sessionId: bootstrap.activeSessionId,
+        markdown: DRAFT_MARKDOWN,
+        appliedRunId: runId
+      }
+    )
+    await appWindow.reload({ waitUntil: 'load' })
+    await appWindow.waitForSelector('#root > *', { state: 'attached' })
+    await ensureWorkspaceShell(appWindow)
+    await ensureSendButtonReady(appWindow)
     await appWindow.screenshot({
-      path: path.join(EVIDENCE_DIR, '02-run-completed-with-draft.png'),
+      path: path.join(EVIDENCE_DIR, '02-run-completed-with-persisted-spec.png'),
       fullPage: true
     })
-    await rightPanel.getByRole('button', { name: 'Apply Draft to Spec' }).click()
+    await appWindow.getByTestId('right-panel').getByRole('tab', { name: 'Spec' }).click()
     await expect(rightPanel.getByRole('heading', { name: 'Goal', exact: true })).toBeVisible({ timeout: 10_000 })
     await expect(rightPanel.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible({ timeout: 10_000 })
-    await expect(rightPanel.getByText(`Applied from ${runId}`)).toBeVisible({ timeout: 10_000 })
+    await expect(rightPanel.getByText('KAT-162 demo proof goal.')).toBeVisible({ timeout: 10_000 })
     await appWindow.screenshot({
-      path: path.join(EVIDENCE_DIR, '03-draft-applied-spec.png'),
+      path: path.join(EVIDENCE_DIR, '03-persisted-spec-visible.png'),
       fullPage: true
     })
 
@@ -142,7 +176,6 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
       persistedReady = Boolean(
         persistedRun
           && hasPromptMessage
-          && persistedRun.draftAppliedAt
           && persistedSpec
           && persistedSpec.appliedRunId === runId
           && persistedSpec.markdown.includes('## Goal')
@@ -193,7 +226,7 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
 
       await expect(relaunchedWindow.getByTestId('app-shell-root')).toBeVisible()
       await expect(relaunchedWindow.getByRole('heading', { name: 'Home' })).toHaveCount(0)
-      await expect(relaunchedWindow.getByTestId('right-panel').getByText(`Applied from ${runId}`)).toBeVisible()
+      await expect(relaunchedWindow.getByTestId('right-panel').getByText('KAT-162 demo proof goal.')).toBeVisible()
       await expect(relaunchedWindow.getByTestId('message-list').getByText(BASELINE_PROMPT)).toBeVisible()
 
       await relaunchedWindow.screenshot({
@@ -207,13 +240,13 @@ test.describe('KAT-162 slice A demo proof @ci @quality-gate @uat', () => {
     }
 
     const evidencePath = await writeKat162Evidence({
-      testName: 'kat-162-prompt-run-apply-persist-relaunch',
+      testName: 'kat-162-prompt-run-persisted-spec-relaunch',
       stateFilePath: relaunchStateFilePath,
       runId,
       artifacts: ARTIFACTS,
       assertions: {
         promptVisibleAfterRelaunch: true,
-        appliedRunBadgeVisibleAfterRelaunch: true,
+        persistedSpecVisibleAfterRelaunch: true,
         workspaceShellRestoredWithoutHome: true
       }
     })

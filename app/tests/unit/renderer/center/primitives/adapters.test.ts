@@ -53,6 +53,15 @@ describe('center primitives adapters', () => {
     }
   )
 
+  it('prefers explicit conversation activity phase over idle run state', () => {
+    expect(
+      toCoordinatorStatusBadgeState({
+        conversationRunState: 'idle',
+        activityPhase: 'drafting'
+      })
+    ).toBe('drafting')
+  })
+
   it.each(['queued', 'delegating', 'running'] as const)(
     'maps active coordinator status %s to running',
     (status) => {

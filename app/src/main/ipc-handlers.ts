@@ -27,7 +27,6 @@ import {
   createRun,
   updateRunStatus,
   appendRunMessage,
-  setRunDraft,
   getRunsForSession
 } from './orchestrator'
 import {
@@ -76,7 +75,6 @@ const SESSION_LIST_BY_SPACE_CHANNEL = 'session:listBySpace'
 const SESSION_SET_ACTIVE_CHANNEL = 'session:setActive'
 const SPEC_GET_CHANNEL = 'spec:get'
 const SPEC_SAVE_CHANNEL = 'spec:save'
-const SPEC_APPLY_DRAFT_CHANNEL = 'spec:applyDraft'
 const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
 const GIT_LIST_BRANCHES_CHANNEL = 'git:listBranches'
 const GITHUB_LIST_REPOS_CHANNEL = 'github:listRepos'
@@ -98,6 +96,26 @@ const SUPPORTED_MODELS = [
   { provider: 'openai', modelId: 'gpt-4.1-mini-2025-04-14', name: 'GPT-4.1 Mini' }
 ]
 
+const DEFAULT_SYSTEM_PROMPT = 'You are a helpful AI assistant.'
+
+const SPEC_AUTHORING_SYSTEM_PROMPT = [
+  'You are drafting a project specification directly into the session spec artifact at notes/spec.md.',
+  'Output only the markdown document body.',
+  'Do not include YAML frontmatter.',
+  'Do not include conversational preambles, explanations, or surrounding code fences.',
+  'Use standard Markdown headings and concise content.',
+  'Include at minimum these sections when relevant:',
+  '## Goal',
+  '## Tasks',
+  '## Acceptance Criteria',
+  '## Non-goals',
+  '## Assumptions',
+  '## Verification Plan',
+  '## Rollback Plan',
+  'Add other sections like ## Architecture when they materially help.',
+  'Represent tasks as markdown checkbox items.'
+].join('\n')
+
 function isExternalHttpUrl(url: unknown): url is string {
   if (typeof url !== 'string') {
     return false
@@ -109,6 +127,18 @@ function isExternalHttpUrl(url: unknown): url is string {
   } catch {
     return false
   }
+}
+
+function isSpecAuthoringPrompt(prompt: string): boolean {
+  const normalized = prompt.trim().toLowerCase()
+  return (
+    /\b(spec|specification)\b/.test(normalized) &&
+    /\b(create|draft|write|generate|start|make|author)\b/.test(normalized)
+  )
+}
+
+function buildSystemPrompt(prompt: string): string {
+  return isSpecAuthoringPrompt(prompt) ? SPEC_AUTHORING_SYSTEM_PROMPT : DEFAULT_SYSTEM_PROMPT
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -355,34 +385,6 @@ function parseSpecSaveInput(input: unknown): {
   }
 }
 
-function parseSpecApplyDraftInput(input: unknown): {
-  spaceId: string
-  sessionId: string
-  draft: { runId: string; content: string }
-} {
-  if (
-    !isObjectRecord(input) ||
-    typeof input.spaceId !== 'string' ||
-    typeof input.sessionId !== 'string' ||
-    !isObjectRecord(input.draft)
-  ) {
-    throw new Error('spec:applyDraft input must include a draft object')
-  }
-
-  if (typeof input.draft.runId !== 'string' || typeof input.draft.content !== 'string') {
-    throw new Error('spec:applyDraft draft must include string runId and content')
-  }
-
-  return {
-    spaceId: input.spaceId,
-    sessionId: input.sessionId,
-    draft: {
-      runId: input.draft.runId,
-      content: input.draft.content
-    }
-  }
-}
-
 function assertSpecScope(state: AppState, spaceId: string, sessionId: string): void {
   if (!state.spaces[spaceId]) {
     throw new Error(`Unknown spaceId: ${spaceId}`)
@@ -486,6 +488,43 @@ function buildSpecArtifactFrontmatter(
   }
 }
 
+async function persistRunSpecArtifact(input: {
+  stateStore: StateStore
+  spaceId: string
+  sessionId: string
+  spaceRootPath: string
+  runId: string
+  markdown: string
+  updatedAt: string
+}): Promise<PersistedSpecDocument> {
+  const currentState = input.stateStore.load()
+  const key = buildSpecDocumentKey(input.spaceId, input.sessionId)
+  const existing = currentState.specDocuments[key]
+  const specDocument = await saveSpecArtifactDocument({
+    sourcePath: buildSpecArtifactPath(input.spaceRootPath, input.sessionId),
+    frontmatter: buildSpecArtifactFrontmatter(
+      existing,
+      {
+        status: 'drafting',
+        sourceRunId: input.runId
+      },
+      input.updatedAt
+    ),
+    markdown: input.markdown,
+    previous: existing
+  })
+
+  input.stateStore.save({
+    ...currentState,
+    specDocuments: {
+      ...currentState.specDocuments,
+      [key]: specDocument
+    }
+  })
+
+  return specDocument
+}
+
 function taskStatusForMarker(marker: string): 'not_started' | 'in_progress' | 'complete' {
   if (marker === '/') {
     return 'in_progress'
@@ -563,7 +602,6 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
   ipcMain.removeHandler(SESSION_SET_ACTIVE_CHANNEL)
   ipcMain.removeHandler(SPEC_GET_CHANNEL)
   ipcMain.removeHandler(SPEC_SAVE_CHANNEL)
-  ipcMain.removeHandler(SPEC_APPLY_DRAFT_CHANNEL)
 
   ipcMain.handle(OPEN_EXTERNAL_URL_CHANNEL, async (_event, url: unknown) => {
     if (!isExternalHttpUrl(url)) {
@@ -846,50 +884,6 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     return specDocument
   })
 
-  ipcMain.handle(SPEC_APPLY_DRAFT_CHANNEL, async (_event, input: unknown) => {
-    const parsedInput = parseSpecApplyDraftInput(input)
-    const state = stateStore.load()
-    assertSpecScope(state, parsedInput.spaceId, parsedInput.sessionId)
-    const run = state.runs[parsedInput.draft.runId]
-    if (!run || run.sessionId !== parsedInput.sessionId) {
-      throw new Error(
-        `Draft run ${parsedInput.draft.runId} does not belong to session ${parsedInput.sessionId}`
-      )
-    }
-    const key = buildSpecDocumentKey(parsedInput.spaceId, parsedInput.sessionId)
-    const appliedAt = new Date().toISOString()
-    const existing = state.specDocuments[key]
-    const specDocument = await saveSpecArtifactDocument({
-      sourcePath: buildSpecArtifactPath(state.spaces[parsedInput.spaceId].rootPath, parsedInput.sessionId),
-      frontmatter: buildSpecArtifactFrontmatter(
-        existing,
-        {
-          sourceRunId: parsedInput.draft.runId
-        },
-        appliedAt
-      ),
-      markdown: parsedInput.draft.content,
-      previous: existing
-    })
-
-    const existingRun = state.runs[parsedInput.draft.runId]
-    stateStore.save({
-      ...state,
-      specDocuments: {
-        ...state.specDocuments,
-        [key]: specDocument
-      },
-      ...(existingRun && {
-        runs: {
-          ...state.runs,
-          [parsedInput.draft.runId]: { ...existingRun, draftAppliedAt: appliedAt }
-        }
-      })
-    })
-
-    return specDocument
-  })
-
   ipcMain.removeHandler(DIALOG_OPEN_DIR_CHANNEL)
   ipcMain.removeHandler(GIT_LIST_BRANCHES_CHANNEL)
   ipcMain.removeHandler(GITHUB_LIST_REPOS_CHANNEL)
@@ -982,12 +976,19 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
     if (!apiKey) throw new Error(`No credentials available for provider: ${provider}`)
 
     const run = createRun(stateStore, { sessionId, prompt, model, provider })
+    const currentState = stateStore.load()
+    const currentSession = currentState.sessions[sessionId]
+    const currentSpace = currentSession ? currentState.spaces[currentSession.spaceId] : undefined
+    const specAuthoringRun = isSpecAuthoringPrompt(prompt)
+    let syntheticMessageCounter = 0
+    let thinkingMessageSent = false
+    let draftingMessageSent = false
 
     const runner = createAgentRunner({
       model,
       provider,
       apiKey,
-      systemPrompt: 'You are a helpful AI assistant.',
+      systemPrompt: buildSystemPrompt(prompt),
       onEvent: (runtimeEvent: SessionRuntimeEvent) => {
         const sendRuntimeEventToRenderer = (nextEvent: SessionRuntimeEvent) => {
           try {
@@ -1012,6 +1013,29 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
           }
         }
 
+        const emitSyntheticAgentMessage = (content: string, createdAt?: string) => {
+          syntheticMessageCounter += 1
+          const message = {
+            id: `${run.id}-status-${syntheticMessageCounter}`,
+            role: 'agent' as const,
+            content,
+            createdAt: createdAt ?? new Date().toISOString()
+          }
+
+          if (
+            !sendRuntimeEventToRenderer({
+              type: 'message_appended',
+              runId: run.id,
+              message
+            })
+          ) {
+            return false
+          }
+
+          appendRunMessage(stateStore, run.id, message)
+          return true
+        }
+
         const emitTaskSnapshot = (snapshot: ReturnType<typeof taskActivityProjector.getSnapshot>) => {
           if (!snapshot) {
             return
@@ -1023,11 +1047,19 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
           })
         }
 
-        if (!sendRuntimeEventToRenderer(runtimeEvent)) {
+        const suppressRawAgentMessage =
+          specAuthoringRun &&
+          (runtimeEvent.type === 'message_updated' || runtimeEvent.type === 'message_appended') &&
+          runtimeEvent.message.role === 'agent'
+
+        if (!suppressRawAgentMessage && !sendRuntimeEventToRenderer(runtimeEvent)) {
           return
         }
 
         if (runtimeEvent.type === 'run_state_changed' && runtimeEvent.runState === 'pending') {
+          if (specAuthoringRun && !thinkingMessageSent) {
+            thinkingMessageSent = emitSyntheticAgentMessage('Thinking') || thinkingMessageSent
+          }
           const currentState = stateStore.load()
           const taskSeedItems = resolveTaskSeedItemsForRun(currentState, run.id, sessionId)
           const snapshot = taskActivityProjector.onRunPending({
@@ -1059,21 +1091,58 @@ export function registerIpcHandlers(store: StateStore, options?: RegisterIpcOpti
           )
         }
 
+        if (
+          specAuthoringRun &&
+          runtimeEvent.type === 'message_updated' &&
+          runtimeEvent.message.role === 'agent' &&
+          runtimeEvent.message.content.trim().length > 0
+        ) {
+          if (!draftingMessageSent) {
+            draftingMessageSent =
+              emitSyntheticAgentMessage('Drafting', runtimeEvent.message.createdAt) ||
+              draftingMessageSent
+          }
+          return
+        }
+
         if (runtimeEvent.type === 'message_appended') {
           const msg = runtimeEvent.message
+          if (specAuthoringRun && msg.role === 'agent') {
+            if (!draftingMessageSent) {
+              draftingMessageSent =
+                emitSyntheticAgentMessage('Drafting', msg.createdAt) || draftingMessageSent
+            }
+
+            if (!currentSession || !currentSpace) {
+              console.error('[IPC] Cannot persist spec artifact for unknown session/space:', sessionId)
+              return
+            }
+
+            void persistRunSpecArtifact({
+              stateStore,
+              spaceId: currentSession.spaceId,
+              sessionId,
+              spaceRootPath: currentSpace.rootPath,
+              runId: run.id,
+              markdown: msg.content,
+              updatedAt: msg.createdAt
+            })
+              .then(() => {
+                emitSyntheticAgentMessage("I've created an initial draft of the project spec.")
+              })
+              .catch((error) => {
+                console.error('[IPC] Failed to persist spec artifact from run output:', error)
+              })
+
+            return
+          }
+
           appendRunMessage(stateStore, run.id, {
             id: msg.id,
             role: msg.role as 'user' | 'agent',
             content: msg.content,
             createdAt: msg.createdAt
           })
-          if (msg.role === 'agent') {
-            setRunDraft(stateStore, run.id, {
-              runId: run.id,
-              generatedAt: msg.createdAt,
-              content: msg.content
-            })
-          }
         }
         // Map runtime ConversationRunState to persisted RunStatus:
         // 'pending' (agent starting) -> 'running'

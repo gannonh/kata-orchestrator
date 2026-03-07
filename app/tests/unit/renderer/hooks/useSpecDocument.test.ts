@@ -5,6 +5,13 @@ import type { PersistedSpecDocument } from '../../../../src/shared/types/spec-do
 const mockSpecGet = vi.fn()
 const mockSpecSave = vi.fn()
 const mockSpecApplyDraft = vi.fn()
+let onRunEventCallback: ((event: unknown) => void) | null = null
+const mockOnRunEvent = vi.fn((cb: (event: unknown) => void) => {
+  onRunEventCallback = cb
+  return () => {
+    onRunEventCallback = null
+  }
+})
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void
@@ -27,8 +34,7 @@ function buildPersistedSpecDocument(
   overrides: Partial<PersistedSpecDocument> = {}
 ): PersistedSpecDocument {
   const updatedAt = overrides.updatedAt ?? '2026-03-03T00:00:00.000Z'
-  const baseSourceRunId =
-    overrides.frontmatter?.sourceRunId ?? overrides.appliedRunId
+  const baseSourceRunId = overrides.frontmatter?.sourceRunId ?? overrides.appliedRunId
   const frontmatter = {
     status: 'drafting' as const,
     updatedAt,
@@ -79,22 +85,14 @@ describe('useSpecDocument', () => {
           }
         })
     )
-    mockSpecApplyDraft.mockImplementation(async (input: {
-      draft: { runId: string; content: string }
-    }) =>
-      buildPersistedSpecDocument(input.draft.content, {
-        updatedAt: '2026-03-03T00:01:00.000Z',
-        frontmatter: {
-          status: 'drafting',
-          updatedAt: '2026-03-03T00:01:00.000Z',
-          sourceRunId: input.draft.runId
-        }
-      }))
+    mockSpecApplyDraft.mockResolvedValue(buildPersistedSpecDocument('# unused'))
+    onRunEventCallback = null
 
     ;(window as any).kata = {
       specGet: mockSpecGet,
       specSave: mockSpecSave,
-      specApplyDraft: mockSpecApplyDraft
+      specApplyDraft: mockSpecApplyDraft,
+      onRunEvent: mockOnRunEvent
     }
   })
 
@@ -102,14 +100,14 @@ describe('useSpecDocument', () => {
     delete (window as any).kata
   })
 
-  it('loads an existing document via specGet', async () => {
+  it('loads an existing document via specGet and preserves markdown-first fields', async () => {
     mockSpecGet.mockResolvedValueOnce(
       buildPersistedSpecDocument(
-        ['## Goal', 'Load from IPC', '', '## Tasks', '- [x] Restore saved specs'].join('\n'),
+        ['# Live spec', '', '## Goal', 'Load from IPC'].join('\n'),
         {
           updatedAt: '2026-03-03T00:00:00.000Z',
           frontmatter: {
-            status: 'drafting',
+            status: 'ready',
             updatedAt: '2026-03-03T00:00:00.000Z',
             sourceRunId: 'run-123'
           }
@@ -125,45 +123,29 @@ describe('useSpecDocument', () => {
     await waitFor(() => {
       expect(mockSpecGet).toHaveBeenCalledWith({ spaceId: 'space-1', sessionId: 'session-1' })
       expect(result.current.document).toMatchObject({
-        markdown: ['## Goal', 'Load from IPC', '', '## Tasks', '- [x] Restore saved specs'].join('\n'),
-        appliedRunId: 'run-123',
-        sections: {
-          goal: 'Load from IPC'
-        },
-        tasks: [
-          {
-            id: 'task-restore-saved-specs',
-            title: 'Restore saved specs',
-            status: 'complete'
-          }
-        ]
+        sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+        markdown: ['# Live spec', '', '## Goal', 'Load from IPC'].join('\n'),
+        status: 'ready',
+        sourceRunId: 'run-123',
+        appliedRunId: 'run-123'
       })
+      expect((result.current.document as any).visibleMarkdown).toBe(
+        ['# Live spec', '', '## Goal', 'Load from IPC'].join('\n')
+      )
     })
   })
 
-  it('restores multiline markdown sections and task ids after specGet reload', async () => {
+  it('uses lastGoodMarkdown as the visible document when frontmatter is invalid', async () => {
     mockSpecGet.mockResolvedValueOnce(
-      buildPersistedSpecDocument(
-        [
-          '## Goal',
-          'Ship `stable ids`.',
-          '',
-          '```ts',
-          'const stable = true',
-          '```',
-          '',
-          '## Tasks',
-          '- [ ] Freeze contract'
-        ].join('\n'),
-        {
-          updatedAt: '2026-03-06T00:00:00.000Z',
-          frontmatter: {
-            status: 'drafting',
-            updatedAt: '2026-03-06T00:00:00.000Z',
-            sourceRunId: 'run-123'
+      buildPersistedSpecDocument('## Goal\nBroken replacement', {
+        diagnostics: [
+          {
+            code: 'invalid_frontmatter_yaml',
+            message: 'Frontmatter must contain only key: value entries.'
           }
-        }
-      )
+        ],
+        lastGoodMarkdown: ['# Live spec', '', '## Goal', 'Last good visible markdown'].join('\n')
+      })
     )
 
     const useSpecDocument = await loadHook()
@@ -172,181 +154,32 @@ describe('useSpecDocument', () => {
     )
 
     await waitFor(() => {
-      expect(result.current.document.sections.goal).toContain('```ts')
-      expect(result.current.document.sections.goal).toContain('`stable ids`')
-      expect(result.current.document.tasks[0]).toMatchObject({
-        id: 'task-freeze-contract',
-        status: 'not_started'
-      })
+      expect(result.current.document.markdown).toBe('## Goal\nBroken replacement')
+      expect((result.current.document as any).visibleMarkdown).toBe(
+        ['# Live spec', '', '## Goal', 'Last good visible markdown'].join('\n')
+      )
+      expect(result.current.document.diagnostics[0]?.code).toBe('invalid_frontmatter_yaml')
     })
   })
 
-  it('parses markdown and persists through specSave', async () => {
+  it('persists markdown through specSave and keeps the visible document aligned', async () => {
     const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
-    const markdown = [
-      '## Goal',
-      'Ship panel parity.',
-      '',
-      '## Acceptance Criteria',
-      '1. Persist parsed output',
-      '',
-      '## Tasks',
-      '- [ ] Draft the hook'
-    ].join('\n')
+    const markdown = ['# Live spec', '', '## Goal', 'Ship panel parity.'].join('\n')
 
     act(() => {
       result.current.setMarkdown(markdown)
     })
 
     expect(result.current.document.markdown).toBe(markdown)
-    expect(result.current.document.sections.goal).toBe('Ship panel parity.')
-    expect(result.current.document.sections.acceptanceCriteria).toEqual([
-      'Persist parsed output'
-    ])
-    expect(result.current.document.tasks).toEqual([
-      {
-        id: 'task-draft-the-hook',
-        title: 'Draft the hook',
-        status: 'not_started',
-        markdownLineIndex: 7
-      }
-    ])
+    expect((result.current.document as any).visibleMarkdown).toBe(markdown)
     expect(mockSpecSave).toHaveBeenCalledWith({
       spaceId: 'space-1',
       sessionId: 'session-1',
       markdown,
       status: 'drafting'
-    })
-  })
-
-  it('applies draft via specApplyDraft and persists task toggles through specSave', async () => {
-    const useSpecDocument = await loadHook()
-    const { result } = renderHook(() =>
-      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
-    )
-    const draft = {
-      runId: 'run-456',
-      generatedAt: '2026-03-02T12:05:00.000Z',
-      content: [
-        '## Goal',
-        'Apply the incoming draft.',
-        '',
-        '## Tasks',
-        '- [ ] Review the draft'
-      ].join('\n')
-    }
-
-    act(() => {
-      result.current.applyDraft(draft)
-    })
-
-    expect(mockSpecApplyDraft).toHaveBeenCalledWith({
-      spaceId: 'space-1',
-      sessionId: 'session-1',
-      draft
-    })
-    expect(mockSpecSave).not.toHaveBeenCalledWith(
-      expect.objectContaining({ markdown: draft.content })
-    )
-    expect(result.current.document.appliedRunId).toBe('run-456')
-    expect(result.current.document.tasks[0]?.status).toBe('not_started')
-
-    act(() => {
-      result.current.toggleTask('task-review-the-draft')
-    })
-
-    expect(result.current.document.tasks[0]?.status).toBe('in_progress')
-    expect(result.current.document.markdown).toBe(
-      ['## Goal', 'Apply the incoming draft.', '', '## Tasks', '- [/] Review the draft'].join(
-        '\n'
-      )
-    )
-    expect(mockSpecSave).toHaveBeenLastCalledWith({
-      spaceId: 'space-1',
-      sessionId: 'session-1',
-      markdown: ['## Goal', 'Apply the incoming draft.', '', '## Tasks', '- [/] Review the draft'].join('\n'),
-      status: 'drafting',
-      sourceRunId: 'run-456'
-    })
-
-    act(() => {
-      result.current.toggleTask('task-review-the-draft')
-    })
-
-    expect(result.current.document.tasks[0]?.status).toBe('complete')
-    expect(result.current.document.markdown).toBe(
-      ['## Goal', 'Apply the incoming draft.', '', '## Tasks', '- [x] Review the draft'].join(
-        '\n'
-      )
-    )
-    expect(mockSpecSave).toHaveBeenLastCalledWith({
-      spaceId: 'space-1',
-      sessionId: 'session-1',
-      markdown: ['## Goal', 'Apply the incoming draft.', '', '## Tasks', '- [x] Review the draft'].join('\n'),
-      status: 'drafting',
-      sourceRunId: 'run-456'
-    })
-  })
-
-  it('round-trips multiline markdown and task ids after toggle and reload', async () => {
-    const useSpecDocument = await loadHook()
-    const initialRender = renderHook(() =>
-      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
-    )
-    const markdown = [
-      '## Goal',
-      'Ship `stable ids`.',
-      '',
-      '```ts',
-      'const stable = true',
-      '```',
-      '',
-      '## Tasks',
-      '- [ ] Freeze contract'
-    ].join('\n')
-
-    act(() => {
-      initialRender.result.current.setMarkdown(markdown)
-    })
-
-    act(() => {
-      initialRender.result.current.toggleTask('task-freeze-contract')
-    })
-
-    const savedMarkdown = mockSpecSave.mock.calls.at(-1)?.[0]?.markdown
-    expect(savedMarkdown).toBe(
-      [
-        '## Goal',
-        'Ship `stable ids`.',
-        '',
-        '```ts',
-        'const stable = true',
-        '```',
-        '',
-        '## Tasks',
-        '- [/] Freeze contract'
-      ].join('\n')
-    )
-
-    mockSpecGet.mockResolvedValueOnce(
-      buildPersistedSpecDocument(savedMarkdown, {
-        updatedAt: '2026-03-06T00:05:00.000Z'
-      })
-    )
-
-    const reloaded = renderHook(() =>
-      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
-    )
-
-    await waitFor(() => {
-      expect(reloaded.result.current.document.sections.goal).toContain('```ts')
-      expect(reloaded.result.current.document.tasks[0]).toMatchObject({
-        id: 'task-freeze-contract',
-        status: 'in_progress'
-      })
     })
   })
 
@@ -359,7 +192,7 @@ describe('useSpecDocument', () => {
     )
 
     act(() => {
-      first.result.current.setMarkdown('## Goal\nSession one only')
+      first.result.current.setMarkdown('# Session one only')
     })
 
     const second = renderHook(() =>
@@ -369,11 +202,11 @@ describe('useSpecDocument', () => {
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
 
-    expect(second.result.current.document.sections.goal).toBe('')
-    expect(firstReloaded.result.current.document.sections.goal).toBe('Session one only')
+    expect(second.result.current.document.markdown).toBe('')
+    expect(firstReloaded.result.current.document.markdown).toBe('# Session one only')
   })
 
-  it('falls back to an empty parsed document when specGet payload is malformed', async () => {
+  it('falls back to an empty document when specGet payload is malformed', async () => {
     mockSpecGet.mockResolvedValueOnce({ markdown: 42, appliedRunId: 'run-1' })
 
     const useSpecDocument = await loadHook()
@@ -382,32 +215,8 @@ describe('useSpecDocument', () => {
     )
 
     await waitFor(() => {
-      expect(result.current.document).toMatchObject({
-        markdown: '',
-        sections: {
-          goal: ''
-        },
-        tasks: []
-      })
-    })
-  })
-
-  it('falls back to an empty parsed document when specGet returns a non-object payload', async () => {
-    mockSpecGet.mockResolvedValueOnce(42 as any)
-
-    const useSpecDocument = await loadHook()
-    const { result } = renderHook(() =>
-      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
-    )
-
-    await waitFor(() => {
-      expect(result.current.document).toMatchObject({
-        markdown: '',
-        sections: {
-          goal: ''
-        },
-        tasks: []
-      })
+      expect(result.current.document.markdown).toBe('')
+      expect((result.current.document as any).visibleMarkdown).toBe('')
     })
   })
 
@@ -420,76 +229,12 @@ describe('useSpecDocument', () => {
     )
 
     act(() => {
-      result.current.setMarkdown('## Goal\nPersist locally')
+      result.current.setMarkdown('# Persist locally')
     })
 
-    expect(result.current.document.sections.goal).toBe('Persist locally')
+    expect(result.current.document.markdown).toBe('# Persist locally')
+    expect((result.current.document as any).visibleMarkdown).toBe('# Persist locally')
     expect(mockSpecSave).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps fallback state when specGet rejects', async () => {
-    mockSpecGet.mockRejectedValueOnce(new Error('ipc unavailable'))
-
-    const useSpecDocument = await loadHook()
-    const { result } = renderHook(() =>
-      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
-    )
-
-    await waitFor(() => {
-      expect(result.current.document).toMatchObject({
-        markdown: '',
-        sections: {
-          goal: ''
-        },
-        tasks: []
-      })
-    })
-  })
-
-  it('keeps local state when specApplyDraft rejects', async () => {
-    mockSpecApplyDraft.mockRejectedValueOnce(new Error('ipc unavailable'))
-
-    const useSpecDocument = await loadHook()
-    const { result } = renderHook(() =>
-      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
-    )
-
-    act(() => {
-      result.current.applyDraft({
-        runId: 'run-77',
-        generatedAt: '2026-03-02T12:05:00.000Z',
-        content: ['## Goal', 'Persist local apply-draft fallback', '', '## Tasks', '- [ ] Keep local'].join('\n')
-      })
-    })
-
-    await waitFor(() => {
-      expect(result.current.document.appliedRunId).toBe('run-77')
-      expect(result.current.document.sections.goal).toBe('Persist local apply-draft fallback')
-    })
-  })
-
-  it('works when spec IPC methods are unavailable', async () => {
-    ;(window as any).kata = {}
-
-    const useSpecDocument = await loadHook()
-    const { result } = renderHook(() =>
-      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
-    )
-
-    act(() => {
-      result.current.applyDraft({
-        runId: 'run-99',
-        generatedAt: '2026-03-02T12:05:00.000Z',
-        content: ['## Goal', 'Keep existing state', '', '## Tasks', '- [ ] Existing task'].join('\n')
-      })
-    })
-
-    act(() => {
-      result.current.toggleTask('task-existing-task')
-    })
-
-    expect(result.current.document.appliedRunId).toBe('run-99')
-    expect(result.current.document.tasks[0]?.status).toBe('in_progress')
   })
 
   it('ignores stale specGet results after switching sessions', async () => {
@@ -497,7 +242,7 @@ describe('useSpecDocument', () => {
     mockSpecGet
       .mockImplementationOnce(() => first.promise)
       .mockResolvedValueOnce(
-        buildPersistedSpecDocument('## Goal\nSession 2 persisted', {
+        buildPersistedSpecDocument('# Session 2 persisted', {
           updatedAt: '2026-03-03T00:00:00.000Z'
         })
       )
@@ -511,13 +256,13 @@ describe('useSpecDocument', () => {
 
     rerender({ spaceId: 'space-1', sessionId: 'session-2' })
     first.resolve(
-      buildPersistedSpecDocument('## Goal\nStale session 1 value', {
+      buildPersistedSpecDocument('# Stale session 1 value', {
         updatedAt: '2026-03-03T00:00:00.000Z'
       })
     )
 
     await waitFor(() => {
-      expect(result.current.document.sections.goal).toBe('Session 2 persisted')
+      expect(result.current.document.markdown).toBe('# Session 2 persisted')
     })
   })
 
@@ -527,7 +272,7 @@ describe('useSpecDocument', () => {
     mockSpecGet
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(
-        buildPersistedSpecDocument('## Goal\nSession 2 canonical', {
+        buildPersistedSpecDocument('# Session 2 canonical', {
           updatedAt: '2026-03-03T00:00:00.000Z'
         })
       )
@@ -540,75 +285,183 @@ describe('useSpecDocument', () => {
     )
 
     act(() => {
-      result.current.setMarkdown('## Goal\nSession 1 local write')
+      result.current.setMarkdown('# Session 1 local write')
     })
 
     rerender({ spaceId: 'space-1', sessionId: 'session-2' })
     saveDeferred.resolve(
-      buildPersistedSpecDocument('## Goal\nSession 1 stale save response', {
+      buildPersistedSpecDocument('# Session 1 stale save response', {
         updatedAt: '2026-03-03T00:00:00.000Z'
       })
     )
 
     await waitFor(() => {
-      expect(result.current.document.sections.goal).toBe('Session 2 canonical')
+      expect(result.current.document.markdown).toBe('# Session 2 canonical')
     })
   })
 
-  it('falls back to local cached state when specSave returns malformed payload', async () => {
-    mockSpecSave.mockResolvedValueOnce({ markdown: 42 } as any)
+  it('refreshes from specGet when an agent message is appended after a run writes the artifact', async () => {
+    mockSpecGet
+      .mockResolvedValueOnce(buildPersistedSpecDocument('## Goal\nScaffold'))
+      .mockResolvedValueOnce(
+        buildPersistedSpecDocument(
+          ['## Goal', 'Generated from the orchestrator run.', '', '## Tasks', '- [ ] Ship it'].join('\n'),
+          {
+            updatedAt: '2026-03-03T00:05:00.000Z',
+            frontmatter: {
+              status: 'drafting',
+              updatedAt: '2026-03-03T00:05:00.000Z',
+              sourceRunId: 'run-spec-1'
+            }
+          }
+        )
+      )
 
     const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
 
-    act(() => {
-      result.current.setMarkdown('## Goal\nKeep local cache')
+    await waitFor(() => {
+      expect(result.current.document.markdown).toBe('## Goal\nScaffold')
+    })
+
+    await act(async () => {
+      onRunEventCallback?.({
+        type: 'message_appended',
+        runId: 'run-spec-1',
+        message: {
+          id: 'agent-status-1',
+          role: 'agent',
+          content: "I've created an initial draft of the project spec.",
+          createdAt: '2026-03-03T00:05:01.000Z'
+        }
+      })
+      await Promise.resolve()
     })
 
     await waitFor(() => {
-      expect(result.current.document.sections.goal).toBe('Keep local cache')
+      expect(mockSpecGet).toHaveBeenCalledTimes(2)
+      expect(result.current.document.markdown).toContain('Generated from the orchestrator run.')
+      expect(result.current.document.sourceRunId).toBe('run-spec-1')
+      expect(result.current.generationPhase).toBeNull()
     })
   })
 
-  it('ignores specGet resolution after unmount', async () => {
-    const deferred = createDeferred<PersistedSpecDocument | null>()
-    mockSpecGet.mockImplementationOnce(() => deferred.promise)
+  it('tracks generation phases from run events before the spec artifact appears', async () => {
+    mockSpecGet.mockResolvedValue(buildPersistedSpecDocument(''))
 
     const useSpecDocument = await loadHook()
-    const { unmount } = renderHook(() =>
+    const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
 
-    unmount()
-    deferred.resolve(buildPersistedSpecDocument('## Goal\nShould be ignored'))
+    expect(result.current.generationPhase).toBeNull()
 
     await act(async () => {
-      await deferred.promise
+      onRunEventCallback?.({
+        type: 'run_state_changed',
+        runState: 'pending'
+      })
+      await Promise.resolve()
     })
+
+    expect(result.current.generationPhase).toBe('thinking')
+
+    await act(async () => {
+      onRunEventCallback?.({
+        type: 'message_updated',
+        runId: 'run-spec-1',
+        message: {
+          id: 'agent-spec-1',
+          role: 'agent',
+          content: 'Drafting',
+          createdAt: '2026-03-03T00:05:01.000Z'
+        }
+      })
+      await Promise.resolve()
+    })
+
+    expect(result.current.generationPhase).toBe('drafting')
   })
 
-  it('ignores unknown task ids when toggling', async () => {
+  it('clears the generation phase when a run error event arrives', async () => {
+    mockSpecGet.mockResolvedValue(buildPersistedSpecDocument(''))
+
+    const useSpecDocument = await loadHook()
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    await act(async () => {
+      onRunEventCallback?.({
+        type: 'run_state_changed',
+        runState: 'pending'
+      })
+      await Promise.resolve()
+    })
+
+    expect(result.current.generationPhase).toBe('thinking')
+
+    await act(async () => {
+      onRunEventCallback?.({
+        type: 'run_state_changed',
+        runState: 'error',
+        errorMessage: 'agent failed'
+      })
+      await Promise.resolve()
+    })
+
+    expect(result.current.generationPhase).toBeNull()
+  })
+
+  it('keeps local markdown when specSave is unavailable', async () => {
+    ;(window as any).kata = {
+      ...window.kata,
+      specGet: mockSpecGet,
+      onRunEvent: mockOnRunEvent
+    }
+
     const useSpecDocument = await loadHook()
     const { result } = renderHook(() =>
       useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
     )
 
     act(() => {
-      result.current.applyDraft({
-        runId: 'run-99',
-        generatedAt: '2026-03-02T12:05:00.000Z',
-        content: ['## Goal', 'Keep existing state', '', '## Tasks', '- [ ] Existing task'].join('\n')
-      })
+      result.current.setMarkdown('# Local only')
     })
 
-    const beforeMarkdown = result.current.document.markdown
+    expect(result.current.document.markdown).toBe('# Local only')
+  })
+
+  it('includes sourceRunId when persisting a document that carries trace metadata', async () => {
+    mockSpecGet.mockResolvedValueOnce(
+      buildPersistedSpecDocument('# Trace this', {
+        frontmatter: {
+          status: 'drafting',
+          updatedAt: '2026-03-03T00:00:00.000Z',
+          sourceRunId: 'run-trace-1'
+        }
+      })
+    )
+
+    const useSpecDocument = await loadHook()
+    const { result } = renderHook(() =>
+      useSpecDocument({ spaceId: 'space-1', sessionId: 'session-1' })
+    )
+
+    await waitFor(() => {
+      expect(result.current.document.sourceRunId).toBe('run-trace-1')
+    })
 
     act(() => {
-      result.current.toggleTask('missing-task-id')
+      result.current.setMarkdown('# Trace this forward')
     })
 
-    expect(result.current.document.markdown).toBe(beforeMarkdown)
+    expect(mockSpecSave).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        sourceRunId: 'run-trace-1'
+      })
+    )
   })
 })

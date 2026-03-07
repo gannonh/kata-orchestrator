@@ -22,13 +22,14 @@ export interface StructuredSpecDocument {
   sourcePath: string
   raw: string
   markdown: string
+  visibleMarkdown: string
   status: SpecArtifactStatus
   diagnostics: SpecArtifactDiagnostic[]
-  sections: StructuredSpecSections
-  tasks: SpecTaskItem[]
   updatedAt: string
   sourceRunId?: string
   appliedRunId?: string
+  sections?: StructuredSpecSections
+  tasks?: SpecTaskItem[]
 }
 
 export type { LatestRunDraft } from '../../shared/types/spec-document'
