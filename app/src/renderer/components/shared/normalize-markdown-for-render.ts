@@ -68,7 +68,6 @@ function getFenceInfo(line: string): FenceInfo | null {
   let whitespace = consumeLeadingWhitespace(line, 0)
   let index = whitespace.index
   let fenceIndent = whitespace.width
-  let containerEnd = 0
   const containerMarkers: string[] = []
 
   while (true) {
@@ -78,7 +77,6 @@ function getFenceInfo(line: string): FenceInfo | null {
         markerEnd += 1
       }
 
-      containerEnd = markerEnd
       containerMarkers.push('>')
       whitespace = consumeLeadingWhitespace(line, markerEnd)
       index = whitespace.index
@@ -91,7 +89,6 @@ function getFenceInfo(line: string): FenceInfo | null {
       break
     }
 
-    containerEnd = nextIndex
     containerMarkers.push(line.slice(index, nextIndex).trimEnd())
     whitespace = consumeLeadingWhitespace(line, nextIndex)
     index = whitespace.index

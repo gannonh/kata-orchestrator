@@ -164,7 +164,7 @@ export function MessageBubble({
       <ConversationMessageCard
         message={displayMessage}
         variant={variant}
-        renderMode={primitiveMessage.role === 'user' ? 'settled' : renderMode}
+        renderMode={renderMode}
         timestampLabel={timestampLabel}
         footer={footerLabel ? <span>{footerLabel}</span> : undefined}
         onDismiss={footerLabel ? () => onDismiss?.(primitiveMessage.id) : undefined}

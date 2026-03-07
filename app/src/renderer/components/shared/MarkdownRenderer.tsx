@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -89,7 +90,7 @@ const MD_COMPONENTS: Components = {
   p: ({ children }) => <p>{children}</p>
 }
 
-export function MarkdownRenderer({
+export const MarkdownRenderer = memo(function MarkdownRenderer({
   content,
   className,
   renderMode = 'settled'
@@ -103,4 +104,4 @@ export function MarkdownRenderer({
       </ReactMarkdown>
     </div>
   )
-}
+})

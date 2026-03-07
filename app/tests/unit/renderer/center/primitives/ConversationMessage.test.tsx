@@ -1,10 +1,29 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { markdownRendererSpy } = vi.hoisted(() => ({
+  markdownRendererSpy: vi.fn()
+}))
+
+vi.mock('../../../../../src/renderer/components/shared/MarkdownRenderer', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../../src/renderer/components/shared/MarkdownRenderer')>()
+  return {
+    ...actual,
+    MarkdownRenderer: (props: Parameters<typeof actual.MarkdownRenderer>[0]) => {
+      markdownRendererSpy(props)
+      return <actual.MarkdownRenderer {...props} />
+    }
+  }
+})
 
 import { ConversationMessage } from '../../../../../src/renderer/components/center/primitives/ConversationMessage'
-import * as MarkdownRendererModule from '../../../../../src/renderer/components/shared/MarkdownRenderer'
 
 describe('ConversationMessage', () => {
+  afterEach(() => {
+    cleanup()
+    markdownRendererSpy.mockClear()
+  })
+
   it('renders user role as plain text with left-aligned full-width layout', () => {
     render(
       <ConversationMessage
@@ -66,14 +85,6 @@ describe('ConversationMessage', () => {
   })
 
   it('passes streaming render mode to assistant markdown content', () => {
-    const markdownRendererSpy = vi
-      .spyOn(MarkdownRendererModule, 'MarkdownRenderer')
-      .mockImplementation(({ content, renderMode }) => (
-        <div data-testid="markdown-renderer" data-render-mode={renderMode}>
-          {content}
-        </div>
-      ))
-
     render(
       <ConversationMessage
         message={{
@@ -85,10 +96,8 @@ describe('ConversationMessage', () => {
       />
     )
 
-    expect(
-      screen.getByTestId('markdown-renderer').getAttribute('data-render-mode')
-    ).toBe('streaming')
-
-    markdownRendererSpy.mockRestore()
+    expect(markdownRendererSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ renderMode: 'streaming' })
+    )
   })
 })

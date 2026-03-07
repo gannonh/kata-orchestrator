@@ -45,10 +45,9 @@ export function ChatPanel({
       return null
     }
 
-    for (let index = visibleMessages.length - 1; index >= 0; index -= 1) {
-      const message = visibleMessages[index]
-      if (message?.role === 'agent') {
-        return message.id
+    for (let i = visibleMessages.length - 1; i >= 0; i -= 1) {
+      if (visibleMessages[i]?.role === 'agent') {
+        return visibleMessages[i].id
       }
     }
 
