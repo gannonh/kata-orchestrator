@@ -96,4 +96,46 @@ describe('normalizeMarkdownForRender', () => {
       ['```ts', 'const ready = true', '```'].join('\n')
     )
   })
+
+  it('closes unterminated ordered-list fences while preserving the list prefix', () => {
+    const content = ['1. ```ts', '   const ready = true'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(
+      ['1. ```ts', '   const ready = true', '1. ```'].join('\n')
+    )
+  })
+
+  it('does not treat malformed ordered-list markers as fence containers', () => {
+    const content = ['1.```ts', 'const ready = true'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(content)
+  })
+
+  it('does not treat tab-indented code as a fenced opener', () => {
+    const content = ['\t```ts', '\tconst ready = true'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(content)
+  })
+
+  it('closes unordered-list fences with alternate markers', () => {
+    const content = ['+ ```ts', '  const ready = true'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(
+      ['+ ```ts', '  const ready = true', '+ ```'].join('\n')
+    )
+  })
+
+  it('closes unordered-list fences with star markers', () => {
+    const content = ['* ```ts', '  const ready = true'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(
+      ['* ```ts', '  const ready = true', '* ```'].join('\n')
+    )
+  })
+
+  it('does not treat malformed ordered-list markers with closing parens as fence containers', () => {
+    const content = ['1)```ts', 'const ready = true'].join('\n')
+
+    expect(normalizeMarkdownForRender(content, 'streaming')).toBe(content)
+  })
 })

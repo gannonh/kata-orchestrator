@@ -36,9 +36,11 @@ const MD_COMPONENTS: Components = {
     <li className={cn('leading-6 marker:text-muted-foreground', className)}>{children}</li>
   ),
   input: ({ checked, className, node: _node, ...props }) => {
+    /* v8 ignore start -- react-markdown only reaches this override for GFM task list checkboxes */
     if (props.type !== 'checkbox') {
       return <input {...props} checked={checked} className={className} readOnly />
     }
+    /* v8 ignore stop */
 
     return (
       <input

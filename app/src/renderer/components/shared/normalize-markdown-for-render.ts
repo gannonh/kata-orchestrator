@@ -43,10 +43,11 @@ function consumeOrderedListMarker(line: string, startIndex: number): number | nu
 }
 
 function consumeListMarker(line: string, startIndex: number): number | null {
-  if (
-    (line[startIndex] === '-' || line[startIndex] === '+' || line[startIndex] === '*') &&
-    (line[startIndex + 1] === ' ' || line[startIndex + 1] === '\t')
-  ) {
+  const hasBulletMarker =
+    line[startIndex] === '-' || line[startIndex] === '+' || line[startIndex] === '*'
+  const hasMarkerSpacing = line[startIndex + 1] === ' ' || line[startIndex + 1] === '\t'
+
+  if (hasBulletMarker && hasMarkerSpacing) {
     return startIndex + 2
   }
 
