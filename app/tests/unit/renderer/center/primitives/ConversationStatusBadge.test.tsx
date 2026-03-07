@@ -7,6 +7,7 @@ describe('ConversationStatusBadge', () => {
   it.each([
     ['ready', 'Ready'],
     ['thinking', 'Thinking'],
+    ['drafting', 'Drafting'],
     ['running', 'Running'],
     ['stopped', 'Stopped'],
     ['error', 'Error']

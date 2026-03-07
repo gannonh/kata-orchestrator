@@ -3,6 +3,7 @@ export type PrimitiveRunState = 'empty' | 'pending' | 'idle' | 'error'
 export type CoordinatorStatusBadgeState =
   | 'ready'
   | 'thinking'
+  | 'drafting'
   | 'running'
   | 'stopped'
   | 'error'

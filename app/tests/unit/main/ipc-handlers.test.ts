@@ -14,6 +14,10 @@ const {
   mockShowOpenDialog,
   mockProvisionManagedWorkspace,
   mockFsAccess,
+  mockFsMkdir,
+  mockFsReadFile,
+  mockFsWriteFile,
+  mockFsRename,
   mockExecFile,
   mockCreateSessionAgentRegistry,
   mockRegistrySeedBaselineAgents,
@@ -25,6 +29,10 @@ const {
   mockShowOpenDialog: vi.fn(),
   mockProvisionManagedWorkspace: vi.fn(),
   mockFsAccess: vi.fn(),
+  mockFsMkdir: vi.fn(),
+  mockFsReadFile: vi.fn(),
+  mockFsWriteFile: vi.fn(),
+  mockFsRename: vi.fn(),
   mockExecFile: vi.fn(),
   mockCreateSessionAgentRegistry: vi.fn(),
   mockRegistrySeedBaselineAgents: vi.fn(),
@@ -52,12 +60,19 @@ vi.mock('node:fs', async () => {
       ...actual,
       promises: {
         ...actual.promises,
-        access: mockFsAccess
+        access: mockFsAccess,
+        mkdir: mockFsMkdir,
+        readFile: mockFsReadFile,
+        writeFile: mockFsWriteFile,
+        rename: mockFsRename
       }
     },
     promises: {
       ...actual.promises,
-      access: mockFsAccess
+      access: mockFsAccess,
+      mkdir: mockFsMkdir,
+      readFile: mockFsReadFile,
+      writeFile: mockFsWriteFile
     }
   }
 })
@@ -132,6 +147,10 @@ describe('registerIpcHandlers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockProvisionManagedWorkspace.mockReset()
+    mockFsMkdir.mockResolvedValue(undefined)
+    mockFsWriteFile.mockResolvedValue(undefined)
+    mockFsRename.mockResolvedValue(undefined)
+    mockFsReadFile.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
     mockCreateSessionAgentRegistry.mockImplementation((getState: () => AppState, setState: (next: AppState) => void) => ({
       seedBaselineAgents: mockRegistrySeedBaselineAgents.mockImplementation(
         (sessionId: string, createdAt: string) => {
@@ -213,7 +232,6 @@ describe('registerIpcHandlers', () => {
     expect(mockRemoveHandler).toHaveBeenCalledWith('session:setActive')
     expect(mockRemoveHandler).toHaveBeenCalledWith('spec:get')
     expect(mockRemoveHandler).toHaveBeenCalledWith('spec:save')
-    expect(mockRemoveHandler).toHaveBeenCalledWith('spec:applyDraft')
     expect(mockHandle).toHaveBeenCalledWith('app:bootstrap', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('space:create', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('space:setActive', expect.any(Function))
@@ -222,7 +240,6 @@ describe('registerIpcHandlers', () => {
     expect(mockHandle).toHaveBeenCalledWith('session:setActive', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('spec:get', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('spec:save', expect.any(Function))
-    expect(mockHandle).toHaveBeenCalledWith('spec:applyDraft', expect.any(Function))
   })
 
   it('opens valid external http(s) URLs through shell', async () => {
@@ -613,6 +630,14 @@ describe('registerIpcHandlers', () => {
         sessionId: (createdSession as { id: string }).id,
         kind: 'spec',
         label: 'Spec',
+        sourcePath: path.join(
+          existingSpace.rootPath,
+          '.kata',
+          'sessions',
+          (createdSession as { id: string }).id,
+          'notes',
+          'spec.md'
+        ),
         sortOrder: 0
       })
     ])
@@ -1078,7 +1103,7 @@ describe('registerIpcHandlers', () => {
     )
   })
 
-  it('spec:get returns persisted spec document by <spaceId>:<sessionId> key', async () => {
+  it('spec:get creates and returns the default scaffold when the file does not exist', async () => {
     const store = createMockStore({
       ...createDefaultAppState(),
       spaces: {
@@ -1089,21 +1114,33 @@ describe('registerIpcHandlers', () => {
       },
       sessions: {
         'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
-      },
-      specDocuments: {
-        'space-1:session-1': {
-          markdown: '# Persisted',
-          updatedAt: '2026-03-03T00:00:00.000Z'
-        }
       }
     })
     registerIpcHandlers(store)
 
     const handler = getHandlersByChannel().get('spec:get')!
-    await expect(handler({}, { spaceId: 'space-1', sessionId: 'session-1' })).resolves.toEqual({
-      markdown: '# Persisted',
-      updatedAt: '2026-03-03T00:00:00.000Z'
-    })
+    const result = await handler({}, { spaceId: 'space-1', sessionId: 'session-1' })
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
+        markdown: expect.stringContaining('## Goal'),
+        frontmatter: expect.objectContaining({
+          status: 'drafting'
+        }),
+        diagnostics: []
+      })
+    )
+    expect(mockFsMkdir).toHaveBeenCalledWith('/tmp/r/.kata/sessions/session-1/notes', { recursive: true })
+    expect(mockFsWriteFile).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tmp\/r\/\.kata\/sessions\/session-1\/notes\/\.spec-\d+\.tmp$/),
+      expect.stringContaining('## Goal'),
+      'utf-8'
+    )
+    expect(mockFsRename).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tmp\/r\/\.kata\/sessions\/session-1\/notes\/\.spec-\d+\.tmp$/),
+      '/tmp/r/.kata/sessions/session-1/notes/spec.md'
+    )
   })
 
   it('spec:get throws for unknown spaceId', async () => {
@@ -1151,7 +1188,7 @@ describe('registerIpcHandlers', () => {
     )
   })
 
-  it('spec:save upserts markdown with updatedAt and optional applied fields', async () => {
+  it('spec:save writes the file-backed projection and derives sourceRunId from appliedRunId', async () => {
     const state = {
       ...createDefaultAppState(),
       spaces: {
@@ -1172,30 +1209,37 @@ describe('registerIpcHandlers', () => {
       spaceId: 'space-1',
       sessionId: 'session-1',
       markdown: '# Updated markdown',
-      appliedRunId: 'run-55',
-      appliedAt: '2026-03-03T00:12:00.000Z'
+      appliedRunId: 'run-55'
     })
 
     expect(result).toEqual(expect.objectContaining({
+      sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
       markdown: '# Updated markdown',
       appliedRunId: 'run-55',
-      appliedAt: '2026-03-03T00:12:00.000Z',
+      frontmatter: expect.objectContaining({
+        status: 'drafting',
+        sourceRunId: 'run-55'
+      }),
+      raw: expect.stringContaining('sourceRunId: run-55'),
       updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
     }))
     expect(store.save).toHaveBeenCalledWith({
       ...state,
       specDocuments: {
         'space-1:session-1': expect.objectContaining({
+          sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
           markdown: '# Updated markdown',
           appliedRunId: 'run-55',
-          appliedAt: '2026-03-03T00:12:00.000Z',
+          frontmatter: expect.objectContaining({
+            sourceRunId: 'run-55'
+          }),
           updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
         })
       }
     })
   })
 
-  it('spec:save preserves existing applied metadata when omitted from input', async () => {
+  it('spec:save preserves existing frontmatter metadata when omitted from input', async () => {
     const state = {
       ...createDefaultAppState(),
       spaces: {
@@ -1209,10 +1253,23 @@ describe('registerIpcHandlers', () => {
       },
       specDocuments: {
         'space-1:session-1': {
+          sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
+          raw: '---\nstatus: ready\nupdatedAt: 2026-03-03T00:00:00.000Z\nsourceRunId: run-existing\n---\n\n# Existing',
           markdown: '# Existing',
           updatedAt: '2026-03-03T00:00:00.000Z',
+          frontmatter: {
+            status: 'ready',
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            sourceRunId: 'run-existing'
+          },
+          diagnostics: [],
           appliedRunId: 'run-existing',
-          appliedAt: '2026-03-03T00:01:00.000Z'
+          lastGoodMarkdown: '# Existing',
+          lastGoodFrontmatter: {
+            status: 'ready',
+            updatedAt: '2026-03-03T00:00:00.000Z',
+            sourceRunId: 'run-existing'
+          }
         }
       }
     }
@@ -1229,99 +1286,12 @@ describe('registerIpcHandlers', () => {
     expect(result).toEqual(expect.objectContaining({
       markdown: '# Updated without explicit applied metadata',
       appliedRunId: 'run-existing',
-      appliedAt: '2026-03-03T00:01:00.000Z',
+      frontmatter: expect.objectContaining({
+        status: 'ready',
+        sourceRunId: 'run-existing'
+      }),
       updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
     }))
-  })
-
-  it('spec:applyDraft saves markdown/applied metadata and marks run draft applied', async () => {
-    const state = {
-      ...createDefaultAppState(),
-      spaces: {
-        'space-1': {
-          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
-          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
-        }
-      },
-      sessions: {
-        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
-      },
-      runs: {
-        'run-10': {
-          id: 'run-10', sessionId: 'session-1', prompt: 'test', status: 'completed' as const,
-          model: 'm', provider: 'p', createdAt: '2026-03-03T00:00:00.000Z', messages: []
-        }
-      }
-    }
-    const store = createMockStore(state)
-    registerIpcHandlers(store)
-
-    const handler = getHandlersByChannel().get('spec:applyDraft')!
-    const result = await handler({}, {
-      spaceId: 'space-1',
-      sessionId: 'session-1',
-      draft: {
-        runId: 'run-10',
-        generatedAt: '2026-03-03T00:00:00.000Z',
-        content: '## Applied draft'
-      }
-    })
-
-    expect(result).toEqual(expect.objectContaining({
-      markdown: '## Applied draft',
-      appliedRunId: 'run-10',
-      appliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
-      updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
-    }))
-    expect(store.save).toHaveBeenCalledWith(expect.objectContaining({
-      specDocuments: {
-        'space-1:session-1': expect.objectContaining({
-          markdown: '## Applied draft',
-          appliedRunId: 'run-10',
-          appliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
-          updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
-        })
-      },
-      runs: expect.objectContaining({
-        'run-10': expect.objectContaining({
-          draftAppliedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
-        })
-      })
-    }))
-  })
-
-  it('spec:applyDraft throws when run does not belong to session', async () => {
-    const state = {
-      ...createDefaultAppState(),
-      spaces: {
-        'space-1': {
-          id: 'space-1', name: 'S1', repoUrl: 'https://github.com/t/r', rootPath: '/tmp/r',
-          branch: 'main', orchestrationMode: 'team' as const, createdAt: '2026-03-03T00:00:00.000Z', status: 'active' as const
-        }
-      },
-      sessions: {
-        'session-1': { id: 'session-1', spaceId: 'space-1', label: 'Sess', createdAt: '2026-03-03T00:00:00.000Z' }
-      },
-      runs: {
-        'run-10': {
-          id: 'run-10', sessionId: 'other-session', prompt: 'test', status: 'completed' as const,
-          model: 'm', provider: 'p', createdAt: '2026-03-03T00:00:00.000Z', messages: []
-        }
-      }
-    }
-    const store = createMockStore(state)
-    registerIpcHandlers(store)
-
-    const handler = getHandlersByChannel().get('spec:applyDraft')!
-    await expect(handler({}, {
-      spaceId: 'space-1',
-      sessionId: 'session-1',
-      draft: {
-        runId: 'run-10',
-        generatedAt: '2026-03-03T00:00:00.000Z',
-        content: '## Draft'
-      }
-    })).rejects.toThrow('Draft run run-10 does not belong to session session-1')
   })
 
   it('rejects malformed payloads for space and session handlers', async () => {
@@ -1336,7 +1306,6 @@ describe('registerIpcHandlers', () => {
     const sessionSetActive = handlers.get('session:setActive')
     const specGet = handlers.get('spec:get')
     const specSave = handlers.get('spec:save')
-    const specApplyDraft = handlers.get('spec:applyDraft')
 
     await expect(spaceCreate?.({}, null)).rejects.toThrow('Space input must be an object')
     await expect(
@@ -1455,12 +1424,6 @@ describe('registerIpcHandlers', () => {
     )
     await expect(specSave?.({}, { spaceId: 'space-1', sessionId: 'session-1', markdown: '# ok', appliedAt: 123 })).rejects.toThrow(
       'spec:save appliedAt must be a string when provided'
-    )
-    await expect(specApplyDraft?.({}, { spaceId: 'space-1', sessionId: 'session-1', draft: null })).rejects.toThrow(
-      'spec:applyDraft input must include a draft object'
-    )
-    await expect(specApplyDraft?.({}, { spaceId: 'space-1', sessionId: 'session-1', draft: { runId: 123, content: '# bad' } })).rejects.toThrow(
-      'spec:applyDraft draft must include string runId and content'
     )
   })
 
@@ -1748,11 +1711,7 @@ describe('registerIpcHandlers', () => {
         content: 'response text',
         createdAt: '2026-03-01T00:00:01Z'
       })
-      expect(mockSetRunDraft).toHaveBeenCalledWith(store, 'run-ev-1', {
-        runId: 'run-ev-1',
-        generatedAt: '2026-03-01T00:00:01Z',
-        content: 'response text'
-      })
+      expect(mockSetRunDraft).not.toHaveBeenCalled()
       expect(mockSend).toHaveBeenCalledWith(
         'run:event',
         expect.objectContaining({
@@ -1772,6 +1731,143 @@ describe('registerIpcHandlers', () => {
       const abortHandler = getHandlersByChannel().get('run:abort')!
       const abortResult = await abortHandler(null, { runId: 'run-ev-1' })
       expect(abortResult).toBe(false)
+    })
+
+    it('persists generated spec markdown to notes/spec.md and emits status-only chat messages', async () => {
+      const mockRunner = { execute: vi.fn().mockResolvedValue(undefined), abort: vi.fn() }
+      mockCredentialResolver.getApiKey.mockResolvedValue('sk-test')
+      mockCreateRun.mockReturnValue({
+        id: 'run-spec-1',
+        sessionId: 'sess-1',
+        prompt: 'Create a spec for a TUI app written in Rust Ratatui for managing GitHub Issues.',
+        status: 'queued',
+        model: 'm',
+        provider: 'p',
+        createdAt: '2026-03-01T00:00:00.000Z',
+        messages: []
+      })
+      mockCreateAgentRunner.mockReturnValue(mockRunner)
+
+      const store = createMockStore({
+        ...createDefaultAppState(),
+        spaces: {
+          'space-1': {
+            id: 'space-1',
+            name: 'Space 1',
+            repoUrl: 'https://github.com/org/repo1',
+            rootPath: '/tmp/repo1',
+            branch: 'main',
+            orchestrationMode: 'team',
+            createdAt: '2026-03-03T00:00:00.000Z',
+            status: 'active'
+          }
+        },
+        sessions: {
+          'sess-1': {
+            id: 'sess-1',
+            spaceId: 'space-1',
+            label: 'Session 1',
+            createdAt: '2026-03-03T00:00:00.000Z'
+          }
+        }
+      })
+      registerIpcHandlers(store, { credentialResolver: mockCredentialResolver })
+      const handler = getHandlersByChannel().get('run:submit')!
+
+      const mockSend = vi.fn()
+      const mockEvent = { sender: { send: mockSend, isDestroyed: () => false } }
+      await handler(mockEvent, {
+        sessionId: 'sess-1',
+        prompt: 'Create a spec for a TUI app written in Rust Ratatui for managing GitHub Issues.',
+        model: 'm',
+        provider: 'p'
+      })
+
+      const onEvent = mockCreateAgentRunner.mock.calls[0][0].onEvent as (event: Record<string, unknown>) => void
+      const generatedSpec = [
+        '## Goal',
+        'Build a Ratatui-based GitHub issues TUI.',
+        '',
+        '## Tasks',
+        '- [ ] Scaffold the project',
+        '- [ ] Implement the GitHub client'
+      ].join('\n')
+
+      onEvent({ type: 'run_state_changed', runState: 'pending' })
+      onEvent({
+        type: 'message_updated',
+        message: {
+          id: 'agent-spec-1',
+          role: 'agent',
+          content: '## Goal\nBuild',
+          createdAt: '2026-03-01T00:00:01Z'
+        }
+      })
+      onEvent({
+        type: 'message_appended',
+        message: {
+          id: 'agent-spec-1',
+          role: 'agent',
+          content: generatedSpec,
+          createdAt: '2026-03-01T00:00:02Z'
+        }
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(mockFsWriteFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+\.tmp$/),
+        expect.stringContaining(generatedSpec),
+        'utf-8'
+      )
+      expect(mockFsWriteFile).toHaveBeenCalledWith(
+        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+\.tmp$/),
+        expect.stringContaining('sourceRunId: run-spec-1'),
+        'utf-8'
+      )
+      expect(mockFsRename).toHaveBeenCalledWith(
+        expect.stringMatching(/\/tmp\/repo1\/\.kata\/sessions\/sess-1\/notes\/\.spec-\d+\.tmp$/),
+        '/tmp/repo1/.kata/sessions/sess-1/notes/spec.md'
+      )
+      expect(store.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          specDocuments: expect.objectContaining({
+            'space-1:sess-1': expect.objectContaining({
+              sourcePath: '/tmp/repo1/.kata/sessions/sess-1/notes/spec.md',
+              markdown: generatedSpec,
+              appliedRunId: 'run-spec-1'
+            })
+          })
+        })
+      )
+
+      const emittedMessages = mockSend.mock.calls
+        .filter(([channel, payload]) => channel === 'run:event' && payload && typeof payload === 'object' && 'type' in (payload as object) && (payload as { type: string }).type === 'message_appended')
+        .map(([, payload]) => (payload as { message: { content: string } }).message.content)
+
+      expect(emittedMessages).toContain('Thinking')
+      expect(emittedMessages).toContain('Drafting')
+      expect(emittedMessages).toContain("I've created an initial draft of the project spec.")
+      expect(emittedMessages).not.toContain(generatedSpec)
+
+      expect(mockAppendRunMessage).toHaveBeenCalledWith(store, 'run-spec-1', expect.objectContaining({
+        role: 'agent',
+        content: 'Thinking'
+      }))
+      expect(mockAppendRunMessage).toHaveBeenCalledWith(store, 'run-spec-1', expect.objectContaining({
+        role: 'agent',
+        content: 'Drafting'
+      }))
+      expect(mockAppendRunMessage).toHaveBeenCalledWith(store, 'run-spec-1', expect.objectContaining({
+        role: 'agent',
+        content: "I've created an initial draft of the project spec."
+      }))
+      expect(mockAppendRunMessage).not.toHaveBeenCalledWith(
+        store,
+        'run-spec-1',
+        expect.objectContaining({ content: generatedSpec })
+      )
+      expect(mockSetRunDraft).not.toHaveBeenCalled()
     })
 
     it('marks run failed when runner.execute rejects unexpectedly', async () => {

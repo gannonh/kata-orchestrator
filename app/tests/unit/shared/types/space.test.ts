@@ -342,10 +342,32 @@ describe('KAT-161 persistence contracts', () => {
   it('supports session-scoped persisted spec documents', () => {
     const key = 'space-1:session-1'
     const specDocument: PersistedSpecDocument = {
+      sourcePath: '/tmp/repo/.kata/sessions/session-1/notes/spec.md',
+      raw: [
+        '---',
+        'status: drafting',
+        'updatedAt: 2026-03-03T00:00:00.000Z',
+        'sourceRunId: run-1',
+        '---',
+        '',
+        '## Goal',
+        'Ship persisted specs'
+      ].join('\n'),
       markdown: ['## Goal', 'Ship persisted specs'].join('\n'),
       updatedAt: '2026-03-03T00:00:00.000Z',
+      frontmatter: {
+        status: 'drafting',
+        updatedAt: '2026-03-03T00:00:00.000Z',
+        sourceRunId: 'run-1'
+      },
+      diagnostics: [],
+      lastGoodMarkdown: ['## Goal', 'Ship persisted specs'].join('\n'),
+      lastGoodFrontmatter: {
+        status: 'drafting',
+        updatedAt: '2026-03-03T00:00:00.000Z',
+        sourceRunId: 'run-1'
+      },
       appliedRunId: 'run-1',
-      appliedAt: '2026-03-03T00:01:00.000Z'
     }
 
     const state: AppState = {

@@ -67,6 +67,78 @@ describe('MessageBubble', () => {
     expect(screen.getByText('Deterministic status pipeline wired')).toBeTruthy()
   })
 
+  it('renders thinking and drafting as animated activity cards instead of plain markdown', () => {
+    const { rerender } = render(
+      <MessageBubble
+        message={{
+          id: 'agent-thinking',
+          role: 'agent',
+          content: 'Thinking',
+          createdAt: '1970-01-01T00:00:01.000Z'
+        }}
+        activityPhase="thinking"
+        conversationRunState="pending"
+      />
+    )
+
+    expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
+    expect(screen.getByTestId('agent-activity-spinner')).toBeTruthy()
+    expect(screen.getByTestId('agent-activity-spinner').getAttribute('class')).toContain('animate-spin')
+    expect(screen.getByTestId('agent-activity-pulse').getAttribute('class')).toContain('animate-pulse')
+    expect(screen.getByText('Working through the request and shaping the spec.')).toBeTruthy()
+
+    rerender(
+      <MessageBubble
+        message={{
+          id: 'agent-thinking',
+          role: 'agent',
+          content: 'Thinking',
+          createdAt: '1970-01-01T00:00:01.000Z'
+        }}
+        activityPhase="drafting"
+        conversationRunState="pending"
+      />
+    )
+
+    expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
+    expect(screen.queryByTestId('agent-activity-spinner')).toBeNull()
+    expect(screen.getByText('Completed')).toBeTruthy()
+
+    rerender(
+      <MessageBubble
+        message={{
+          id: 'agent-drafting',
+          role: 'agent',
+          content: 'Drafting',
+          createdAt: '1970-01-01T00:00:02.000Z'
+        }}
+        activityPhase="drafting"
+        conversationRunState="pending"
+      />
+    )
+
+    expect(screen.getByRole('status', { name: 'Drafting' })).toBeTruthy()
+    expect(screen.getByTestId('agent-activity-spinner')).toBeTruthy()
+  })
+
+  it('renders a completed drafting card without animation once the phase has cleared', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 'agent-drafting-complete',
+          role: 'agent',
+          content: 'Drafting'
+        }}
+        conversationRunState="idle"
+      />
+    )
+
+    expect(screen.getByRole('status', { name: 'Drafting' })).toBeTruthy()
+    expect(screen.queryByTestId('agent-activity-spinner')).toBeNull()
+    expect(screen.getByText('Completed')).toBeTruthy()
+    expect(screen.getByText('Draft written to the spec artifact.')).toBeTruthy()
+  })
+
   it('renders collapsed summary variant for analyzing mode', () => {
     render(
       <MessageBubble
@@ -149,6 +221,33 @@ describe('MessageBubble', () => {
     expect(screen.getByRole('button', { name: 'Approve the plan...' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Approve the plan...' }))
     expect(onDecisionAction).toHaveBeenCalledWith('approve_tech_stack_plan')
+  })
+
+  it('strips decision action lines from collapsed summaries as well as message content', () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 'agent-2',
+          role: 'agent',
+          content: 'Decision message content',
+          createdAt: '1970-01-01T00:00:02.000Z'
+        }}
+        variant="collapsed"
+        summary={[
+          'Summary body',
+          '',
+          'Approve this plan with 1 check? Clarifications',
+          '- Approve the plan...',
+          '- Clarifications'
+        ].join('\n')}
+        decisionCard={decisionCard}
+        decisionState="available"
+        onDecisionAction={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Summary body')).toBeTruthy()
+    expect(screen.getAllByText('Approve this plan with 1 check? Clarifications')).toHaveLength(1)
   })
 
   it('renders decision actions for assistant ChatMessage after role normalization', () => {

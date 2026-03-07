@@ -97,6 +97,25 @@ describe('ChatPanel', () => {
     expect(screen.getByRole('status', { name: 'Thinking' })).toBeTruthy()
   })
 
+  it('uses the explicit activity phase for the footer status badge', () => {
+    mockHook.mockReturnValue({
+      state: idleState({
+        runState: 'idle',
+        activityPhase: 'drafting',
+        messages: [
+          { id: 'm1', role: 'user', content: 'Create the spec', createdAt: '2026-03-01T00:00:00Z' },
+          { id: 'm2', role: 'agent', content: 'Drafting', createdAt: '2026-03-01T00:00:01Z' }
+        ]
+      }),
+      submitPrompt: vi.fn(),
+      retry: vi.fn()
+    })
+
+    render(<ChatPanel sessionId={null} />)
+
+    expect(screen.getAllByRole('status', { name: 'Drafting' })).toHaveLength(2)
+  })
+
   it('renders pasted-context affordances through the real center panel path', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-01T00:00:10Z'))

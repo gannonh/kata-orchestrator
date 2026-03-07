@@ -144,8 +144,7 @@ test.describe('KAT-161 relaunch resume persistence @uat', () => {
           spaceId: inputSpaceId,
           sessionId: inputSessionId,
           markdown: inputMarkdown,
-          appliedRunId: 'run-kat-161',
-          appliedAt: '2026-03-03T00:00:00.000Z'
+          sourceRunId: 'run-kat-161'
         })
       },
       { inputSpaceId: spaceId, inputSessionId: sessionId, inputMarkdown: markdown }
@@ -181,8 +180,9 @@ test.describe('KAT-161 relaunch resume persistence @uat', () => {
       const rightPanel = relaunchedWindow.getByTestId('right-panel')
       await expect(rightPanel.getByRole('heading', { name: 'Goal', exact: true })).toBeVisible()
       await expect(rightPanel.getByText('Relaunch continuity goal.')).toBeVisible()
-      await expect(rightPanel.getByText('Applied from run-kat-161')).toBeVisible()
-      await expect(rightPanel.getByText('In Progress')).toBeVisible()
+      await expect(rightPanel.getByText('Keep task state after restart')).toBeVisible()
+      await expect(rightPanel.getByText('Trace: run-kat-161')).toBeVisible()
+      await expect(rightPanel.getByText('drafting')).toBeVisible()
 
       await relaunchedWindow.screenshot({
         path: path.join(evidenceDir, `restored-session-spec-${Date.now()}.png`),
@@ -195,8 +195,8 @@ test.describe('KAT-161 relaunch resume persistence @uat', () => {
         activeSpaceId: spaceId,
         activeSessionId: sessionId,
         details: {
-          expectedAppliedRunId: 'run-kat-161',
-          expectedTaskState: 'in_progress'
+          expectedSourceRunId: 'run-kat-161',
+          expectedTaskLine: 'Keep task state after restart'
         }
       })
     } finally {

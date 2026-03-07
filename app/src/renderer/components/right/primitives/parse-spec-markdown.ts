@@ -77,7 +77,12 @@ export function parseSpecMarkdown(markdown: string): ParsedSpecMarkdownDocument 
   })
 
   return {
+    sourcePath: '',
+    raw: markdown,
     markdown,
+    visibleMarkdown: markdown,
+    status: 'drafting',
+    diagnostics: [],
     sections: {
       goal: normalizeTextBlock(sectionLines.get('goal') ?? []),
       acceptanceCriteria: normalizeListItems(sectionLines.get('acceptanceCriteria') ?? []),

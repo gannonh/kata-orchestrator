@@ -282,15 +282,6 @@ describe('preload bridge', () => {
           appliedRunId?: string
           appliedAt?: string
         }) => Promise<unknown>
-        specApplyDraft: (input: {
-          spaceId: string
-          sessionId: string
-          draft: {
-            runId: string
-            generatedAt: string
-            content: string
-          }
-        }) => Promise<unknown>
       }
     ]
 
@@ -321,9 +312,26 @@ describe('preload bridge', () => {
     })
     expect(invoke).toHaveBeenCalledWith('session:setActive', { sessionId: 'session-1' })
 
-    invoke.mockResolvedValueOnce({ markdown: '# Spec', updatedAt: '2026-03-03T00:00:00.000Z' })
-    await expect(api.specGet({ spaceId: 'space-1', sessionId: 'session-1' })).resolves.toEqual({
+    invoke.mockResolvedValueOnce({
+      sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
+      raw: '---\nstatus: drafting\nupdatedAt: 2026-03-03T00:00:00.000Z\n---\n\n# Spec',
       markdown: '# Spec',
+      frontmatter: {
+        status: 'drafting',
+        updatedAt: '2026-03-03T00:00:00.000Z'
+      },
+      diagnostics: [],
+      updatedAt: '2026-03-03T00:00:00.000Z'
+    })
+    await expect(api.specGet({ spaceId: 'space-1', sessionId: 'session-1' })).resolves.toEqual({
+      sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
+      raw: '---\nstatus: drafting\nupdatedAt: 2026-03-03T00:00:00.000Z\n---\n\n# Spec',
+      markdown: '# Spec',
+      frontmatter: {
+        status: 'drafting',
+        updatedAt: '2026-03-03T00:00:00.000Z'
+      },
+      diagnostics: [],
       updatedAt: '2026-03-03T00:00:00.000Z'
     })
     expect(invoke).toHaveBeenCalledWith('spec:get', { spaceId: 'space-1', sessionId: 'session-1' })
@@ -335,35 +343,33 @@ describe('preload bridge', () => {
       appliedRunId: 'run-9',
       appliedAt: '2026-03-03T00:10:00.000Z'
     }
-    invoke.mockResolvedValueOnce({ ...saveInput, updatedAt: '2026-03-03T00:11:00.000Z' })
+    invoke.mockResolvedValueOnce({
+      sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
+      raw: '---\nstatus: drafting\nupdatedAt: 2026-03-03T00:11:00.000Z\nsourceRunId: run-9\n---\n\n# Saved',
+      markdown: '# Saved',
+      frontmatter: {
+        status: 'drafting',
+        updatedAt: '2026-03-03T00:11:00.000Z',
+        sourceRunId: 'run-9'
+      },
+      diagnostics: [],
+      updatedAt: '2026-03-03T00:11:00.000Z',
+      appliedRunId: 'run-9'
+    })
     await expect(api.specSave(saveInput)).resolves.toEqual({
-      ...saveInput,
-      updatedAt: '2026-03-03T00:11:00.000Z'
+      sourcePath: '/tmp/r/.kata/sessions/session-1/notes/spec.md',
+      raw: '---\nstatus: drafting\nupdatedAt: 2026-03-03T00:11:00.000Z\nsourceRunId: run-9\n---\n\n# Saved',
+      markdown: '# Saved',
+      frontmatter: {
+        status: 'drafting',
+        updatedAt: '2026-03-03T00:11:00.000Z',
+        sourceRunId: 'run-9'
+      },
+      diagnostics: [],
+      updatedAt: '2026-03-03T00:11:00.000Z',
+      appliedRunId: 'run-9'
     })
     expect(invoke).toHaveBeenCalledWith('spec:save', saveInput)
-
-    const applyDraftInput = {
-      spaceId: 'space-1',
-      sessionId: 'session-1',
-      draft: {
-        runId: 'run-10',
-        generatedAt: '2026-03-03T00:00:00.000Z',
-        content: '# Applied from draft'
-      }
-    }
-    invoke.mockResolvedValueOnce({
-      markdown: '# Applied from draft',
-      updatedAt: '2026-03-03T00:12:00.000Z',
-      appliedRunId: 'run-10',
-      appliedAt: '2026-03-03T00:12:00.000Z'
-    })
-    await expect(api.specApplyDraft(applyDraftInput)).resolves.toEqual({
-      markdown: '# Applied from draft',
-      updatedAt: '2026-03-03T00:12:00.000Z',
-      appliedRunId: 'run-10',
-      appliedAt: '2026-03-03T00:12:00.000Z'
-    })
-    expect(invoke).toHaveBeenCalledWith('spec:applyDraft', applyDraftInput)
   })
 
   it('onRunEvent handler forwards event data to callback', async () => {

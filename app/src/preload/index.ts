@@ -10,7 +10,7 @@ import type {
 } from '../shared/types/space'
 import type { RunRecord } from '../shared/types/run'
 import type { SessionRuntimeEvent } from '../renderer/types/session-runtime-adapter'
-import type { LatestRunDraft, PersistedSpecDocument } from '../shared/types/spec-document'
+import type { PersistedSpecDocument, SpecArtifactStatus } from '../shared/types/spec-document'
 
 const OPEN_EXTERNAL_URL_CHANNEL = 'kata:openExternalUrl'
 const APP_BOOTSTRAP_CHANNEL = 'app:bootstrap'
@@ -25,7 +25,6 @@ const SESSION_LIST_BY_SPACE_CHANNEL = 'session:listBySpace'
 const SESSION_SET_ACTIVE_CHANNEL = 'session:setActive'
 const SPEC_GET_CHANNEL = 'spec:get'
 const SPEC_SAVE_CHANNEL = 'spec:save'
-const SPEC_APPLY_DRAFT_CHANNEL = 'spec:applyDraft'
 const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
 const GIT_LIST_BRANCHES_CHANNEL = 'git:listBranches'
 const GITHUB_LIST_REPOS_CHANNEL = 'github:listRepos'
@@ -91,16 +90,12 @@ const kataApi = {
     spaceId: string
     sessionId: string
     markdown: string
+    status?: SpecArtifactStatus
+    sourceRunId?: string
     appliedRunId?: string
     appliedAt?: string
   }): Promise<PersistedSpecDocument> =>
     invokeTyped<PersistedSpecDocument>(SPEC_SAVE_CHANNEL, input),
-  specApplyDraft: (input: {
-    spaceId: string
-    sessionId: string
-    draft: LatestRunDraft
-  }): Promise<PersistedSpecDocument> =>
-    invokeTyped<PersistedSpecDocument>(SPEC_APPLY_DRAFT_CHANNEL, input),
   dialogOpenDirectory: (): Promise<{ path: string } | { error: string; path: string } | null> =>
     invokeTyped(DIALOG_OPEN_DIR_CHANNEL),
   gitListBranches: (repoPath: string): Promise<string[] | { error: string }> =>

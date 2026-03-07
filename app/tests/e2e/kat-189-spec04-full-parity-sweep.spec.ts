@@ -37,13 +37,9 @@ test.describe('KAT-189 spec04 parity sweep @quality-gate @ci @uat', () => {
 
       const messageList = appWindow.getByTestId('message-list')
       await timeline.showMock10SpecDraftReview()
-      await expect(messageList.getByText('Spec Updated')).toBeVisible({ timeout: 10_000 })
       await expect(rightPanel.getByRole('heading', { name: 'Spec', exact: true })).toBeVisible({ timeout: 10_000 })
-
-      const applyDraftButton = rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })
-      await expect(applyDraftButton).toBeVisible({ timeout: 10_000 })
-      await applyDraftButton.click()
-
+      await expect(rightPanel.getByRole('button', { name: 'Apply Draft to Spec' })).toHaveCount(0)
+      await expect(rightPanel.getByText('Spec Updated')).toBeVisible({ timeout: 10_000 })
       await expect(rightPanel.getByRole('heading', { name: 'Goal', exact: true })).toBeVisible({ timeout: 10_000 })
       await expect(rightPanel.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible({ timeout: 10_000 })
 
@@ -124,8 +120,8 @@ test.describe('KAT-189 spec04 parity sweep @quality-gate @ci @uat', () => {
 
       await expect(taskTrackingSection.getByText(MOCK14_HIGH_ACTIVITY_DETAIL)).toBeVisible({ timeout: 10_000 })
       await expect(taskTrackingSection.getByLabel('Active specialist')).toBeVisible({ timeout: 10_000 })
-      await expect(rightPanel.getByText(MOCK14_HIGH_ACTIVITY_DETAIL)).toBeVisible({ timeout: 10_000 })
-      await expect(rightPanel.getByLabel('Active specialist')).toBeVisible({ timeout: 10_000 })
+      await expect(rightPanel.getByText(MOCK14_HIGH_ACTIVITY_DETAIL)).toHaveCount(0)
+      await expect(rightPanel.getByLabel('Active specialist')).toHaveCount(0)
 
       await appWindow.screenshot({ path: mock14Path, fullPage: true })
     } finally {

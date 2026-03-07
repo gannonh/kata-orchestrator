@@ -190,8 +190,8 @@ async function captureAndResetSpecState(appWindow: Page): Promise<SeedSpecContex
       markdown: ''
     }
 
-    // spec:save retains appliedRunId when omitted; set empty string to clear
-    // prior applied state so "Apply Draft to Spec" deterministically appears.
+    // spec:save retains appliedRunId when omitted; set empty string to clear any
+    // prior run linkage before seeding the markdown-first parity states.
     if (initialSpecDocument?.appliedRunId !== undefined) {
       clearInput.appliedRunId = ''
     }
@@ -285,6 +285,43 @@ export async function seedSpec04ParityTimeline({
             createdAt: '2026-03-04T12:00:00.000Z'
           }
         })
+
+        await appWindow.evaluate(
+          async ({
+            inputSpaceId,
+            inputSessionId,
+            markdown,
+            appliedRunId
+          }: {
+            inputSpaceId: string
+            inputSessionId: string
+            markdown: string
+            appliedRunId: string
+          }) => {
+            const specSave = window.kata?.specSave
+            if (typeof specSave !== 'function') {
+              throw new Error('specSave API unavailable while seeding mock10 parity state.')
+            }
+
+            await specSave({
+              spaceId: inputSpaceId,
+              sessionId: inputSessionId,
+              markdown,
+              appliedRunId
+            })
+          },
+          {
+            inputSpaceId: seedContext.spaceId,
+            inputSessionId: seedContext.sessionId,
+            markdown: MOCK10_SPEC_UPDATED_CONTENT,
+            appliedRunId: RUN_ID
+          }
+        )
+
+        await appWindow.reload({ waitUntil: 'load' })
+        await appWindow.waitForSelector('#root > *', { state: 'attached' })
+        await ensureWorkspaceShell(appWindow)
+        await ensureSendButtonReady(appWindow)
       },
       showMock11ArchitectureProposal: async () => {
         await broadcastRunEvent(electronApp, {

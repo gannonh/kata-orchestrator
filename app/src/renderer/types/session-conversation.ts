@@ -2,6 +2,7 @@ import type { LatestRunDraft } from './spec-document'
 import type { TaskActivitySnapshot } from '@shared/types/task-tracking'
 
 export type ConversationRunState = 'empty' | 'pending' | 'error' | 'idle'
+export type ConversationActivityPhase = 'thinking' | 'drafting'
 
 export type ConversationMessageRole = 'user' | 'agent'
 
@@ -14,6 +15,7 @@ export interface ConversationMessage {
 
 export interface SessionConversationState {
   runState: ConversationRunState
+  activityPhase?: ConversationActivityPhase
   messages: ConversationMessage[]
   errorMessage?: string
   latestDraft?: LatestRunDraft
@@ -54,6 +56,15 @@ export type RetryFromErrorEvent = {
   type: 'RETRY_FROM_ERROR'
 }
 
+export type SetActivityPhaseEvent = {
+  type: 'SET_ACTIVITY_PHASE'
+  phase: ConversationActivityPhase
+}
+
+export type ClearActivityPhaseEvent = {
+  type: 'CLEAR_ACTIVITY_PHASE'
+}
+
 export type RunCompletedEvent = {
   type: 'RUN_COMPLETED'
 }
@@ -75,6 +86,8 @@ export type SessionConversationEvent =
   | UpdateMessageEvent
   | RunFailedEvent
   | RetryFromErrorEvent
+  | SetActivityPhaseEvent
+  | ClearActivityPhaseEvent
   | RunCompletedEvent
   | TaskActivitySnapshotReceivedEvent
   | ResetConversationEvent
