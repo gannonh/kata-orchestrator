@@ -74,9 +74,6 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1
-      shadcn:
-        specifier: ^4.0.0
-        version: 4.0.0(@types/node@22.19.13)(typescript@5.9.3)
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
@@ -120,6 +117,9 @@ importers:
       jsdom:
         specifier: ^25.0.0
         version: 25.0.1
+      shadcn:
+        specifier: ^4.0.0
+        version: 4.0.0(@types/node@22.19.13)(typescript@5.9.3)
       tailwindcss:
         specifier: ^4.0.0
         version: 4.2.1

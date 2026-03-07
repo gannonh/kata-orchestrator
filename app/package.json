@@ -69,7 +69,9 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
-      "esbuild"
+      "esbuild",
+      "msw",
+      "protobufjs"
     ]
   }
 }
