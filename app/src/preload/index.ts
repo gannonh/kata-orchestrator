@@ -22,7 +22,9 @@ const SESSION_CREATE_CHANNEL = 'session:create'
 const SESSION_AGENT_ROSTER_LIST_CHANNEL = 'session-agent-roster:list'
 const SESSION_CONTEXT_RESOURCES_LIST_CHANNEL = 'session-context-resources:list'
 const SESSION_LIST_BY_SPACE_CHANNEL = 'session:listBySpace'
+const SESSION_GET_CHANNEL = 'session:get'
 const SESSION_SET_ACTIVE_CHANNEL = 'session:setActive'
+const SESSION_SET_ACTIVE_MODEL_CHANNEL = 'session:setActiveModel'
 const SPEC_GET_CHANNEL = 'spec:get'
 const SPEC_SAVE_CHANNEL = 'spec:save'
 const DIALOG_OPEN_DIR_CHANNEL = 'dialog:openDirectory'
@@ -80,10 +82,14 @@ const kataApi = {
     invokeTyped<SessionContextResourceRecord[]>(SESSION_CONTEXT_RESOURCES_LIST_CHANNEL, input),
   sessionListBySpace: (input: { spaceId: string }): Promise<SessionRecord[]> =>
     invokeTyped<SessionRecord[]>(SESSION_LIST_BY_SPACE_CHANNEL, input),
+  sessionGet: (sessionId: string): Promise<SessionRecord | null> =>
+    invokeTyped<SessionRecord | null>(SESSION_GET_CHANNEL, { sessionId }),
   sessionSetActive: (sessionId: string): Promise<{ activeSpaceId: string; activeSessionId: string }> =>
     invokeTyped<{ activeSpaceId: string; activeSessionId: string }>(SESSION_SET_ACTIVE_CHANNEL, {
       sessionId
     }),
+  sessionSetActiveModel: (input: { sessionId: string; activeModelId: string }): Promise<SessionRecord> =>
+    invokeTyped<SessionRecord>(SESSION_SET_ACTIVE_MODEL_CHANNEL, input),
   specGet: (input: { spaceId: string; sessionId: string }): Promise<PersistedSpecDocument | null> =>
     invokeTyped<PersistedSpecDocument | null>(SPEC_GET_CHANNEL, input),
   specSave: (input: {

@@ -120,7 +120,7 @@ vi.mock('../../../src/main/agent-runner', () => ({
 }))
 
 import { WorkspaceProvisioningError } from '../../../src/main/workspace-provisioning'
-import { registerIpcHandlers } from '../../../src/main/ipc-handlers'
+import { registerIpcHandlers, SUPPORTED_MODELS } from '../../../src/main/ipc-handlers'
 
 type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 type MockStore = {
@@ -229,7 +229,9 @@ describe('registerIpcHandlers', () => {
     expect(mockRemoveHandler).toHaveBeenCalledWith('session:create')
     expect(mockRemoveHandler).toHaveBeenCalledWith('session-agent-roster:list')
     expect(mockRemoveHandler).toHaveBeenCalledWith('session:listBySpace')
+    expect(mockRemoveHandler).toHaveBeenCalledWith('session:get')
     expect(mockRemoveHandler).toHaveBeenCalledWith('session:setActive')
+    expect(mockRemoveHandler).toHaveBeenCalledWith('session:setActiveModel')
     expect(mockRemoveHandler).toHaveBeenCalledWith('spec:get')
     expect(mockRemoveHandler).toHaveBeenCalledWith('spec:save')
     expect(mockHandle).toHaveBeenCalledWith('app:bootstrap', expect.any(Function))
@@ -237,7 +239,9 @@ describe('registerIpcHandlers', () => {
     expect(mockHandle).toHaveBeenCalledWith('space:setActive', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('session-agent-roster:list', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('session:listBySpace', expect.any(Function))
+    expect(mockHandle).toHaveBeenCalledWith('session:get', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('session:setActive', expect.any(Function))
+    expect(mockHandle).toHaveBeenCalledWith('session:setActiveModel', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('spec:get', expect.any(Function))
     expect(mockHandle).toHaveBeenCalledWith('spec:save', expect.any(Function))
   })
@@ -284,6 +288,70 @@ describe('registerIpcHandlers', () => {
       status: 'active'
     })
     expect(store.save).toHaveBeenCalledTimes(1)
+  })
+
+  it('session:get returns the requested session record', async () => {
+    const store = createMockStore({
+      ...createDefaultAppState(),
+      sessions: {
+        'session-1': {
+          id: 'session-1',
+          spaceId: 'space-1',
+          label: 'Chat',
+          createdAt: '2026-03-06T00:00:00.000Z',
+          activeModelId: 'gpt-5.3-codex'
+        }
+      }
+    })
+
+    registerIpcHandlers(store)
+    const handler = getHandlersByChannel().get('session:get')
+
+    await expect(handler?.({}, { sessionId: 'session-1' })).resolves.toMatchObject({
+      id: 'session-1',
+      activeModelId: 'gpt-5.3-codex'
+    })
+  })
+
+  it('session:get returns null for an unknown session id', async () => {
+    registerIpcHandlers(createMockStore())
+    const handler = getHandlersByChannel().get('session:get')
+
+    await expect(handler?.({}, { sessionId: 'missing-session' })).resolves.toBeNull()
+  })
+
+  it('session:setActiveModel persists activeModelId for an existing session', async () => {
+    const state = {
+      ...createDefaultAppState(),
+      sessions: {
+        'session-1': {
+          id: 'session-1',
+          spaceId: 'space-1',
+          label: 'Chat',
+          createdAt: '2026-03-06T00:00:00.000Z'
+        }
+      }
+    }
+    const store = createMockStore(state)
+
+    registerIpcHandlers(store)
+    const handler = getHandlersByChannel().get('session:setActiveModel')
+
+    await handler?.({}, {
+      sessionId: 'session-1',
+      activeModelId: 'claude-sonnet-4-6-20250514'
+    })
+
+    expect(store.save).toHaveBeenCalledWith({
+      ...state,
+      sessions: {
+        ...state.sessions,
+        'session-1': {
+          ...state.sessions['session-1'],
+          activeModelId: 'claude-sonnet-4-6-20250514'
+        }
+      }
+    })
   })
 
   it('space:create delegates managed provisioning and persists rootPath/branch/name', async () => {
@@ -2554,10 +2622,8 @@ describe('registerIpcHandlers', () => {
     it('returns supported models with auth status', async () => {
       mockCredentialResolver.getAuthStatus
         .mockResolvedValueOnce('none')     // openai-codex
-        .mockResolvedValueOnce('api_key')  // anthropic (first model)
-        .mockResolvedValueOnce('api_key')  // anthropic (second model)
-        .mockResolvedValueOnce('none')     // openai (first model)
-        .mockResolvedValueOnce('none')     // openai (second model)
+        .mockResolvedValueOnce('api_key')  // anthropic
+        .mockResolvedValueOnce('none')     // openai
 
       registerIpcHandlers(createMockStore(), { credentialResolver: mockCredentialResolver })
       const handler = getHandlersByChannel().get('model:list')!
@@ -2576,6 +2642,11 @@ describe('registerIpcHandlers', () => {
 
       expect(result.length).toBeGreaterThan(0)
       expect(result.every(m => m.authStatus === 'none')).toBe(true)
+    })
+
+    it('uses unique model ids across the curated list', () => {
+      const modelIds = SUPPORTED_MODELS.map((model) => model.modelId)
+      expect(new Set(modelIds).size).toBe(modelIds.length)
     })
   })
 })
