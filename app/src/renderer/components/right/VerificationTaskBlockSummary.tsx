@@ -11,7 +11,9 @@ export function VerificationTaskBlockSummary({ title, tasks }: VerificationTaskB
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle asChild>
+          <h3>{title}</h3>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <TaskBlockList

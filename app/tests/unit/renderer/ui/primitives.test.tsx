@@ -3,14 +3,29 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { Badge } from '../../../../src/renderer/components/ui/badge'
 import { Button } from '../../../../src/renderer/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../../../src/renderer/components/ui/card'
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../../../src/renderer/components/ui/card'
 import { Checkbox } from '../../../../src/renderer/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../../src/renderer/components/ui/collapsible'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger
+} from '../../../../src/renderer/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '../../../../src/renderer/components/ui/dropdown-menu'
 import { Input } from '../../../../src/renderer/components/ui/input'
 import { ScrollArea } from '../../../../src/renderer/components/ui/scroll-area'
 import { Separator } from '../../../../src/renderer/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../../src/renderer/components/ui/tabs'
 import { Textarea } from '../../../../src/renderer/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../../src/renderer/components/ui/tooltip'
 
 describe('shadcn primitives baseline', () => {
   it('renders button, badge, input, and card primitives', () => {
@@ -34,12 +49,42 @@ describe('shadcn primitives baseline', () => {
       </Card>
     )
 
-    expect(screen.getByRole('heading', { name: 'Shell Baseline' })).toBeTruthy()
+    expect(screen.getByText('Shell Baseline')).toBeTruthy()
     expect(screen.getByText('Ready')).toBeTruthy()
     expect(screen.getByText('Base primitive description')).toBeTruthy()
     expect(screen.getByText('Footer content')).toBeTruthy()
     expect(screen.getByRole('textbox', { name: 'Search' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Run' })).toBeTruthy()
+  })
+
+  it('supports rendering card titles as semantic headings', () => {
+    render(
+      <Card>
+        <CardHeader>
+          <CardTitle asChild>
+            <h3>Shell Baseline</h3>
+          </CardTitle>
+        </CardHeader>
+      </Card>
+    )
+
+    expect(screen.getByRole('heading', { level: 3, name: 'Shell Baseline' })).toBeTruthy()
+  })
+
+  it('exposes size and action hooks for the v4 card contract', () => {
+    const { container } = render(
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Shell Baseline</CardTitle>
+          <CardAction>
+            <Button type="button">Quick action</Button>
+          </CardAction>
+        </CardHeader>
+      </Card>
+    )
+
+    expect(container.querySelector('[data-slot="card"]')?.getAttribute('data-size')).toBe('sm')
+    expect(container.querySelector('[data-slot="card-action"]')).toBeTruthy()
   })
 
   it('supports tab switching with radix tab semantics', () => {
@@ -158,5 +203,82 @@ describe('shadcn primitives baseline', () => {
     expect(screen.queryByText('Hidden details')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Toggle details' }))
     expect(screen.getByText('Hidden details')).toBeTruthy()
+  })
+
+  it('renders overlay primitives with accessible trigger and content wiring', async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+
+    class MockResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    try {
+      globalThis.ResizeObserver = MockResizeObserver as typeof ResizeObserver
+
+      render(
+        <TooltipProvider>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button type="button">Open dialog</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogTitle>Migration dialog</DialogTitle>
+              <DialogDescription>Migration dialog description</DialogDescription>
+            </DialogContent>
+          </Dialog>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button">Hover target</Button>
+            </TooltipTrigger>
+            <TooltipContent>Preset tooltip</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )
+
+      fireEvent.focus(screen.getByRole('button', { name: 'Hover target' }))
+      expect(await screen.findByRole('tooltip')).toBeTruthy()
+
+      const tooltipContent = screen
+        .getAllByText('Preset tooltip')
+        .map((element) => element.closest('[data-slot="tooltip-content"]'))
+        .find((element) => element !== null)
+      expect(tooltipContent).toBeTruthy()
+      expect(tooltipContent?.className.includes('data-[state=instant-open]:animate-in')).toBe(true)
+      expect(tooltipContent?.className.includes('data-[state=closed]:animate-out')).toBe(true)
+      expect(tooltipContent?.className.includes('data-open:animate-in')).toBe(false)
+      expect(tooltipContent?.className.includes('data-closed:animate-out')).toBe(false)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open dialog' }))
+
+      expect(screen.getByRole('dialog')).toBeTruthy()
+      expect(screen.getByText('Migration dialog')).toBeTruthy()
+      expect(screen.getByText('Migration dialog description')).toBeTruthy()
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
+
+  it('renders dropdown menu content through the shared wrapper', async () => {
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button">Open menu</Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuGroup>
+            <DropdownMenuItem>Preset item</DropdownMenuItem>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+
+    const menuTrigger = screen.getByRole('button', { name: 'Open menu' })
+    fireEvent.keyDown(menuTrigger, { key: 'ArrowDown', code: 'ArrowDown' })
+
+    expect(await screen.findByRole('menu')).toBeTruthy()
+    expect(screen.getByText('Preset item')).toBeTruthy()
   })
 })

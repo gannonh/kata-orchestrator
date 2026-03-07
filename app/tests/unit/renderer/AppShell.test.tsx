@@ -105,6 +105,7 @@ describe('AppShell', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false)
     expect(document.documentElement.style.colorScheme).toBe('light')
     expect(screen.getByRole('button', { name: 'Switch to dark theme' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Collapse sidebar navigation' })).toBeTruthy()
   })
 
   it('renders columns and supports keyboard panel resizing with window resize fallback', () => {

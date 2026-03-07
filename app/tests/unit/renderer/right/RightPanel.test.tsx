@@ -15,12 +15,12 @@ describe('RightPanel', () => {
 
     expect(screen.getByRole('tablist', { name: 'Right panel tabs' })).toBeTruthy()
     expect(screen.getByRole('tab', { name: /Spec/ }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByRole('heading', { name: 'Goal' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Architecture' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Tasks' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Acceptance Criteria' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Non-Goals' })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Assumptions' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'Goal' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'Architecture' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'Tasks' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'Acceptance Criteria' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'Non-Goals' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'Assumptions' })).toBeTruthy()
   })
 
   it('creates and activates a New Note tab from the right panel menu', () => {
@@ -43,7 +43,7 @@ describe('RightPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close New Note tab' }))
 
     expect(screen.getByRole('tab', { name: /Spec/ }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByRole('heading', { name: 'Goal' })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 3, name: 'Goal' })).toBeTruthy()
   })
 
   it('renames a right-panel note tab via inline edit', () => {

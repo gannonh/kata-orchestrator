@@ -90,7 +90,9 @@ export function SpecTab({ project, specState }: SpecTabProps) {
     <div className="grid gap-4">
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm uppercase tracking-wide">Goal</CardTitle>
+          <CardTitle asChild className="text-sm uppercase tracking-wide">
+            <h3>Goal</h3>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">{project.goal}</p>
@@ -99,7 +101,9 @@ export function SpecTab({ project, specState }: SpecTabProps) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm uppercase tracking-wide">Architecture</CardTitle>
+          <CardTitle asChild className="text-sm uppercase tracking-wide">
+            <h3>Architecture</h3>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ArchitectureDiagram />
@@ -108,7 +112,9 @@ export function SpecTab({ project, specState }: SpecTabProps) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm uppercase tracking-wide">Tasks</CardTitle>
+          <CardTitle asChild className="text-sm uppercase tracking-wide">
+            <h3>Tasks</h3>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <TaskList tasks={project.tasks} />
@@ -117,7 +123,9 @@ export function SpecTab({ project, specState }: SpecTabProps) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm uppercase tracking-wide">Acceptance Criteria</CardTitle>
+          <CardTitle asChild className="text-sm uppercase tracking-wide">
+            <h3>Acceptance Criteria</h3>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <AcceptanceCriteria criteria={project.acceptanceCriteria} />
@@ -126,7 +134,9 @@ export function SpecTab({ project, specState }: SpecTabProps) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm uppercase tracking-wide">Non-Goals</CardTitle>
+          <CardTitle asChild className="text-sm uppercase tracking-wide">
+            <h3>Non-Goals</h3>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
@@ -139,7 +149,9 @@ export function SpecTab({ project, specState }: SpecTabProps) {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm uppercase tracking-wide">Assumptions</CardTitle>
+          <CardTitle asChild className="text-sm uppercase tracking-wide">
+            <h3>Assumptions</h3>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">

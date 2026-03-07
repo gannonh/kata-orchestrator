@@ -1,0 +1,25 @@
+# KAT-259 Evidence
+
+- Preset applied: `a1FAcdAe`
+- `npx shadcn@latest info --json`: PASS
+  - Vite project
+  - Tailwind v4
+  - style `radix-mira`
+  - aliases still resolve to `@renderer/components/ui`
+  - installed component inventory remains the same 22 primitives: `avatar`, `badge`, `breadcrumb`, `button`, `card`, `checkbox`, `collapsible`, `command`, `context-menu`, `dialog`, `drawer`, `dropdown-menu`, `input-group`, `input`, `scroll-area`, `separator`, `sheet`, `sidebar`, `skeleton`, `tabs`, `textarea`, `tooltip`
+- `npm run lint`: PASS
+- `npm run test`: PASS
+  - 110 test files
+  - 939 tests
+- Focused guardrail suite after migration realignment: PASS
+  - `tests/unit/renderer/ui/primitives.test.tsx`
+  - `tests/unit/renderer/AppShell.test.tsx`
+  - `tests/unit/renderer/Hero1.test.tsx`
+- App smoke evidence: `/tmp/kat-259-v4-migration.png`
+  - renderer loaded in Electron dev mode via `npm run dev -- --remote-debugging-port=9222`
+  - `agent-browser` connected to the running app on port `9222`
+  - smoke snapshot confirmed shell chrome rendered with left navigation, center coordinator tab, and right spec tab visible
+- Notes:
+  - preset reset required repairing the local pnpm store linkage with `pnpm install --store-dir /Volumes/EVO/.pnpm-store/v10` before `shadcn init` could reinstall dependencies in this worktree
+  - retained post-preset app customizations are limited to app-specific semantic status tokens and existing project font aliases in `src/renderer/app.css`
+  - migration-related regressions were test-contract changes around regenerated card/title semantics and Radix interaction expectations, not application behavior regressions
