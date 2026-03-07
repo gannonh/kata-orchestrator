@@ -82,6 +82,41 @@ afterEach(() => {
 })
 
 describe('useCoordinatorSidebarData', () => {
+  it('returns the empty state without warning when no session is active', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    window.kata = {} as Window['kata']
+
+    const { result } = renderHook(() => useCoordinatorSidebarData(null))
+
+    expect(result.current).toEqual({
+      agentItems: [],
+      contextItems: [],
+      promptPreview: null,
+      isLoading: false,
+      error: null
+    })
+    expect(warnSpy).not.toHaveBeenCalled()
+  })
+
+  it('returns empty state and avoids IPC calls when required bridge methods are missing', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    window.kata = {} as Window['kata']
+
+    const { result } = renderHook(() => useCoordinatorSidebarData('session-1'))
+
+    expect(result.current).toEqual({
+      agentItems: [],
+      contextItems: [],
+      promptPreview: null,
+      isLoading: false,
+      error: null
+    })
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[useCoordinatorSidebarData] IPC bridge methods missing. Preload may be misconfigured.'
+    )
+  })
+
   it('loads coordinator sidebar data from IPC and derives prompt preview + context items', async () => {
     const roster = createDeferred<SessionAgentRecord[]>()
     const resources = createDeferred<SessionContextResourceRecord[]>()
@@ -233,5 +268,76 @@ describe('useCoordinatorSidebarData', () => {
     expect(result.current.agentItems[0]?.name).toBe('Coordinator Two')
     expect(result.current.contextItems[0]?.label).toBe('Spec Two')
     expect(result.current.promptPreview).toContain('session two')
+  })
+
+  it('captures load failures with fallback copy for non-Error rejections', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    window.kata = {
+      sessionAgentRosterList: vi.fn().mockRejectedValue('boom'),
+      sessionContextResourcesList: vi.fn(),
+      runList: vi.fn()
+    } as unknown as Window['kata']
+
+    const { result } = renderHook(() => useCoordinatorSidebarData('session-1'))
+
+    await waitFor(() =>
+      expect(result.current).toEqual({
+        agentItems: [],
+        contextItems: [],
+        promptPreview: null,
+        isLoading: false,
+        error: 'Failed to load coordinator sidebar data.'
+      })
+    )
+    expect(errorSpy).toHaveBeenCalled()
+  })
+
+  it('uses the thrown Error message when sidebar loading fails with an Error instance', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    window.kata = {
+      sessionAgentRosterList: vi.fn().mockRejectedValue(new Error('IPC unavailable')),
+      sessionContextResourcesList: vi.fn(),
+      runList: vi.fn()
+    } as unknown as Window['kata']
+
+    const { result } = renderHook(() => useCoordinatorSidebarData('session-1'))
+
+    await waitFor(() =>
+      expect(result.current).toEqual({
+        agentItems: [],
+        contextItems: [],
+        promptPreview: null,
+        isLoading: false,
+        error: 'IPC unavailable'
+      })
+    )
+    expect(errorSpy).toHaveBeenCalled()
+  })
+
+  it('ignores rejected late results after the hook unmounts', async () => {
+    const roster = createDeferred<SessionAgentRecord[]>()
+    const resources = createDeferred<SessionContextResourceRecord[]>()
+    const runs = createDeferred<RunRecord[]>()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    window.kata = {
+      sessionAgentRosterList: vi.fn().mockReturnValue(roster.promise),
+      sessionContextResourcesList: vi.fn().mockReturnValue(resources.promise),
+      runList: vi.fn().mockReturnValue(runs.promise)
+    } as Window['kata']
+
+    const { result, unmount } = renderHook(() => useCoordinatorSidebarData('session-1'))
+
+    await waitFor(() => expect(result.current.isLoading).toBe(true))
+
+    unmount()
+    roster.reject(new Error('late failure'))
+    resources.resolve([])
+    runs.resolve([])
+
+    await Promise.resolve()
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 })
