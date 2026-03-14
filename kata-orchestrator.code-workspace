@@ -17,6 +17,9 @@
 		},
 		{
 			"path": "../kata-orchestrator.worktrees/wt-d"
+		},
+		{
+			"path": "../get-shit-done-post"
 		}
 	]
 }
